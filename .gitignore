@@ -4,7 +4,3 @@
 # Superpowers planner tool state (per-user, not for version control)
 docs/superpowers/
 
-# Third-party source drops kept locally for analysis. Never tracked.
-/_research/
-/_external/
-/otheraddons/
