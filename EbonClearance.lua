@@ -812,6 +812,17 @@ local function EnsureDB()
     if type(DB.autoProtectUpgrades) ~= "boolean" then
         DB.autoProtectUpgrades = false
     end
+    -- v2.13.0 Equipment Manager protection. When ON, every item in any of
+    -- the player's saved equipment sets (Blizzard's stock 3.3.5a Equipment
+    -- Manager, NOT a third-party set addon) lands on the Keep list with
+    -- origin tag "set". Solves the dual-spec / off-set problem: items
+    -- assigned to your alternate gear set sit in bags between swaps and
+    -- are unprotected by autoAddEquipped (which only catches currently-
+    -- equipped slots). Default OFF; opt-in. EQUIPMENT_SETS_CHANGED drives
+    -- live re-syncs when the user adds / modifies / deletes a set.
+    if type(DB.autoProtectEquipmentSets) ~= "boolean" then
+        DB.autoProtectEquipmentSets = false
+    end
     if type(DB.whitelistMinQuality) ~= "number" then
         DB.whitelistMinQuality = 1
     end
@@ -2052,12 +2063,12 @@ function EC_compCache.protectEquipSlot(slot)
         return true
     elseif DB.blacklistAuto[id] then
         -- v2.12.0: item was already on the blacklist with an existing
-        -- auto-tag (most commonly "upgrade" from an earlier
-        -- autoProtectUpgrades scan). The user has now explicitly
-        -- equipped it, so the more accurate tag is "equipped" -
-        -- refresh in place. Manual blacklist entries (where
-        -- blacklistAuto[id] is nil) stay untouched - the user added
-        -- those deliberately.
+        -- auto-tag ("upgrade" from autoProtectUpgrades, or "set" from
+        -- v2.13.0's Equipment Manager protection). The user has now
+        -- explicitly equipped it, so the more accurate tag is
+        -- "equipped" - refresh in place. Manual blacklist entries
+        -- (where blacklistAuto[id] is nil) stay untouched - the user
+        -- added those deliberately.
         DB.blacklistAuto[id] = "equipped"
         return false
     end
@@ -2081,6 +2092,84 @@ function EC_compCache.syncEquipped()
     else
         PrintNice("|cffaaaaaaNo new equipped items to auto-protect; current gear was already on the keep list.|r")
     end
+end
+
+-- v2.13.0 Equipment Manager protection. Adds an item from a saved equipment
+-- set to the Keep list with origin tag "set". Routes through EC_AddItemToList
+-- so cross-list conflicts and duplicate guards apply. Items already equipped
+-- (tag "equipped") and looted upgrades (tag "upgrade") keep their existing
+-- tag - "set" is the weakest tag and shouldn't downgrade more specific
+-- ones. Manual blacklist entries (no auto-tag) are not touched. Returns
+-- true iff a new entry was added.
+function EC_compCache.protectEquipmentSetItem(itemID)
+    -- Slot values 0 (empty) and 1 (ignore) come back from GetEquipmentSetItemIDs;
+    -- itemID 1 is technically a real item but isn't auto-protectable equipment,
+    -- so the > 1 check is safe in practice and dodges the ignore-marker overload.
+    if not itemID or itemID <= 1 then
+        return false
+    end
+    DB.blacklistAuto = DB.blacklistAuto or {}
+    if EC_AddItemToList("blacklist", itemID, "Blacklist (Keep)", true) then
+        DB.blacklistAuto[itemID] = "set"
+        return true
+    end
+    -- Already on the blacklist. Do not promote or downgrade an existing
+    -- tag - "equipped" / "upgrade" are more specific and should win.
+    return false
+end
+
+-- One-shot sync helper. Called by the Blacklist (Keep) panel's
+-- "Auto-protect equipment-manager sets" checkbox when the user flips it from
+-- off to on, and by the EQUIPMENT_SETS_CHANGED reactive handler. Walks every
+-- saved equipment set, dedupes itemIDs across sets via a session-local seen
+-- map, and stamps each onto the Keep list. The Blizzard 3.3.5a Equipment
+-- Manager API (GetNumEquipmentSets, GetEquipmentSetInfo, GetEquipmentSetItemIDs)
+-- exists since 3.1.2; defensive nil-guards are kept for clients that
+-- somehow lack it. `silent` skips the chat summary - used by the live
+-- EQUIPMENT_SETS_CHANGED path so set-edits don't spam.
+function EC_compCache.syncEquipmentSets(silent)
+    if not (GetNumEquipmentSets and GetEquipmentSetInfo and GetEquipmentSetItemIDs) then
+        return 0
+    end
+    local n = GetNumEquipmentSets()
+    if not n or n == 0 then
+        if not silent then
+            PrintNice("|cffaaaaaaNo equipment sets saved. Use the Blizzard Equipment Manager to create one, then re-tick this option.|r")
+        end
+        return 0
+    end
+    local added, sets = 0, 0
+    local seen = {}
+    local buf = {}
+    for i = 1, n do
+        local name = GetEquipmentSetInfo(i)
+        if name then
+            sets = sets + 1
+            for k in pairs(buf) do
+                buf[k] = nil
+            end
+            GetEquipmentSetItemIDs(name, buf)
+            for _, id in pairs(buf) do
+                if id and id > 1 and not seen[id] then
+                    seen[id] = true
+                    if EC_compCache.protectEquipmentSetItem(id) then
+                        added = added + 1
+                    end
+                end
+            end
+        end
+    end
+    if not silent then
+        if added > 0 then
+            PrintNicef("|cffb6ffb6Auto-protected %d item%s from %d equipment set%s.|r",
+                added, added == 1 and "" or "s",
+                sets, sets == 1 and "" or "s")
+        else
+            PrintNicef("|cffaaaaaaScanned %d equipment set%s; all items already on the keep list.|r",
+                sets, sets == 1 and "" or "s")
+        end
+    end
+    return added
 end
 
 -- v2.11.0 auto-protect upgraded gear (BAG_UPDATE-driven). Closes the gap
@@ -3593,6 +3682,13 @@ local function EC_AnnotateTooltip(tooltip)
                 statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected (Worn)|r"
             elseif autoTag == "upgrade" then
                 statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected (Upgrade)|r"
+            elseif autoTag == "set" then
+                -- v2.13.0: items from a saved Blizzard Equipment Manager set.
+                -- Most likely an off-set / dual-spec piece sitting in bags
+                -- between swaps; the tag promotes to "(Worn)" the next time
+                -- the user actually equips it (via protectEquipSlot's
+                -- existing tag-refresh branch).
+                statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected (Set)|r"
             else
                 statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected|r"
             end
@@ -6902,6 +6998,9 @@ BlacklistPanel:SetScript("OnShow", function(self)
         if self.autoUpgradeCB then
             self.autoUpgradeCB:SetChecked(DB.autoProtectUpgrades)
         end
+        if self.autoSetCB then
+            self.autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
+        end
         if self.listUI then
             self.listUI:Refresh()
         end
@@ -7028,12 +7127,58 @@ BlacklistPanel:SetScript("OnShow", function(self)
             .. "vendor without this protection.|r"
     )
 
-    -- Cascade-anchor the list UI to the auto-upgrade note's BOTTOMLEFT so
-    -- the manual-add list always sits below the new toggle pair regardless
+    -- v2.13.0 Equipment Manager protection. Catches the dual-spec /
+    -- off-set gap: items assigned to your alternate Blizzard equipment
+    -- set sit in bags between swaps and aren't protected by
+    -- autoAddEquipped (which only catches currently-equipped slots).
+    -- One-shot sync at toggle, then EQUIPMENT_SETS_CHANGED reactive.
+    local autoSetCB = CreateFrame(
+        "CheckButton",
+        "EbonClearanceAutoProtectSetsCB",
+        self,
+        "InterfaceOptionsCheckButtonTemplate"
+    )
+    autoSetCB:SetPoint("TOPLEFT", autoUpgradeNote, "BOTTOMLEFT", -26, -10)
+    autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
+    local asText = _G[autoSetCB:GetName() .. "Text"]
+    if asText then
+        asText:SetText("Auto-protect items in Blizzard equipment sets")
+        EC_compCache.setPanelWidth(asText, 60)
+        asText:SetJustifyH("LEFT")
+    end
+    autoSetCB:SetScript("OnClick", function(cb)
+        local on = cb:GetChecked() and true or false
+        local wasOff = (DB.autoProtectEquipmentSets ~= true)
+        DB.autoProtectEquipmentSets = on
+        PlaySound("igMainMenuOptionCheckBoxOn")
+        if on and wasOff then
+            EC_compCache.syncEquipmentSets(false)
+            if self.listUI then
+                self.listUI:Refresh()
+            end
+        end
+    end)
+    self.autoSetCB = autoSetCB
+
+    local autoSetNote = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    autoSetNote:SetPoint("TOPLEFT", autoSetCB, "BOTTOMLEFT", 26, -2)
+    EC_compCache.setPanelWidth(autoSetNote, 60)
+    autoSetNote:SetJustifyH("LEFT")
+    if autoSetNote.SetWordWrap then
+        autoSetNote:SetWordWrap(true)
+    end
+    autoSetNote:SetText(
+        "|cff888888Adds every item in your saved Blizzard equipment-manager sets to this Keep list, and re-syncs whenever you save or modify a set. "
+            .. "Useful for hybrids and dual-spec players whose off-set gear sits in bags between swaps. "
+            .. "Tooltip shows |cffffb84dAuto-Protected (Set)|r|cff888888 on items kept by this rule. Removing a set later does not auto-clean items it added; use Alt+Right-Click to drop unwanted entries.|r"
+    )
+
+    -- Cascade-anchor the list UI to the auto-set note's BOTTOMLEFT so
+    -- the manual-add list always sits below the toggle stack regardless
     -- of how many lines the notes wrap to.
     self.listUI = CreateListUI(self, "Protected Items", "blacklist", 16, -200)
     self.listUI:ClearAllPoints()
-    self.listUI:SetPoint("TOPLEFT", autoUpgradeNote, "BOTTOMLEFT", -26, -16)
+    self.listUI:SetPoint("TOPLEFT", autoSetNote, "BOTTOMLEFT", -26, -16)
     self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
     self.listUI:Refresh()
 end)
@@ -7806,6 +7951,11 @@ end
 -- EC_AutoProtectEquippedSlot which short-circuits when the toggle is off,
 -- so users not opted in pay one early-return per swap.
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+-- v2.13.0: drives the Equipment Manager protection re-sync when the user
+-- adds, modifies, or deletes a saved equipment set via the Blizzard
+-- Equipment Manager. Handler is gated on DB.autoProtectEquipmentSets so
+-- users without the toggle on pay one early-return per set save.
+f:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 -- Wakes the auto-open-containers driver when combat ends. Without this the
 -- combat-deferred queue could sit indefinitely if no further BAG_UPDATE
 -- arrives. Handler self-gates on DB.autoOpenContainers, so users with the
@@ -7859,6 +8009,17 @@ f:SetScript("OnEvent", function(self, event, ...)
         -- one branch.
         EC_compCache.combatDeferredAnnounced = false
         EC_HandleAutoOpenContainers()
+    elseif event == "EQUIPMENT_SETS_CHANGED" then
+        -- v2.13.0: live re-sync of Blizzard equipment-manager sets onto
+        -- the Keep list. Silent variant suppresses the chat summary so
+        -- save-edit-save cycles in the Equipment Manager UI don't spam.
+        if DB and DB.autoProtectEquipmentSets then
+            EC_compCache.syncEquipmentSets(true)
+            local bp = _G["EbonClearanceOptionsBlacklist"]
+            if bp and bp.listUI then
+                bp.listUI:Refresh()
+            end
+        end
     elseif event == "BAG_UPDATE" then
         -- Bag-full handler runs first; the open driver yields via the `running`
         -- guard if the vendor cycle is already active.
