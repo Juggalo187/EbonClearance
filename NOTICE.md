@@ -25,6 +25,50 @@ direction.
 
 ---
 
+## Related projects in the PE auto-vendor niche
+
+Two other addons solve overlapping problems in the same niche:
+
+- [AutoDelete](https://github.com/disarrayed/AutoDelete) (MIT-licensed) -
+  whitelist + delete + sell hybrid with a tabbed custom-window UI, an
+  Auto-Invite system, and ElvUI bag drag-buttons. Ships features like
+  `autoAddEquipped` (sync currently-equipped gear to a Keep list +
+  reactive PLAYER_EQUIPMENT_CHANGED), `summonOnlyInCombat`, and a
+  first-run welcome popup. Several of these landed in AutoDelete's
+  v3.10-v3.18 series (April 25 - May 2, 2026), in some cases days
+  before EbonClearance's equivalents shipped (notably `autoAddEquipped`,
+  May 2 in AutoDelete vs May 4 in EC v2.10.0).
+
+  EbonClearance's equivalents were written independently against the
+  same Blizzard 3.3.5a API surface. The 1-19 inventory slot walk with
+  shirt+tabard skip, the one-shot-at-toggle-flip + reactive-event
+  split, and the quiet-bulk-vs-chatty-reactive print pattern are all
+  shapes the API itself forces; the code that implements them in EC
+  uses different storage fields (`blacklistAuto` vs `whitelistText`),
+  different add helpers (`EC_AddItemToList` vs `AddLineIfMissing`),
+  and different print formatting, and EC carries v2.12.0 origin-tag
+  extensions (`"equipped"` / `"upgrade"`) that AutoDelete does not.
+  EC's `summonOnlyOutOfCombat` field is the polar opposite of
+  AutoDelete's `summonOnlyInCombat`: AutoDelete gates auto-summons
+  to fire only while in combat (farming-mode toggle); EC gates them
+  to fire only while out of combat (don't burn a GCD mid-rotation).
+
+- [AutoLoot](https://github.com/Veronica-Vasilieva/AutoLoot) (license
+  per upstream repo) - smaller, blacklist-first auto-vendor with a
+  state-machine companion cycle and a custom standalone window.
+  Different scope and architecture from EC; no overlapping
+  implementation patterns.
+
+Cross-pollination of ideas in a small private-server addon ecosystem
+is normal and acknowledged. Where EbonClearance was inspired by an
+idea visible in another addon's behaviour, the implementation was
+written from scratch against the Blizzard API; verbatim code from
+another addon is not present in this codebase. Anyone wishing to
+verify can clone the EC repository and review the commit log
+alongside the cited competitor source.
+
+---
+
 ## Source-available licence pattern
 
 EbonClearance ships under a custom **source-available attribution
