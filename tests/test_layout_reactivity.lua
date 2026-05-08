@@ -236,6 +236,45 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 7: ADDON_VERSION lua constant matches the .toc Version field.
+-- ---------------------------------------------------------------------------
+-- The lua constant is what EC_GetVersion returns (and therefore what the
+-- panel header / /ec bugreport display). The .toc Version field is what
+-- Blizzard's AddOn list shows. Drift between the two means EC says one
+-- version while WoW says another.
+--
+-- Pre-v2.13.2, the release workflow only updated the .toc and silently
+-- failed to update the lua constant, leaving in-game version displays
+-- stuck at v2.12.0 across the v2.13.0 and v2.13.1 releases. This test
+-- locks the invariant so any future release that updates one but not
+-- the other fails CI before it can ship.
+do
+    local tocPath = "EbonClearance.toc"
+    local f, err = io.open(tocPath, "r")
+    if not f then
+        check("ADDON_VERSION matches .toc Version field", false,
+            "cannot open " .. tocPath .. ": " .. tostring(err))
+    else
+        local tocContent = f:read("*a")
+        f:close()
+        local tocVersion = tocContent:match("##%s*Version:%s*(v[%d%.]+)")
+        local luaVersion = src:match("local ADDON_VERSION%s*=%s*\"(v[%d%.]+)\"")
+        local message
+        if not tocVersion then
+            message = "no '## Version: vX.Y.Z' line found in " .. tocPath
+        elseif not luaVersion then
+            message = "no 'local ADDON_VERSION = \"vX.Y.Z\"' line found in " .. SOURCE_PATH
+        elseif tocVersion ~= luaVersion then
+            message = string.format(
+                "version drift: %s says %s but %s says %s",
+                tocPath, tocVersion, SOURCE_PATH, luaVersion
+            )
+        end
+        check("ADDON_VERSION matches .toc Version field", message == nil, message)
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Result.
 -- ---------------------------------------------------------------------------
 print()

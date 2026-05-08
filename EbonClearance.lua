@@ -45,7 +45,7 @@ _G["__EbonClearance_author"] = ADDON_AUTHOR
 -- version lie on a release build. Pre-v2.9.1 builds shipped a stale "v2.5.0"
 -- literal because the workflow's sed pattern didn't match this line; fixed
 -- in v2.9.1 by switching to the v2.11.0 placeholder convention.
-local ADDON_VERSION = "v2.12.0"
+local ADDON_VERSION = "v2.13.1"
 local function EC_GetVersion()
     if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
         return ADDON_VERSION

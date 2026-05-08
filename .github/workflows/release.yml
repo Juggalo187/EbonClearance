@@ -21,11 +21,18 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           echo "Building version: $VERSION"
-          # Replace @VERSION@ placeholder or any previous vX.Y.Z version string
+          # Replace @VERSION@ placeholder or any previous vX.Y.Z version string.
           sed -i "s/@VERSION@/$VERSION/g" EbonClearance.toc EbonClearance.lua
           sed -i "s/\[v[0-9]*\.[0-9]*\.[0-9]*\]/[$VERSION]/g" EbonClearance.toc
           sed -i "s/^## Version: .*/## Version: $VERSION/" EbonClearance.toc
-          sed -i "s/EbonClearance v[0-9]*\.[0-9]*\.[0-9]*/EbonClearance $VERSION/g" EbonClearance.lua
+          # v2.13.2: anchor the lua sed to the canonical ADDON_VERSION
+          # declaration. The previous pattern looked for the substring
+          # "EbonClearance vX.Y.Z" which never appears in source (the
+          # panel header is built by concatenation at runtime), so the
+          # lua constant was silently stuck at whatever was last manually
+          # bumped. The anchored pattern matches one specific line and
+          # cannot accidentally rewrite an unrelated version-shaped string.
+          sed -i "s/^local ADDON_VERSION = \"v[0-9]*\.[0-9]*\.[0-9]*\"/local ADDON_VERSION = \"$VERSION\"/" EbonClearance.lua
 
       - name: Package addon
         run: |
