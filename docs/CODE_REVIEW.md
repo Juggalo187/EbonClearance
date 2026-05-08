@@ -3,26 +3,47 @@
 A curated backlog of known follow-ups not yet actioned. Each item is
 scoped to be a single-session change unless flagged otherwise.
 
-> **Last refresh:** post-v2.12.0 on 2026-05-05.
+> **Last refresh:** post-v2.13.4 on 2026-05-08.
 > Statuses below verified against the current `EbonClearance.lua`.
-> None of items 1-5 below were resolved in v2.8.0 - v2.12.0; those
-> releases shipped feature work (per-rarity Purple row, smarter stuck
-> detection, manual-sell attribution, guild-bank repair, auto-protect
-> equipped + auto-protect upgrades + per-rarity bind-type filter,
-> bag-full hysteresis, combat-only summon, reactive panel layout,
-> per-rarity `Use equipped iLvl` dynamic-cap mode, auto-protect
-> origin tags `(Worn)` / `(Upgrade)`, fresh-install detection +
-> first-run welcome popup, `/ec clean upgrades` cleanup command)
-> plus targeted reliability fixes. **Item 4 (extract panel OnShow
-> boilerplate) remains elevated**: v2.12.0 scroll-wrapped the Main
-> panel to fix vertical overflow, bringing the count of scroll-
-> wrapped content panels to five (Main / Scavenger / Merchant /
-> Profiles / Import-Export). The reactive-layout handler
-> ([EC_compCache.refreshLayouts](../EbonClearance.lua)) registers
-> width-snapshot widgets via helper hooks; when item 4 is actioned,
-> the future `EC_InitPanel(self, refresh, build)` helper should
-> internalise both the scroll-wrap and the registry registration so
-> panel authors don't have to remember to call them.
+> v2.13.0-v2.13.4 shipped a feature burst (auto-open combat-defer,
+> quest-item safety net, Equipment Manager protection, ElvUI bag
+> buttons, default-merchant flip), then a maintenance cluster:
+> v2.13.2 fixed a silent ADDON_VERSION drift across two prior
+> releases and added a CI test to lock the invariant; v2.13.3 ran
+> an audit-driven cleanup removing ~148 LOC of dead/vestigial code
+> (dormant vendor-button cluster, unreachable v2.10.0 migration
+> notice, write-only flags, an always-true stub); v2.13.4 closed
+> two correctness gaps from the same audit (the `/ecdebug` stale
+> predicate that produced wrong "would sell" output, and three
+> add-to-list bypass paths that skipped the canonical
+> `EC_AddItemToList` and silently lost origin-tag support on bulk
+> adds). Items 1-5 below remain unresolved through this period.
+> **Item 4 (extract panel OnShow boilerplate) remains elevated**:
+> the count of scroll-wrapped content panels stands at five (Main /
+> Scavenger / Merchant / Profiles / Import-Export). The reactive-
+> layout handler ([EC_compCache.refreshLayouts](../EbonClearance.lua))
+> registers width-snapshot widgets via helper hooks; when item 4 is
+> actioned, the future `EC_InitPanel(self, refresh, build, wrapScroll)`
+> helper should internalise both the scroll-wrap and the registry
+> registration so panel authors don't have to remember to call them.
+
+> **Audit deferred item 6 (added 2026-05-08)**: the post-v2.13.2
+> audit identified `EC_IsSellable` <-> `EC_AnnotateTooltip` as a
+> two-way parallel implementation of the sell-decision logic
+> (down from the original three-way after v2.13.4 routed
+> `/ecdebug` through `EC_IsSellable`). A full extraction into a
+> shared `EC_ClassifyItem(itemID, bag, slot, junkOnly) -> (decision,
+> reason, detail)` was scoped but deferred when closer inspection
+> revealed it would net ~+100 LOC because the formatting layer in
+> `EC_AnnotateTooltip` has many distinct labels per rule outcome
+> (Will Sell - Green iLvl X / Protected - Quest item / Protected -
+> BoP-only filter / Potential Upgrade / etc.) that don't compress
+> cleanly into a reason+detail pair. The remaining paired-edit
+> burden has held up across v2.10.0-v2.13.4 with one drift
+> incident (the v2.13.x quest-item check) caught within hours.
+> Re-evaluate when adding a new sell condition naturally creates
+> pressure to unify, OR when a concrete drift incident demonstrates
+> the paired-edit discipline is breaking down.
 
 ---
 
