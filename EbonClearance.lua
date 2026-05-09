@@ -5310,7 +5310,9 @@ local function BuildMainPanel(panel, content, refreshStats)
             .. "|cffffff00/ec profile [list|save|load|delete <name>]|r  Manage saved profiles\n"
             .. "|cffffff00/ec clean [apply]|r  Find and resolve list conflicts\n"
             .. "|cffffff00/ec clean upgrades [apply]|r  Clean stale 'Upgrade'-tagged Blacklist entries\n"
-            .. "Type |cffffff00/ec help|r in chat for the full reference."
+            .. "|cffffff00/ec bugreport|r  Generate a diagnostic report\n"
+            .. "|cffffff00/ec help|r  Print full slash-command reference in chat\n"
+            .. "|cffffff00/ecdebug|r  Show debug info and bag scan"
     )
 
     -- v2.12.0: size the scroll content to fit the bottom-most widget so
