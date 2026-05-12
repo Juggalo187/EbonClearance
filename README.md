@@ -8,29 +8,29 @@ A World of Warcraft addon built for **Project Ebonhold**, designed to take the f
 
 ## What It Does
 
-**Whitelist-based auto-vendoring** - Add items to your whitelist by their item ID and they will be automatically sold when you visit a merchant. You can also set per-rarity quality thresholds (under Merchant Settings) with two cap modes: tick **Use equipped iLvl** for a dynamic cap that follows the iLvl of whatever you currently have equipped in the same slot (default ON for whites and greens on fresh installs - so anything you loot below your current gear auto-sells without ever putting your real gear at risk), or untick to set a fixed max iLvl per rarity for "sell anything below this absolute number". Four tiers: White (Common), Green (Uncommon), Blue (Rare), Purple (Epic). Works with the Goblin Merchant, normal vendors, or both. Items with no vendor value are automatically skipped. Your equipped gear is safe, and every item is double-checked against its bag slot before anything gets sold.
+**Sell-List-based auto-vendoring** - Add items to your Sell List by their item ID and they will be automatically sold when you visit a merchant. You can also set per-rarity quality thresholds (under Merchant Settings) with two cap modes: tick **Use equipped iLvl** for a dynamic cap that follows the iLvl of whatever you currently have equipped in the same slot (default ON for whites and greens on fresh installs - so anything you loot below your current gear auto-sells without ever putting your real gear at risk), or untick to set a fixed max iLvl per rarity for "sell anything below this absolute number". Four tiers: White (Common), Green (Uncommon), Blue (Rare), Purple (Epic). Works with the Goblin Merchant, normal vendors, or both. Items with no vendor value are automatically skipped. Your equipped gear is safe, and every item is double-checked against its bag slot before anything gets sold.
 
-**Auto-protect equipped gear** - Optional toggle on the Blacklist (Keep) panel (default ON for fresh installs). Adds your currently-equipped gear to the Keep list on toggle-on, then auto-adds anything you equip later via `PLAYER_EQUIPMENT_CHANGED`, so a replaced upgrade sliding into bags can never be auto-vendored. Tooltip annotation marks these `[EC] Auto-Protected (Worn)`.
+**Auto-protect equipped gear** - Optional toggle on the Keep List panel (default ON for fresh installs). Adds your currently-equipped gear to the Keep List on toggle-on, then auto-adds anything you equip later via `PLAYER_EQUIPMENT_CHANGED`, so a replaced upgrade sliding into bags can never be auto-vendored. Tooltip annotation marks these `[EC] Auto-Protected (Worn)`.
 
-**Auto-protect looted upgrades** - Optional toggle on the Blacklist (Keep) panel (default OFF). Watches new bag items and auto-adds any whose iLvl exceeds your currently-equipped gear in the same slot. Tooltip annotation marks these `[EC] Auto-Protected (Upgrade)`. Mostly redundant when the per-rarity quality threshold uses `Use equipped iLvl` (the dynamic cap already excludes upgrades from auto-sell); useful when you switch a rarity to a fixed max iLvl above your equipped iLvl.
+**Auto-protect looted upgrades** - Optional toggle on the Keep List panel (default OFF). Watches new bag items and auto-adds any whose iLvl exceeds your currently-equipped gear in the same slot. Tooltip annotation marks these `[EC] Auto-Protected (Upgrade)`. Mostly redundant when the per-rarity quality threshold uses `Use equipped iLvl` (the dynamic cap already excludes upgrades from auto-sell); useful when you switch a rarity to a fixed max iLvl above your equipped iLvl.
 
-**Character and account whitelists** - Keep a per-character whitelist for things only that character sells, plus an account-wide whitelist for shared trash (reagents, seasonal items) that gets sold on every alt. Both lists are consulted when vendoring; either one listing an item is enough.
+**Character and account Sell Lists** - Keep a per-character Sell List for things only that character sells, plus an Account Sell List for shared trash (reagents, seasonal items) that gets sold on every alt. Both lists are consulted when vendoring; either one listing an item is enough.
 
-**Scan bags to whitelist** - Quickly bulk-add items from your bags by quality. Three colour-coded buttons (White, Green, Blue) on each whitelist panel scan your bags and add all matching items. Only items with a vendor value are added. A separate "Add matching in bags" field lets you add every bag item whose name contains a typed substring (handy for seasonal prefixes).
+**Scan bags to Sell List** - Quickly bulk-add items from your bags by quality. Three colour-coded buttons (White, Green, Blue) on each Sell List panel scan your bags and add all matching items. Only items with a vendor value are added. A separate "Add matching in bags" field lets you add every bag item whose name contains a typed substring (handy for seasonal prefixes).
 
-**Blacklist (do not sell)** - Protect valuable items from being sold. If an item is on your blacklist, it will never be vendored regardless of the whitelist or quality threshold. Useful for auction house items like Traveler's Bags that you don't want accidentally sold.
+**Keep List (do not sell)** - Protect valuable items from being sold. If an item is on your Keep List, it will never be vendored regardless of the Sell List or quality threshold. Useful for auction house items like Traveler's Bags that you don't want accidentally sold.
 
-**Auto-sell grey junk** - All grey (Poor quality) items are sold automatically at any merchant, regardless of your whitelist or merchant mode settings. No setup needed.
+**Auto-sell grey junk** - All grey (Poor quality) items are sold automatically at any merchant, regardless of your Sell List or merchant mode settings. No setup needed.
 
-**Profiles** - Save and load different whitelists and blacklists as named profiles. Handy for swapping between farming spots or activities without keeping one massive list. Each profile stores both your sell list and your protected items. Manage profiles through the settings panel or with slash commands. Destructive actions (clear, delete, reset stats) prompt for confirmation.
+**Profiles** - Save and load different Sell Lists and Keep Lists as named profiles. Handy for swapping between farming spots or activities without keeping one massive list. Each profile stores both your Sell List and your Keep List items. Manage profiles through the settings panel or with slash commands. Destructive actions (clear, delete, reset stats) prompt for confirmation.
 
-**List conflict clean-up** - Adds that would put an item on conflicting lists are refused at input time with a clear message, and the Alt+Right-Click bag menu greys out rows that would conflict. Legacy or imported conflicts can still be reported via `/ec clean` and auto-resolved with `/ec clean apply` (precedence: blacklist > delete-list > whitelist).
+**List conflict clean-up** - Adds that would put an item on conflicting lists are refused at input time with a clear message, and the Alt+Right-Click bag menu greys out rows that would conflict. Legacy or imported conflicts can still be reported via `/ec clean` and auto-resolved with `/ec clean apply` (precedence: Keep List > Delete List > Sell List).
 
 **Item deletion** - For items that can't be sold, the addon can automatically destroy them. You manage a separate delete list of item IDs to control exactly what gets removed.
 
 **Auto-open lootable containers** - Optional toggle on the Scavenger Settings panel. When enabled, EbonClearance opens any "Right Click to Open" container in your bags as soon as it lands - gift bags, treasure pouches, freebie pouches, etc. Lockboxes that need a key or lockpick are skipped. Combat-paused.
 
-**Right-click bag-item menu** - Alt+Right-Click any item in your bags to add it to a whitelist (character or account), blacklist, or deletion list, or to sell it immediately. Saves a trip to the settings panel for one-off list edits. A small grey "Alt+Right-Click for EbonClearance menu" hint on bag-item tooltips makes the shortcut discoverable.
+**Right-click bag-item menu** - Alt+Right-Click any item in your bags to add it to a Sell List (character or account), Keep List, or Delete List, or to sell it immediately. Saves a trip to the settings panel for one-off list edits. A small grey "Alt+Right-Click for EbonClearance menu" hint on bag-item tooltips makes the shortcut discoverable.
 
 **Greedy Scavenger management** - EbonClearance can mute the Scavenger's chat messages and speech bubbles, auto-summon it when you log in, dismiss it when you mount up, and re-summon it if it despawns or gets stuck on terrain. If you manually unsummon the Scavenger, the addon respects that and won't re-summon it. Other companions (bank mule, mailbox) are never replaced. Optional `Only summon Greedy Scavenger when out of combat` toggle defers summons during combat for users who prefer not to see the pet pop in mid-pull.
 
@@ -44,7 +44,7 @@ A World of Warcraft addon built for **Project Ebonhold**, designed to take the f
 
 **First-run welcome** - Brand-new installs see a brief chat summary of the active defaults at first login, plus a small popup with `Keep Defaults` / `Open Settings`. Existing characters never see this; they keep the unchanged single-line welcome.
 
-**Tooltip annotations on bag items** - Hover any bag item to see what EbonClearance will do with it: `Will Sell` (with reason), `Protected - Blacklisted`, `Auto-Protected (Worn)`, `Auto-Protected (Upgrade)`, `Will Delete - Deletion List`, `Whitelisted - No Vendor Price (cannot sell)`, etc. The annotation respects the live rule chain so what you see at hover time is what happens at the merchant.
+**Tooltip annotations on bag items** - Hover any bag item to see what EbonClearance will do with it: `Will Sell` (with reason for quality-rule matches), `Protected`, `Auto-Protected (Worn)`, `Auto-Protected (Upgrade)`, `Will Delete`, `Won't Sell - Currently Equipped`, `Won't Sell - No Vendor Price`, etc. The annotation respects the live rule chain so what you see at hover time is what happens at the merchant.
 
 **Session and lifetime statistics** - Keeps a running tally of gold earned, items sold, items deleted, repair costs and average inventory value. Session deltas are shown inline next to each lifetime figure so you can see at a glance what the current play session added. Lifetime and session counters reset independently.
 
@@ -52,18 +52,18 @@ A World of Warcraft addon built for **Project Ebonhold**, designed to take the f
 
 ## Coming from EbonholdStuff?
 
-EbonClearance started life as a fork of [EbonholdStuff](https://github.com/Badutski2/EbonholdStuff) by [Badutski2](https://github.com/Badutski2). The biggest change is the selling philosophy - EbonholdStuff sells everything and you blacklist what to keep, whereas EbonClearance only sells items you've explicitly whitelisted. Nothing gets sold unless you've told it to.
+EbonClearance started life as a fork of [EbonholdStuff](https://github.com/Badutski2/EbonholdStuff) by [Badutski2](https://github.com/Badutski2). The biggest change is the selling philosophy - EbonholdStuff sells everything and you mark what to keep, whereas EbonClearance only sells items you've explicitly listed for sale. Nothing gets sold unless you've told it to.
 
 | Feature | EbonholdStuff | EbonClearance |
 |---------|:---:|:---:|
-| **Selling approach** | Blacklist (sells everything, you protect items) | Whitelist (only sells what you list) |
+| **Selling approach** | Sells everything by default, you mark what to keep | Sell List (only sells what you list) |
 | **Grey junk auto-sell** | Yes | Yes |
 | **Quality filtering** | Fixed (protects green and above) | Configurable per-rarity threshold (White, Green, Blue, Purple) with `Use equipped iLvl` dynamic cap or fixed max iLvl, plus per-rarity bind-type filter (Any / BoE only / BoP only) |
 | **Auto-protect equipped gear** | No | Yes - on equip, gear lands on the Keep list automatically |
 | **Auto-protect looted upgrades** | No | Optional - bag drops above your equipped iLvl auto-Kept |
-| **Blacklist (do not sell)** | No | Yes - protect items from being sold |
-| **Scan bags to whitelist** | No | Yes - bulk add by quality (White/Green/Blue) |
-| **Whitelist/Blacklist profiles** | No | Yes - save, load, clear and rename profiles |
+| **Keep List (do not sell)** | No | Yes - protect items from being sold |
+| **Scan bags to Sell List** | No | Yes - bulk add by quality (White/Green/Blue) |
+| **Sell List / Keep List profiles** | No | Yes - save, load, clear and rename profiles |
 | **Import/Export lists** | No | Yes - shareable text strings |
 | **Default profile safety** | N/A | Default profile locked to empty for new characters |
 | **Equipped item protection** | No | Yes - gear is never touched, bag slots verified |
@@ -82,14 +82,14 @@ EbonClearance started life as a fork of [EbonholdStuff](https://github.com/Badut
 
 **Removed from EbonholdStuff:** The auto-inviting system (keyword whispers, raid conversion, loot rules) was dropped to keep the addon focused on inventory management.
 
-**If you're switching over:** Your old blacklist won't carry across. You'll need to build up a whitelist of items you actually want to sell. This is a bit more setup upfront but means the addon can never sell something you didn't expect.
+**If you're switching over:** Your old EbonholdStuff Keep List won't carry across. You'll need to build up a Sell List of items you actually want to sell. This is a bit more setup upfront but means the addon can never sell something you didn't expect.
 
 ## Installation
 
 1. Head to the [latest release](https://github.com/powerfulqa/EbonClearance/releases/latest) and download the zip file
 2. Extract the `EbonClearance` folder into your `Interface/AddOns` directory
 3. Log in and type `/ec` to open the configuration panel
-4. Add items to your whitelist (the things you want to sell) by shift-clicking them or entering their item IDs
+4. Add items to your Sell List (the things you want to sell) by shift-clicking them or entering their item IDs
 5. Optionally set up a delete list for unsellable items you want automatically destroyed
 
 The addon is character-aware, so you can restrict it to specific characters if you'd rather not have it running on every alt.
@@ -98,36 +98,36 @@ The addon is character-aware, so you can restrict it to specific characters if y
 
 All settings live under `/ec`, which opens a scrollable config panel. From there you can:
 
-- Manage your character whitelist, account-wide whitelist, blacklist, and deletion list
-- Scan bags to bulk-add items by quality (White, Green, Blue) on either whitelist panel
+- Manage your Sell List, Account Sell List, Keep List, and Delete List
+- Scan bags to bulk-add items by quality (White, Green, Blue) on either Sell List panel
 - Add items matching a name substring in one go via the "Add matching in bags" field on any list panel
-- Save and load profiles with different whitelist and blacklist combinations
+- Save and load profiles with different Sell List and Keep List combinations
 - Set per-rarity quality thresholds with either a dynamic cap (`Use equipped iLvl` - the cap follows your gear) or a fixed max iLvl, with an optional bind-type filter (Any / BoE only / BoP only) on Merchant Settings
-- Auto-protect equipped gear and looted upgrades on the Blacklist (Keep) panel - tickbox to opt in
+- Auto-protect equipped gear and looted upgrades on the Keep List panel - tickbox to opt in
 - Choose which merchants the addon works with (Goblin Merchant, normal vendors, or both)
 - Toggle auto-vendoring, deletion, repairs, Greedy Scavenger, and auto-opening of lootable containers on or off
 - Keep bags open when leaving a merchant
 - Enable Fast Mode for higher vendoring throughput at slightly higher disconnect risk
-- Import and export whitelists as shareable strings (per-section Source / Target list selectors)
+- Import and export Sell Lists as shareable strings (per-section Source / Target list selectors)
 - View lifetime and session statistics side-by-side, reset either independently
 - Control which characters the addon is active on
 - Adjust the vendor sell speed and summon delay
 - Right-click the minimap button to quickly enable or disable the addon
 - Bind keys for Open/close settings, Toggle enabled, and Force sell at current merchant under the WoW Key Bindings menu
-- Alt+Right-Click any bag item for a quick-action menu (whitelist, blacklist, delete, sell now)
+- Alt+Right-Click any bag item for a quick-action menu (Sell List, Keep List, Delete List, sell now)
 
 ## Slash Commands
 
 | Command | Description |
 |---------|-------------|
 | `/ec` | Open the settings panel |
-| `/ec profile list` | Show all saved whitelist profiles |
-| `/ec profile save <name>` | Save the current whitelist as a named profile |
-| `/ec profile load <name>` | Load a saved profile into the active whitelist |
+| `/ec profile list` | Show all saved Sell List profiles |
+| `/ec profile save <name>` | Save the current Sell List as a named profile |
+| `/ec profile load <name>` | Load a saved profile into the active Sell List |
 | `/ec profile delete <name>` | Delete a saved profile |
 | `/ec clean` | Report any item IDs present in more than one list |
-| `/ec clean apply` | Auto-resolve list conflicts using precedence blacklist > delete-list > whitelist |
-| `/ec clean upgrades` | Report stale `Auto-Protected (Upgrade)` Blacklist entries that are no longer above your equipped iLvl |
+| `/ec clean apply` | Auto-resolve list conflicts using precedence Keep List > Delete List > Sell List |
+| `/ec clean upgrades` | Report stale `Auto-Protected (Upgrade)` Keep List entries that are no longer above your equipped iLvl |
 | `/ec clean upgrades apply` | Remove the stale `Auto-Protected (Upgrade)` entries (with confirmation) |
 | `/ec bugreport` | Generate a diagnostic report you can copy and paste into a bug report |
 | `/ec help` | Print the full slash-command reference in chat |
@@ -148,6 +148,14 @@ Working on the addon? There's developer documentation under [docs/](docs/):
 A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check EbonClearance.lua` and `luacheck EbonClearance.lua` before opening a PR.
 
 ## Changelog
+
+### v2.14.0
+
+- **Lists renamed for clarity — Whitelist → Sell List, Blacklist → Keep List, Deletion List → Delete List.** Same data, clearer labels. Internal `DB.whitelist`, `DB.blacklist`, `DB.whitelistProfiles`, `DB.blacklistProfiles`, and `DB.blacklistAuto` field names are unchanged so existing user data carries forward exactly as-is — only user-facing UI labels, panel names, tooltip annotations, slash command help, and bug-report sections were updated. The previous "Whitelist" terminology was a long-standing source of confusion: in tech "whitelist" usually means "approved for the action being gated," but colloquially it often reads as "approved/kept." EC's whitelist was the **sell list** (approved for selling) — the opposite of the colloquial reading. Action-verb names (Sell List / Keep List / Delete List) make the function self-documenting: the name describes what the addon does with items on each list.
+- **Tooltip annotations simplified.** Bag-item hover annotations now use action-verb labels without redundant suffixes: `Will Sell`, `Protected`, `Will Delete` for the canonical states, `Won't Sell - Currently Equipped` and `Won't Sell - No Vendor Price` for the explicit-Sell-List-but-blocked cases (clearer than the previous `On Sell List - X (cannot sell)` framing which read as a contradiction). `Auto-Protected (Worn/Upgrade/Set)` and the per-rarity quality-rule strings (`Will Sell - Green iLvl X (cap Y)` etc.) are unchanged because their suffixes carry useful diagnostic info.
+- **Polish: `Greedy Scavenger resummoned.` close-out line now fires on every EC-driven merchant cycle.** Previously the chat acknowledgement only fired when the cycle was bag-full triggered (the only path that set the `pendingAnnounce` flag). Manual merchant visits where EC sold items silently re-summoned the Scavenger without the close-out. `FinishRun` now arms the flag before every `EC_SummonGreedyWithDelay` call so the line fires consistently. The "already-out" branch in `SummonGreedyScavenger` still clears the flag silently when the Scavenger was never dismissed (e.g. you sold only greys at a normal vendor without the Goblin cycle), so no spurious prints.
+
+Pure UI/docs refactor + one-line behaviour polish; zero schema change. Existing profiles and saved lists continue to work without migration.
 
 ### v2.13.0
 

@@ -32,19 +32,20 @@ _G["EBONCLEARANCE_ORIGIN"] = ADDON_URL
 _G["__EbonClearance_origin"] = ADDON_URL
 _G["__EbonClearance_author"] = ADDON_AUTHOR
 
--- Build-time version. The release workflow rewrites the v2.9.1 placeholder
--- with the pushed git tag (`vX.Y.Z`) via the same `s/v2.9.1/$VERSION/g`
--- sed rule that updates the .toc, so the in-game UI surfaces (settings
+-- Build-time version. The release workflow's sed rule rewrites the
+-- `local ADDON_VERSION = "vX.Y.Z"` line on each tag push (anchored
+-- pattern fixed in v2.13.2), so the in-game UI surfaces (settings
 -- panel header, bug-report builder, anything routed through EC_GetVersion)
--- always match the .toc on a release build. Dev checkouts keep the literal
--- `v2.9.1`; EC_GetVersion's match check fails on the placeholder and the
--- function falls back to GetAddOnMetadata, which on dev returns the .toc's
--- last-shipped value -- a legitimate "what's actually installed" indicator.
+-- always match the .toc on a release build. Dev checkouts keep
+-- whatever real version the last release shipped; EC_GetVersion's
+-- match check accepts any `^v%d+%.%d+%.%d+` value and short-circuits
+-- to it. The fallback to GetAddOnMetadata exists for the legacy
+-- placeholder case but is no longer reached on the current workflow.
 -- Carrying the version here means a stale .toc cache (WoW only re-reads
 -- .toc files on full client restart, not /reload) cannot make the displayed
--- version lie on a release build. Pre-v2.9.1 builds shipped a stale "v2.5.0"
--- literal because the workflow's sed pattern didn't match this line; fixed
--- in v2.9.1 by switching to the v2.11.0 placeholder convention.
+-- version lie on a release build. The CI test in
+-- tests/test_layout_reactivity.lua asserts this constant matches the
+-- .toc Version field so any future drift fails CI before shipping.
 local ADDON_VERSION = "v2.13.8"
 local function EC_GetVersion()
     if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
@@ -1108,7 +1109,7 @@ local function EC_SaveProfile(name)
     DB.activeProfileName = name
     local wlCount = EC_CountItems(snapshot)
     local blCount = EC_CountItems(blSnapshot)
-    return true, string.format('Saved profile "|cffffff00%s|r" (%d whitelist, %d blacklist).', name, wlCount, blCount)
+    return true, string.format('Saved profile "|cffffff00%s|r" (%d sell, %d keep).', name, wlCount, blCount)
 end
 
 local function EC_LoadProfile(name)
@@ -1145,7 +1146,7 @@ local function EC_LoadProfile(name)
     if bp and bp.listUI then
         bp.listUI:Refresh()
     end
-    return true, string.format('Loaded profile "|cffffff00%s|r" (%d whitelist, %d blacklist).', name, wlCount, blCount)
+    return true, string.format('Loaded profile "|cffffff00%s|r" (%d sell, %d keep).', name, wlCount, blCount)
 end
 
 local function EC_DeleteProfile(name)
@@ -2026,7 +2027,7 @@ end
 -- (returns "item", itemID, itemLink for items), clears the cursor, and
 -- routes through EC_AddItemToList so cross-list conflict guards and
 -- duplicate checks apply. The label is the human-readable list name used
--- in the chat reply ("Whitelist", "Blacklist (Keep)", "Delete List").
+-- in the chat reply ("Sell List", "Keep List", "Delete List").
 -- Hung off EC_compCache (rather than a file-scope local) to stay under
 -- Lua 5.1's 200-locals-per-main-chunk cap.
 function EC_compCache.handleItemDrop(setName, label)
@@ -2140,9 +2141,9 @@ function EC_compCache.buildElvUIBagButtons()
     sellBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
         GameTooltip:AddLine("|cff66ccff[EC]|r |cffb6ffb6Sell|r", 0.71, 1, 0.71)
-        GameTooltip:AddLine("Drop item to add to Whitelist (sell list).", 1, 1, 1)
+        GameTooltip:AddLine("Drop item to add to Sell List.", 1, 1, 1)
         GameTooltip:AddLine("Click at a vendor to start selling now.", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Right-click to open the Whitelist panel.", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Right-click to open the Sell List panel.", 0.7, 0.7, 0.7)
         if not (MerchantFrame and MerchantFrame:IsShown()) then
             GameTooltip:AddLine("Not at a vendor.", 1, 0.4, 0.4)
         end
@@ -2153,13 +2154,13 @@ function EC_compCache.buildElvUIBagButtons()
     sellBtn:RegisterForDrag("LeftButton")
     sellBtn:RegisterForClicks("AnyUp")
     sellBtn:SetScript("OnReceiveDrag", function()
-        EC_compCache.handleItemDrop("whitelist", "Whitelist")
+        EC_compCache.handleItemDrop("whitelist", "Sell List")
     end)
     sellBtn:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             EC_compCache.openPanelToList("whitelist")
         elseif CursorHasItem() then
-            EC_compCache.handleItemDrop("whitelist", "Whitelist")
+            EC_compCache.handleItemDrop("whitelist", "Sell List")
         elseif EbonClearance_ForceSell then
             EbonClearance_ForceSell()
         end
@@ -2174,9 +2175,9 @@ function EC_compCache.buildElvUIBagButtons()
     keepBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
         GameTooltip:AddLine("|cff66ccff[EC]|r |cffffb84dKeep|r", 1, 0.78, 0.30)
-        GameTooltip:AddLine("Drop item to add to Blacklist (Keep list).", 1, 1, 1)
+        GameTooltip:AddLine("Drop item to add to Keep List.", 1, 1, 1)
         GameTooltip:AddLine("Items here are never auto-sold or auto-deleted.", 0.7, 0.7, 0.7)
-        GameTooltip:AddLine("Right-click to open the Blacklist panel.", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Right-click to open the Keep List panel.", 0.7, 0.7, 0.7)
         GameTooltip:Show()
         self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
         self._icon:SetVertexColor(self._hoverR, self._hoverG, self._hoverB)
@@ -2184,13 +2185,13 @@ function EC_compCache.buildElvUIBagButtons()
     keepBtn:RegisterForDrag("LeftButton")
     keepBtn:RegisterForClicks("AnyUp")
     keepBtn:SetScript("OnReceiveDrag", function()
-        EC_compCache.handleItemDrop("blacklist", "Blacklist (Keep)")
+        EC_compCache.handleItemDrop("blacklist", "Keep List")
     end)
     keepBtn:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             EC_compCache.openPanelToList("blacklist")
         elseif CursorHasItem() then
-            EC_compCache.handleItemDrop("blacklist", "Blacklist (Keep)")
+            EC_compCache.handleItemDrop("blacklist", "Keep List")
         end
     end)
 
@@ -2285,7 +2286,7 @@ function EC_compCache.protectEquipSlot(slot)
     -- Blacklist is the protected list; that's the correct semantic for
     -- "remember what I'm wearing and don't auto-sell it".
     DB.blacklistAuto = DB.blacklistAuto or {}
-    if EC_AddItemToList("blacklist", id, "Blacklist (Keep)", true) then
+    if EC_AddItemToList("blacklist", id, "Keep List", true) then
         -- v2.12.0: tag the entry with its origin so the tooltip can
         -- show "(Worn)" vs "(Upgrade)" instead of a generic
         -- Auto-Protected label. Legacy boolean-true entries from
@@ -2341,7 +2342,7 @@ function EC_compCache.protectEquipmentSetItem(itemID)
         return false
     end
     DB.blacklistAuto = DB.blacklistAuto or {}
-    if EC_AddItemToList("blacklist", itemID, "Blacklist (Keep)", true) then
+    if EC_AddItemToList("blacklist", itemID, "Keep List", true) then
         DB.blacklistAuto[itemID] = "set"
         return true
     end
@@ -2564,7 +2565,7 @@ function EC_compCache.checkBagsForUpgrades()
                         -- side; subsequent BAG_UPDATEs cover the bag side
                         -- once at least one slot is populated.
                         if lowestEquipped and iLvl > lowestEquipped then
-                            if EC_AddItemToList("blacklist", itemID, "Blacklist (Keep)", true) then
+                            if EC_AddItemToList("blacklist", itemID, "Keep List", true) then
                                 DB.blacklistAuto = DB.blacklistAuto or {}
                                 -- v2.12.0: origin tag for tooltip fork.
                                 DB.blacklistAuto[itemID] = "upgrade"
@@ -2606,10 +2607,10 @@ end
 -- and fixed handlers. EC_ShowItemContextMenu sets per-row text + OnClick on
 -- every show; the buttons created in EC_BuildCtxFrame are empty placeholders.
 local EC_CTX_ROWS = {
-    { kind = "list", setName = "whitelist", label = "Whitelist (Character)" },
-    { kind = "list", setName = "accountWhitelist", label = "Whitelist (Account)" },
-    { kind = "list", setName = "blacklist", label = "Blacklist (Do Not Sell)" },
-    { kind = "list", setName = "deleteList", label = "Deletion List" },
+    { kind = "list", setName = "whitelist", label = "Sell List (Character)" },
+    { kind = "list", setName = "accountWhitelist", label = "Sell List (Account)" },
+    { kind = "list", setName = "blacklist", label = "Keep List (Do Not Sell)" },
+    { kind = "list", setName = "deleteList", label = "Delete List" },
     { kind = "sellNow" },
     { kind = "cancel" },
 }
@@ -3685,6 +3686,17 @@ local function FinishRun()
                 if DB and DB.autoLootCycle then
                     EC_lootCycleState = STATE.IDLE
                 end
+                -- v2.14.0: arm the resummon-print debounce on every
+                -- merchant-cycle close-out, not just bag-full-triggered
+                -- cycles. SummonGreedyScavenger's already-out branch
+                -- clears the flag silently if the Scavenger was never
+                -- dismissed (e.g. user sold only greys at a normal
+                -- vendor without the Goblin cycle), so this can't
+                -- spuriously print. The previous behaviour only set
+                -- the flag in EC_HandleBagFullForCycle, so manual
+                -- merchant visits silently summoned the Scavenger
+                -- without the chat acknowledgement.
+                EC_compCache.pendingAnnounce = true
                 EC_SummonGreedyWithDelay()
             end
         end)
@@ -3701,6 +3713,8 @@ local function FinishRun()
     if DB and DB.autoLootCycle then
         EC_lootCycleState = STATE.IDLE
     end
+    -- v2.14.0: see comment at the corresponding call above.
+    EC_compCache.pendingAnnounce = true
     EC_SummonGreedyWithDelay()
 end
 
@@ -3957,10 +3971,10 @@ local function EC_AnnotateTooltip(tooltip)
                 statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected|r"
             end
         else
-            statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Blacklisted|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dProtected|r"
         end
     elseif IsInSet(DB.deleteList, id) and DB.enableDeletion then
-        statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete - Deletion List|r"
+        statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete|r"
     elseif IsInSet(DB.whitelist, id) or (ADB and IsInSet(ADB.whitelist, id)) then
         -- Honesty: EC_IsSellable also requires sellPrice > 0 and not currently
         -- equipped. Without these checks the tooltip used to claim "Will Sell"
@@ -3970,11 +3984,11 @@ local function EC_AnnotateTooltip(tooltip)
         -- of decision instead of wondering why the cycle skipped them.
         local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(id)
         if IsEquippedItem(id) then
-            statusLine = "|cff66ccff[EC]|r |cffffb84dWhitelisted - Currently Equipped (cannot sell)|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell - Currently Equipped|r"
         elseif not (sellPrice and sellPrice > 0) then
-            statusLine = "|cff66ccff[EC]|r |cffffb84dWhitelisted - No Vendor Price (cannot sell)|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell - No Vendor Price|r"
         else
-            statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell - Whitelisted|r"
+            statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell|r"
         end
     elseif DB.qualityRules then
         local _, _, quality, ilvl, _, _, _, _, equipLoc, _, sellPrice = GetItemInfo(id)
@@ -5174,9 +5188,9 @@ StaticPopupDialogs["EC_CONFIRM_CLEAR_LIST"] = {
 -- OnAccept invokes the callback function passed via StaticPopup_Show's
 -- third "data" argument, mirroring the EC_CONFIRM_CLEAR_LIST pattern.
 StaticPopupDialogs["EC_CONFIRM_CLEAN_UPGRADES"] = {
-    text = "Remove |cffffff00%d|r stale 'Upgrade'-tagged entries from your Blacklist?\n"
+    text = "Remove |cffffff00%d|r stale 'Upgrade'-tagged entries from your Keep List?\n"
         .. "|cffaaaaaaThese items were auto-tagged as upgrades but are no longer above your "
-        .. "currently-equipped iLvl. Manual blacklist entries (no auto-tag) and 'Worn'-tagged "
+        .. "currently-equipped iLvl. Manual Keep List entries (no auto-tag) and 'Worn'-tagged "
         .. "entries are not affected.|r",
     button1 = YES,
     button2 = NO,
@@ -5252,7 +5266,7 @@ local function BuildMainPanel(panel, content, refreshStats)
         descLabel2:SetWordWrap(true)
     end
     descLabel2:SetText(
-        "Greys auto-sell. Whites and greens with iLvl below your equipped gear in the same slot also auto-sell by default, and upgrades you loot are auto-protected. Use the |cffb6ffb6Whitelist|r (per-character or account-wide) to mark specific items for sale, the |cffb6ffb6Blacklist|r to permanently protect items, and |cffb6ffb6Merchant Settings|r to tune the auto-sell rules per rarity. |cff888888Tip: Alt+Right-Click any bag item for a quick-action menu.|r"
+        "Greys auto-sell. Whites and greens with iLvl below your equipped gear in the same slot also auto-sell by default, and upgrades you loot are auto-protected. Use the |cffb6ffb6Sell List|r (per-character or account-wide) to mark specific items for sale, the |cffb6ffb6Keep List|r to permanently protect items, and |cffb6ffb6Merchant Settings|r to tune the auto-sell rules per rarity. |cff888888Tip: Alt+Right-Click any bag item for a quick-action menu.|r"
     )
 
     -- Stats fontstrings. Stacked vertically; each attaches its ref to `panel`
@@ -5349,7 +5363,7 @@ local function BuildMainPanel(panel, content, refreshStats)
         "|cffffff00/ec|r  Open settings\n"
             .. "|cffffff00/ec profile [list|save|load|delete <name>]|r  Manage saved profiles\n"
             .. "|cffffff00/ec clean [apply]|r  Find and resolve list conflicts\n"
-            .. "|cffffff00/ec clean upgrades [apply]|r  Clean stale 'Upgrade'-tagged Blacklist entries\n"
+            .. "|cffffff00/ec clean upgrades [apply]|r  Clean stale 'Upgrade'-tagged Keep List entries\n"
             .. "|cffffff00/ec bugreport|r  Generate a diagnostic report\n"
             .. "|cffffff00/ec help|r  Print full slash-command reference in chat\n"
             .. "|cffffff00/ecdebug|r  Show debug info and bag scan"
@@ -5695,7 +5709,7 @@ MerchantPanel:SetScript("OnShow", function(self)
         thresholdDesc:SetWordWrap(true)
     end
     thresholdDesc:SetText(
-        "Auto-sell rules per rarity. Each rarity has its own toggle, an optional cap, and a bind-type filter. Tick |cffffff00Use equipped iLvl|r for a dynamic cap that follows your equipped iLvl in the same slot (recommended; default ON for whites/greens on fresh installs). Untick for a fixed |cffffff00max iLvl|r - 0 = sell every item of that rarity. |cffaaaaaaWhitelist always sells; blacklist always protects.|r"
+        "Auto-sell rules per rarity. Each rarity has its own toggle, an optional cap, and a bind-type filter. Tick |cffffff00Use equipped iLvl|r for a dynamic cap that follows your equipped iLvl in the same slot (recommended; default ON for whites/greens on fresh installs). Untick for a fixed |cffffff00max iLvl|r - 0 = sell every item of that rarity. |cffaaaaaaSell List always sells; Keep List always protects.|r"
     )
 
     -- v2.10.0: bind-type filter options shared across all four rarity rows.
@@ -5990,7 +6004,7 @@ local function EC_AddScanByQualityRow(parent, anchorFrame, setTableName, listLab
 end
 
 local WhitelistPanel = CreateFrame("Frame", "EbonClearanceOptionsWhitelist", InterfaceOptionsFramePanelContainer)
-WhitelistPanel.name = "Whitelist - Character"
+WhitelistPanel.name = "Sell List"
 WhitelistPanel.parent = "EbonClearance"
 
 WhitelistPanel:SetScript("OnShow", function(self)
@@ -6004,14 +6018,14 @@ WhitelistPanel:SetScript("OnShow", function(self)
     end
     self.inited = true
 
-    MakeHeader(self, "Whitelist Settings", -16)
+    MakeHeader(self, "Sell List", -16)
 
     -- Panel-specific description only. Cross-cutting info (grey junk
     -- auto-sell, quality threshold) lives on the Main panel to avoid
     -- repeating the same explanation on every list page.
     local descLabel = MakeLabel(
         self,
-        "Specific items to always auto-sell on this character, regardless of rarity rules. Use the |cffb6ffb6Add from bags|r buttons below to bulk-add by colour, or shift-click / type IDs to add manually. |cffaaaaaaItems are saved and restored by profiles. For items you want sold on every alt, use |cffb6ffb6Whitelist - Account|r |cffaaaaaainstead.|r",
+        "Specific items to always auto-sell on this character, regardless of rarity rules. Use the |cffb6ffb6Add from bags|r buttons below to bulk-add by colour, or shift-click / type IDs to add manually. |cffaaaaaaItems are saved and restored by profiles. For items you want sold on every alt, use |cffb6ffb6Account Sell List|r |cffaaaaaainstead.|r",
         16,
         -44
     )
@@ -6021,7 +6035,7 @@ WhitelistPanel:SetScript("OnShow", function(self)
     -- the list UI cascades below the scan row and fills the remaining panel
     -- height via a BOTTOMRIGHT anchor (fixed SetHeight previously caused the
     -- bottom row to clip past the panel safe area at narrow widths).
-    local scanRow = EC_AddScanByQualityRow(self, descLabel, "whitelist", "your character whitelist", function()
+    local scanRow = EC_AddScanByQualityRow(self, descLabel, "whitelist", "the Sell List", function()
         if self.listUI then
             self.listUI:Refresh()
         end
@@ -6055,7 +6069,7 @@ ProfilesPanel:SetScript("OnShow", function(self)
     MakeHeader(self, "Profiles", -16)
     local descLabel = MakeLabel(
         self,
-        "Profiles save and restore your |cffb6ffb6Whitelist - Character|r and |cffb6ffb6Blacklist - Keep|r as a named pair. Switching profiles overwrites the live character lists with the saved snapshot. Handy for swapping between farming spots.",
+        "Profiles save and restore your |cffb6ffb6Sell List|r and |cffb6ffb6Keep List|r as a named pair. Switching profiles overwrites the live character lists with the saved snapshot. Handy for swapping between farming spots.",
         16,
         -44
     )
@@ -6070,7 +6084,7 @@ ProfilesPanel:SetScript("OnShow", function(self)
         clarifyLabel:SetWordWrap(true)
     end
     clarifyLabel:SetText(
-        "|cffaaaaaaProfiles do NOT touch the |cffb6ffb6Whitelist - Account|r|cffaaaaaa list (which is shared across every alt and never replaced). The |cffb6ffb6Default|r|cffaaaaaa profile is permanently empty - give your profile a real name before saving.|r"
+        "|cffaaaaaaProfiles do NOT touch the |cffb6ffb6Account Sell List|r|cffaaaaaa (which is shared across every alt and never replaced). The |cffb6ffb6Default|r|cffaaaaaa profile is permanently empty - give your profile a real name before saving.|r"
     )
 
     -- Active profile indicator
@@ -6500,7 +6514,7 @@ ImportExportPanel:SetScript("OnShow", function(self)
     exportNameBox:SetSize(200, 20)
     exportNameBox:SetPoint("LEFT", exportNameLabel, "RIGHT", 8, 0)
     exportNameBox:SetMaxLetters(40)
-    exportNameBox:SetText("My Whitelist")
+    exportNameBox:SetText("My Sell List")
     StyleInputBox(exportNameBox)
 
     local exportBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
@@ -6546,7 +6560,7 @@ ImportExportPanel:SetScript("OnShow", function(self)
     end)
 
     -- === IMPORT SECTION ===
-    MakeLabel(self, "Paste a whitelist string and pick which list it imports into.", 16, -198)
+    MakeLabel(self, "Paste a Sell List string and pick which list it imports into.", 16, -198)
 
     local importScope = "character"
 
@@ -6657,7 +6671,7 @@ ImportExportPanel:SetScript("OnShow", function(self)
 end)
 
 local DeletePanel = CreateFrame("Frame", "EbonClearanceOptionsDeletion", InterfaceOptionsFramePanelContainer)
-DeletePanel.name = "Deletion List"
+DeletePanel.name = "Delete List"
 DeletePanel.parent = "EbonClearance"
 
 DeletePanel:SetScript("OnShow", function(self)
@@ -6699,7 +6713,7 @@ DeletePanel:SetScript("OnShow", function(self)
         PlaySound("igMainMenuOptionCheckBoxOn")
     end)
 
-    self.listUI = CreateListUI(self, "Deletion List", "deleteList", 16, -130)
+    self.listUI = CreateListUI(self, "Delete List", "deleteList", 16, -130)
     -- v2.11.0: anchor BOTTOMRIGHT so the list stretches with the panel
     -- on Interface Options frame resize - mirrors the Whitelist /
     -- Blacklist / Account-Whitelist setups. Without this the list box
@@ -7184,7 +7198,7 @@ end)
 -- Blacklist (Do Not Sell) Panel
 -- ============================================================
 local BlacklistPanel = CreateFrame("Frame", "EbonClearanceOptionsBlacklist", InterfaceOptionsFramePanelContainer)
-BlacklistPanel.name = "Blacklist - Keep"
+BlacklistPanel.name = "Keep List"
 BlacklistPanel.parent = "EbonClearance"
 
 BlacklistPanel:SetScript("OnShow", function(self)
@@ -7207,7 +7221,7 @@ BlacklistPanel:SetScript("OnShow", function(self)
     end
     self.inited = true
 
-    MakeHeader(self, "Blacklist (Do Not Sell)", -16)
+    MakeHeader(self, "Keep List (Do Not Sell)", -16)
     local blDesc = MakeLabel(
         self,
         "Specific items to permanently protect from auto-sell. Use this for valuable items you'd rather list at the auction house. |cffaaaaaaThe auto-protect toggles below extend this list automatically with items you equip and upgrades you loot.|r",
@@ -7384,7 +7398,7 @@ end)
 
 local AccountWhitelistPanel =
     CreateFrame("Frame", "EbonClearanceOptionsAccountWhitelist", InterfaceOptionsFramePanelContainer)
-AccountWhitelistPanel.name = "Whitelist - Account"
+AccountWhitelistPanel.name = "Account Sell List"
 AccountWhitelistPanel.parent = "EbonClearance"
 
 AccountWhitelistPanel:SetScript("OnShow", function(self)
@@ -7398,7 +7412,7 @@ AccountWhitelistPanel:SetScript("OnShow", function(self)
     end
     self.inited = true
 
-    MakeHeader(self, "Account Whitelist", -16)
+    MakeHeader(self, "Account Sell List", -16)
     local descLabel = MakeLabel(
         self,
         "Specific items to always auto-sell on |cffffff00every|r character on this account. Useful for shared trash like reagents or seasonal items. |cffaaaaaaThis list is not part of profiles - it stays the same when you switch profiles.|r",
@@ -7409,7 +7423,7 @@ AccountWhitelistPanel:SetScript("OnShow", function(self)
     -- Cascade-anchor the scan row to the description's BOTTOMLEFT so it stays
     -- below the description regardless of how many lines it wraps to. Then the
     -- list UI cascades below the scan row. Mirrors WhitelistPanel.
-    local scanRow = EC_AddScanByQualityRow(self, descLabel, "accountWhitelist", "the account whitelist", function()
+    local scanRow = EC_AddScanByQualityRow(self, descLabel, "accountWhitelist", "the Account Sell List", function()
         if self.listUI then
             self.listUI:Refresh()
         end
@@ -7592,7 +7606,7 @@ local function EC_BuildBugReport()
     end
     add("")
 
-    add("--- Whitelist ---")
+    add("--- Sell Rules ---")
     add("Quality Rules:")
     for q = 1, 4 do
         local r = DB.qualityRules and DB.qualityRules[q] or {}
@@ -7612,9 +7626,9 @@ local function EC_BuildBugReport()
         ))
     end
     add("Active Profile: " .. tostring(DB.activeProfileName))
-    add("Whitelist Items: " .. tostring(EC_CountItems(DB.whitelist)))
-    add("Account Whitelist Items: " .. tostring(ADB and EC_CountItems(ADB.whitelist) or 0))
-    add("Blacklist Items: " .. tostring(EC_CountItems(DB.blacklist)))
+    add("Sell List Items: " .. tostring(EC_CountItems(DB.whitelist)))
+    add("Account Sell List Items: " .. tostring(ADB and EC_CountItems(ADB.whitelist) or 0))
+    add("Keep List Items: " .. tostring(EC_CountItems(DB.blacklist)))
     add("Delete List Items: " .. tostring(EC_CountItems(DB.deleteList)))
     add("")
 
@@ -7665,7 +7679,7 @@ local function EC_BuildBugReport()
         local wlCount = EC_CountItems(DB.whitelistProfiles[names[i]])
         local blCount = DB.blacklistProfiles[names[i]] and EC_CountItems(DB.blacklistProfiles[names[i]]) or 0
         local tag = (names[i] == DB.activeProfileName) and " (active)" or ""
-        add(names[i] .. " (" .. wlCount .. " whitelist, " .. blCount .. " blacklist)" .. tag)
+        add(names[i] .. " (" .. wlCount .. " sell, " .. blCount .. " keep)" .. tag)
     end
     add("")
 
@@ -8021,7 +8035,7 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
             PrintNice(result)
         elseif sub == "list" or sub == "" then
             EnsureDB()
-            PrintNice("Whitelist Profiles:")
+            PrintNice("Sell List Profiles:")
             local names = {}
             for name in pairs(DB.whitelistProfiles) do
                 if type(name) == "string" then
@@ -8055,12 +8069,12 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
         PrintNice("|cffffff00=== EbonClearance Slash Commands ===|r")
         PrintNice("|cffffff00/ec|r  Open settings")
         PrintNice("|cffffff00/ec profile list|r  Show all saved profiles")
-        PrintNice("|cffffff00/ec profile save <name>|r  Save current whitelist as a profile")
+        PrintNice("|cffffff00/ec profile save <name>|r  Save current Sell List as a profile")
         PrintNice("|cffffff00/ec profile load <name>|r  Load a saved profile")
         PrintNice("|cffffff00/ec profile delete <name>|r  Delete a profile")
         PrintNice("|cffffff00/ec clean|r  Report items present in more than one list")
-        PrintNice("|cffffff00/ec clean apply|r  Auto-resolve conflicts (blacklist > deleteList > whitelist)")
-        PrintNice("|cffffff00/ec clean upgrades|r  Report stale 'Upgrade'-tagged Blacklist entries no longer above equipped")
+        PrintNice("|cffffff00/ec clean apply|r  Auto-resolve conflicts (Keep List > Delete List > Sell List)")
+        PrintNice("|cffffff00/ec clean upgrades|r  Report stale 'Upgrade'-tagged Keep List entries no longer above equipped")
         PrintNice("|cffffff00/ec clean upgrades apply|r  Remove the stale 'Upgrade' entries (with confirmation)")
         PrintNice("|cffffff00/ec bugreport|r  Generate a diagnostic report for bug reports")
         PrintNice("|cffffff00/ecdebug|r  Show debug info and bag scan")
@@ -8081,7 +8095,7 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
             local nDeferred = #report.deferred
             local nSkipped = #report.skipped
             if nStale == 0 and nDeferred == 0 and nSkipped == 0 then
-                PrintNice("|cffaaaaaaNo 'Upgrade'-tagged entries on your Blacklist.|r")
+                PrintNice("|cffaaaaaaNo 'Upgrade'-tagged entries on your Keep List.|r")
                 return
             end
             PrintNicef(
@@ -8125,7 +8139,7 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
                     dialog.data = function()
                         local removed = EC_compCache.applyStaleUpgradeCleanup(report)
                         PrintNicef(
-                            "Removed |cffffff00%d|r stale 'Upgrade' entr%s from the Blacklist.",
+                            "Removed |cffffff00%d|r stale 'Upgrade' entr%s from the Keep List.",
                             removed,
                             removed == 1 and "y" or "ies"
                         )
@@ -8189,7 +8203,7 @@ SlashCmdList["ECDEBUG"] = function()
     local wlCount = 0
     for k, v in pairs(DB.whitelist or {}) do
         local n = GetItemInfo(k) or ("ItemID:" .. tostring(k))
-        PrintNicef("  Whitelist[%s] = %s  (%s)", tostring(k), tostring(v), n)
+        PrintNicef("  Sell List[%s] = %s  (%s)", tostring(k), tostring(v), n)
         wlCount = wlCount + 1
     end
     if wlCount == 0 then
