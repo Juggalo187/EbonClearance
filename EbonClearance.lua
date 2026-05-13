@@ -690,6 +690,18 @@ local function EnsureDB()
     if type(DB.autoOpenContainers) ~= "boolean" then
         DB.autoOpenContainers = false
     end
+    -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
+    -- effectively enabled, EC_HandleLootReady drains every slot in the
+    -- loot window the moment LOOT_READY fires, so the loot frame
+    -- flashes briefly or skips entirely. Pairs with the auto-loot
+    -- cycle: faster per-kill looting = bag-full threshold trips
+    -- sooner = vendor cycle turns over faster. Default off so
+    -- existing users keep the standard loot-window behaviour and
+    -- BoP-bind safety prompts. Pattern borrowed from FasterLoot
+    -- (others/FasterLoot/FasterLoot.lua).
+    if type(DB.fastLoot) ~= "boolean" then
+        DB.fastLoot = false
+    end
     if DB.merchantMode ~= "goblin" and DB.merchantMode ~= "any" and DB.merchantMode ~= "both" then
         -- v2.13.x: default flipped from "goblin" to "both" so brand-new users
         -- who haven't unlocked the Goblin Merchant pet yet still get useful
@@ -1688,6 +1700,14 @@ local EC_merchantReminderTimer = 0
 -- the write to leak into _G if the function is parsed before the local exists.
 local EC_autoOpenInFlight = false
 
+-- v2.16.0: Fast Loot last-fire timestamp. EC_HandleLootReady debounces on
+-- this so a burst of LOOT_READY events (which can fire several times for the
+-- same loot interaction) doesn't cause repeated LootSlot storms. Same
+-- forward-declaration discipline as EC_autoOpenInFlight: the handler writes
+-- this and we don't want the write to leak to _G if the function parses
+-- before the local exists.
+local EC_lastFastLootTime = 0
+
 -- Auto-loot cycle: react to bag-full as soon as the game tells us a bag
 -- changed. Same body as the old 5-second poll; called from BAG_UPDATE so the
 -- Goblin Merchant is summoned within a tick of the threshold being crossed.
@@ -1943,6 +1963,39 @@ local function EC_HandleAutoOpenContainers()
                 return
             end
         end
+    end
+end
+
+-- v2.16.0: Fast Loot driver. On LOOT_READY, if DB.fastLoot is on AND
+-- Blizzard's auto-loot mode is effectively enabled, iterate the loot
+-- window's slots backwards and call LootSlot on each so the items vacuum
+-- into bags instantly. The loot frame briefly appears or skips entirely.
+-- Pattern borrowed from FasterLoot (others/FasterLoot/FasterLoot.lua).
+--
+-- The "auto-loot is effectively on right now?" check is FasterLoot's:
+-- autoLootDefault is the CVar setting, AUTOLOOTTOGGLE is the modifier
+-- key (typically Shift) that inverts auto-loot for one interaction. When
+-- the CVar's value matches whether the modifier is held, auto-loot is
+-- OFF for this loot (user is explicitly opting OUT - or didn't opt IN);
+-- when they differ, auto-loot is ON. Skip when off so the user keeps the
+-- standard loot window for selective looting.
+--
+-- 0.3 s debounce: LOOT_READY can fire multiple times in a single loot
+-- interaction. After the first firing drains all slots, subsequent fires
+-- within 0.3 s would just be wasted work. Same pattern FasterLoot uses.
+local function EC_HandleLootReady()
+    if not DB or not DB.fastLoot then
+        return
+    end
+    if GetCVarBool("autoLootDefault") == IsModifiedClick("AUTOLOOTTOGGLE") then
+        return
+    end
+    if (GetTime() - EC_lastFastLootTime) < 0.3 then
+        return
+    end
+    EC_lastFastLootTime = GetTime()
+    for i = GetNumLootItems(), 1, -1 do
+        LootSlot(i)
     end
 end
 
@@ -4135,6 +4188,30 @@ local function EC_InstallTooltipHookOnce()
         ItemRefTooltip:HookScript("OnTooltipSetItem", EC_AnnotateTooltip)
         ItemRefTooltip:HookScript("OnTooltipCleared", EC_ClearTooltipFlag)
     end
+end
+
+-- v2.16.0: Fast Loot BoP-bind auto-dismiss. When Fast Loot is on and the
+-- user loots a Bind-on-Pickup item, Blizzard normally shows a LOOT_BIND
+-- popup asking "are you sure?". That popup blocks the rest of the loot
+-- queue draining and defeats the point of Fast Loot. This hook auto-
+-- confirms each LootSlot call and force-hides the popup. Self-gates on
+-- DB.fastLoot at call time so non-Fast-Loot users keep the Blizzard
+-- safety prompt. Idempotent: the hookedOnce guard makes a second call
+-- cheap if anything ever calls this twice. Pattern borrowed from
+-- LootClicker (others/LootClicker-master/core.lua:158-161).
+local EC_fastLootHooked = false
+local function EC_InstallFastLootHookOnce()
+    if EC_fastLootHooked then
+        return
+    end
+    EC_fastLootHooked = true
+    hooksecurefunc("LootSlot", function(slot)
+        if not DB or not DB.fastLoot then
+            return
+        end
+        ConfirmLootSlot(slot)
+        StaticPopup_Hide("LOOT_BIND")
+    end)
 end
 
 local MainOptions = CreateFrame("Frame", "EbonClearanceOptionsMain", InterfaceOptionsFramePanelContainer)
@@ -6758,6 +6835,9 @@ ScavengerPanel:SetScript("OnShow", function(self)
         if self.autoOpenCB then
             self.autoOpenCB:SetChecked(DB.autoOpenContainers)
         end
+        if self.fastLootCB then
+            self.fastLootCB:SetChecked(DB.fastLoot)
+        end
         return
     end
     self.inited = true
@@ -6937,6 +7017,47 @@ ScavengerPanel:SetScript("OnShow", function(self)
     end
     autoOpenNote:SetText("|cff888888Lockboxes that need a key or lockpick are skipped. Combat-paused.|r")
 
+    -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
+    -- effectively enabled (autoLootDefault XOR'd with the
+    -- AUTOLOOTTOGGLE modifier), EC drains every slot in the loot
+    -- window the moment LOOT_READY fires - the loot frame flashes
+    -- briefly or skips entirely, and BoP-bind popups are auto-
+    -- confirmed for items that would otherwise interrupt the drain.
+    -- Pairs well with the auto-loot cycle for fast farming.
+    local fastLootCB = AddCheckbox(
+        content,
+        "EbonClearanceFastLootCB",
+        autoOpenNote,
+        "Fast Loot (instant corpse looting)",
+        function()
+            return DB.fastLoot
+        end,
+        function(v)
+            DB.fastLoot = v
+        end,
+        -10
+    )
+    -- AddCheckbox anchors at (0, yOff) from its anchor's BOTTOMLEFT, and
+    -- our anchor (autoOpenNote) is itself indented +26 to align with the
+    -- auto-open checkbox label. Back-shift the x by -26 to put fastLootCB
+    -- on the panel's left margin, level with autoOpenCB above. Same trick
+    -- the Keep List Settings panel uses to keep its toggle stack
+    -- left-aligned beneath each toggle's wrapped explanatory note.
+    fastLootCB:ClearAllPoints()
+    fastLootCB:SetPoint("TOPLEFT", autoOpenNote, "BOTTOMLEFT", -26, -10)
+    self.fastLootCB = fastLootCB
+
+    local fastLootNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    fastLootNote:SetPoint("TOPLEFT", fastLootCB, "BOTTOMLEFT", 26, -2)
+    EC_compCache.setPanelWidth(fastLootNote, 60)
+    fastLootNote:SetJustifyH("LEFT")
+    if fastLootNote.SetWordWrap then
+        fastLootNote:SetWordWrap(true)
+    end
+    fastLootNote:SetText(
+        "|cff888888Speeds up |cffffff00manual|r|cff888888 looting (corpses you click, fishing, gift bags, dungeon/raid loot, mailbox attachments). Does |cffffff00not|r|cff888888 affect |cffff7f7fGreedy Scavenger|r|cff888888 autonomous looting - that bypasses the loot window server-side and is already instant. Honours Blizzard's |cffffff00Auto Loot|r|cff888888 setting (also auto-confirms |cffffb84dBoP|r|cff888888 popups while on, so items bind without interrupting the drain).|r"
+    )
+
     -- v2.10.0: the v2.9.0 editable companion-name input boxes were removed
     -- from this panel after in-game testing showed the click-to-focus path
     -- was unreliable on PE-ElvUI; users could see the inputs but typing did
@@ -6952,7 +7073,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
     -- Discoverability hint for the right-click context menu. Lives on this
     -- panel because both v2.3.0 bag-action features cluster here.
     local rightClickHint = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    rightClickHint:SetPoint("TOPLEFT", autoOpenNote, "BOTTOMLEFT", 0, -16)
+    rightClickHint:SetPoint("TOPLEFT", fastLootNote, "BOTTOMLEFT", 0, -16)
     EC_compCache.setPanelWidth(rightClickHint, 60)
     rightClickHint:SetJustifyH("LEFT")
     if rightClickHint.SetWordWrap then
@@ -7617,6 +7738,7 @@ local function EC_BuildBugReport()
     add("Auto-Loot Cycle: " .. tostring(DB.autoLootCycle))
     add("Bag Full Threshold: " .. tostring(DB.bagFullThreshold))
     add("Auto-Open Containers: " .. tostring(DB.autoOpenContainers))
+    add("Fast Loot: " .. tostring(DB.fastLoot))
     -- Companion-name overrides. Most users leave these as defaults; when a
     -- user has customised one and then reports a "addon doesn't recognise
     -- my Goblin Merchant" / "Scavenger isn't being detected" issue, the
@@ -8352,6 +8474,10 @@ f:RegisterEvent("EQUIPMENT_SETS_CHANGED")
 -- arrives. Handler self-gates on DB.autoOpenContainers, so users with the
 -- toggle off pay one early-return per combat exit.
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- v2.16.0: drives the Fast Loot driver. Handler self-gates on
+-- DB.fastLoot and on Blizzard's autoLootDefault CVar, so users without
+-- the toggle on pay one early-return per loot interaction.
+f:RegisterEvent("LOOT_READY")
 
 f:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -8363,6 +8489,7 @@ f:SetScript("OnEvent", function(self, event, ...)
             _G.EC_summonGoblinPending = nil
             _G.EC_summonGoblinTimer = nil
             HookDeletePopupOnce()
+            EC_InstallFastLootHookOnce()
             if ApplyGreedyChatFilter then
                 ApplyGreedyChatFilter()
             end
@@ -8421,6 +8548,11 @@ f:SetScript("OnEvent", function(self, event, ...)
         -- the steady-state cost to one GetItemInfo lookup per never-seen
         -- bag item.
         EC_compCache.checkBagsForUpgrades()
+    elseif event == "LOOT_READY" then
+        -- v2.16.0: Fast Loot driver. Self-gates on DB.fastLoot and on
+        -- Blizzard's autoLootDefault CVar so non-Fast-Loot users pay
+        -- one early-return per loot interaction.
+        EC_HandleLootReady()
     elseif event == "LOOT_CLOSED" then
         -- One push per corpse looted. EC_IsLootSilenceStuck prunes the ring
         -- inside its body (called from the 5 s pet tick), so growth is bounded.

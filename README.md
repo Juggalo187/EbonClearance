@@ -30,6 +30,8 @@ A World of Warcraft addon built for **Project Ebonhold**, designed to take the f
 
 **Auto-open lootable containers** - Optional toggle on the Scavenger Settings panel. When enabled, EbonClearance opens any "Right Click to Open" container in your bags as soon as it lands - gift bags, treasure pouches, freebie pouches, etc. Lockboxes that need a key or lockpick are skipped. Combat-paused.
 
+**Fast Loot** - Optional toggle on the Scavenger Settings panel (default OFF). Speeds up **manual** looting - corpses you click, fishing catches, gift bags / quest chests / mailbox attachments, dungeon and raid loot windows, profession openables. EbonClearance vacuums every slot the moment `LOOT_READY` fires so the loot frame flashes briefly or skips entirely. Does **not** affect the Greedy Scavenger's autonomous corpse looting - that bypasses the player's loot pipeline server-side and is already as instant as the server allows. Honours Blizzard's `Auto Loot` CVar (so selective looting still works when you toggle auto-loot off, or shift-click for a one-off). BoP-bind popups are auto-confirmed while Fast Loot is on so items bind without interrupting the drain - turn Fast Loot off to restore the Blizzard safety prompt.
+
 **Right-click bag-item menu** - Alt+Right-Click any item in your bags to add it to a Sell List (character or account), Keep List, or Delete List, or to sell it immediately. Saves a trip to the settings panel for one-off list edits. A small grey "Alt+Right-Click for EbonClearance menu" hint on bag-item tooltips makes the shortcut discoverable.
 
 **Greedy Scavenger management** - EbonClearance can mute the Scavenger's chat messages and speech bubbles, auto-summon it when you log in, dismiss it when you mount up, and re-summon it if it despawns or gets stuck on terrain. If you manually unsummon the Scavenger, the addon respects that and won't re-summon it. Other companions (bank mule, mailbox) are never replaced. Optional `Only summon Greedy Scavenger when out of combat` toggle defers summons during combat for users who prefer not to see the pet pop in mid-pull.
@@ -105,7 +107,7 @@ All settings live under `/ec`, which opens a scrollable config panel. From there
 - Set per-rarity quality thresholds with either a dynamic cap (`Use equipped iLvl` - the cap follows your gear) or a fixed max iLvl, with an optional bind-type filter (Any / BoE only / BoP only) on Merchant Settings
 - Auto-protect equipped gear, looted upgrades, and Blizzard equipment-manager set items on the Keep List Settings panel - tickbox to opt in
 - Choose which merchants the addon works with (Goblin Merchant, normal vendors, or both)
-- Toggle auto-vendoring, deletion, repairs, Greedy Scavenger, and auto-opening of lootable containers on or off
+- Toggle auto-vendoring, deletion, repairs, Greedy Scavenger, auto-opening of lootable containers, and Fast Loot on or off
 - Keep bags open when leaving a merchant
 - Enable Fast Mode for higher vendoring throughput at slightly higher disconnect risk
 - Import and export Sell Lists as shareable strings (per-section Source / Target list selectors)
@@ -148,6 +150,12 @@ Working on the addon? There's developer documentation under [docs/](docs/):
 A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check EbonClearance.lua` and `luacheck EbonClearance.lua` before opening a PR.
 
 ## Changelog
+
+### v2.16.0
+
+- **New: Fast Loot.** Optional toggle on the Scavenger Settings panel (default OFF). When enabled, EbonClearance drains every slot in the loot window the moment `LOOT_READY` fires, so manual corpse loot, fishing catches, gift bags, mailbox attachments, profession openables, and dungeon/raid loot windows vacuum into bags instantly - the loot frame flashes briefly or skips entirely. Honours Blizzard's `autoLootDefault` CVar XOR'd with the `AUTOLOOTTOGGLE` modifier key, so users who want to be selective by holding Shift (or by toggling auto-loot off in interface options) still get the standard loot window. Includes a 0.3 s debounce so the burst of `LOOT_READY` events that fires for a single loot interaction doesn't cause redundant `LootSlot` storms. **Does not** affect the Greedy Scavenger's autonomous corpse looting - that bypasses the player's loot pipeline server-side and is already as instant as the server allows. Useful anywhere a loot window appears for player-initiated looting (which the Scavenger doesn't cover).
+- **New: BoP-bind popup auto-confirm (gated on Fast Loot).** When Fast Loot is on, the `LOOT_BIND` popup ("Are you sure you want to bind this item on pickup?") that would normally block fast-looting on BoP items is auto-confirmed. Items still bind on pickup; you just don't have to click a confirmation. When Fast Loot is off the Blizzard safety prompt is unchanged, so users who haven't opted in keep the prompt as the safety net it was intended to be.
+- **Zero schema migration.** New field `DB.fastLoot` boolean defaults to `false`; existing users keep current behaviour unchanged. Field added by `EnsureDB`'s additive defaulter pattern; no upgrade step needed. Both patterns borrowed from existing reference addons (`FasterLoot` for the loot-drain, `LootClicker` for the BoP-confirm hook).
 
 ### v2.15.0
 
