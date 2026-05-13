@@ -46,7 +46,7 @@ A World of Warcraft addon built for **Project Ebonhold**, designed to take the f
 
 **First-run welcome** - Brand-new installs see a brief chat summary of the active defaults at first login, plus a small popup with `Keep Defaults` / `Open Settings`. Existing characters never see this; they keep the unchanged single-line welcome.
 
-**Tooltip annotations on bag items** - Hover any bag item to see what EbonClearance will do with it: `Will Sell` (with reason for quality-rule matches), `Protected`, `Auto-Protected (Worn)`, `Auto-Protected (Upgrade)`, `Will Delete`, `Won't Sell - Currently Equipped`, `Won't Sell - No Vendor Price`, etc. The annotation respects the live rule chain so what you see at hover time is what happens at the merchant.
+**Tooltip annotations on bag items** - Hover any bag item to see what EbonClearance will do with it: `Will Sell` (with reason for quality-rule matches), `Protected`, `Auto-Protected (Worn)`, `Auto-Protected (Upgrade)`, `Will Delete`, `Won't Sell - Currently Equipped`, `Won't Sell - No Vendor Price`, `Protected - Random affix` (v2.19.0+, for affixed Blue/Purple instances), etc. The annotation respects the live rule chain so what you see at hover time is what happens at the merchant.
 
 **Session and lifetime statistics** - Keeps a running tally of gold earned, items sold, items deleted, repair costs and average inventory value. Session deltas are shown inline next to each lifetime figure so you can see at a glance what the current play session added. Lifetime and session counters reset independently.
 
@@ -150,6 +150,13 @@ Working on the addon? There's developer documentation under [docs/](docs/):
 A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check EbonClearance.lua` and `luacheck EbonClearance.lua` before opening a PR.
 
 ## Changelog
+
+### v2.19.0
+
+- **New: Affix protection for Rare/Epic items.** Project Ebonhold's roguelite system randomly applies " of X" suffix affixes (with up to 4 ranks - e.g. `Thorbia's Gauntlets of Fortified by Pain IV`) to dropped items, adding proc effects. The base itemID is identical to the plain version, so a user with the base itemID on their Sell List or Delete List would accidentally dump the affixed copy. The new `Protect rare/epic items with random affixes` toggle on the Keep List Settings panel skips affixed Blue/Purple instances at sell / delete decision time, even when the itemID is explicitly listed. Tooltip shows `[EC] Protected - Random affix` on these items so users see why the merchant cycle is leaving them alone. **Default ON** for fresh installs and upgrades; users who want pre-v2.19.0 behaviour toggle it off.
+- **Two-layer affix detection.** Primary: parses the item link's `suffix-DBC` field (`ItemRandomSuffix.dbc` / `ItemRandomProperties.dbc` ID, position 7 in the 3.3.5a link format) - cheap, no tooltip scan. Fallback: compares the live tooltip's title to `GetItemInfo`'s base name - if they differ, the title has extra text appended (an affix). The fallback covers any custom PE mechanism that doesn't touch the link's suffix slot. Both layers ship in v2.19.0 so the protection works regardless of how PE implements the affix system server-side.
+- **Quality scope: Rare (Blue) and Epic (Purple) only.** White and Green items with random affixes still sell/delete normally when listed - rare drops are where the high-value affixes appear on PE, and protecting all qualities would clog bags with low-tier affixed greens. Future request can widen the scope if needed.
+- **Zero existing-behaviour change beyond the new protection.** The Keep List still takes precedence over everything (manual entries already do); the affix gate is an additional check that runs ONLY when the item would otherwise sell or delete. Bug-report includes `Protect Affixed Rare Items: <bool>` for diagnostics.
 
 ### v2.18.0
 

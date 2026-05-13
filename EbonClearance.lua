@@ -690,6 +690,22 @@ local function EnsureDB()
     if type(DB.autoOpenContainers) ~= "boolean" then
         DB.autoOpenContainers = false
     end
+    -- v2.19.0: Project Ebonhold's roguelite system randomly applies
+    -- "affix" suffixes to dropped items (e.g. `Thorbia's Gauntlets of
+    -- Fortified by Pain IV` is the same itemID as the base
+    -- `Thorbia's Gauntlets` but has a random suffix and an attached
+    -- proc effect). A user with the base itemID on their Sell List or
+    -- Delete List would inadvertently dump the affixed version, which
+    -- is meaningfully different gear. This toggle gates the affix-
+    -- check that skips affixed Rare/Epic instances at sell/delete
+    -- decision time. Default ON because it's a safety net; users who
+    -- want pre-v2.19.0 behaviour toggle it off. See
+    -- EC_compCache.bagSlotHasAffix / liveTooltipHasAffix for the
+    -- two-layer detection (link suffix-DBC field, then tooltip-title
+    -- name-compare fallback for any custom PE mechanism).
+    if type(DB.protectAffixedRareItems) ~= "boolean" then
+        DB.protectAffixedRareItems = true
+    end
     -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
     -- effectively enabled, EC_HandleLootReady drains every slot in the
     -- loot window the moment LOOT_READY fires, so the loot frame
@@ -1906,6 +1922,96 @@ function EC_compCache.getBindTypeFromTooltip(tooltip, itemID)
         EC_compCache.bindCache[itemID] = result
     end
     return result
+end
+
+-- ---------------------------------------------------------------------------
+-- v2.19.0: PE roguelite affix detection
+-- ---------------------------------------------------------------------------
+-- Project Ebonhold randomly applies suffix-style affixes to items (e.g.
+-- `Thorbia's Gauntlets of Fortified by Pain IV` shares the base itemID
+-- with the plain `Thorbia's Gauntlets` but adds a random " of X" suffix
+-- and a proc effect). EC needs to detect affixed instances so the
+-- Sell-List / Delete-List itemID match doesn't accidentally dump them.
+--
+-- Two-layer detection:
+--   1. linkHasAffix(link)         - parses the 7th field of the item
+--      link (suffix-DBC ID). Non-zero means the standard 3.3.5a random
+--      property/suffix system fired on this instance. Cheap; one regex.
+--   2. bagSlotHasAffix / liveTooltipHasAffix - fallback that compares
+--      the live tooltip's title (TextLeft1) to GetItemInfo's base name.
+--      If they differ, the title has extra text appended - affix
+--      detected. Covers the case where PE uses a custom mechanism that
+--      doesn't touch the link's suffix slot. Slightly more expensive
+--      (tooltip scan) but only fires when Layer 1 returned false.
+function EC_compCache.linkHasAffix(link)
+    if not link then
+        return false
+    end
+    -- 3.3.5a item link format:
+    -- |cQUALITY|Hitem:ID:enchant:gem1:gem2:gem3:gem4:suffix:uniqueID:level|h[Name]|h|r
+    -- The 7th numeric field is the suffix-DBC ID. Positive =
+    -- ItemRandomProperties.dbc, negative = ItemRandomSuffix.dbc, zero
+    -- = no random property. We only care about non-zero.
+    local suffix = link:match("item:%-?%d+:%-?%d+:%-?%d+:%-?%d+:%-?%d+:%-?%d+:(%-?%d+):")
+    local n = suffix and tonumber(suffix)
+    return n ~= nil and n ~= 0
+end
+
+function EC_compCache.bagSlotHasAffix(bag, slot)
+    if not bag or not slot then
+        return false
+    end
+    local link = GetContainerItemLink(bag, slot)
+    if EC_compCache.linkHasAffix(link) then
+        return true
+    end
+    -- Layer 2: tooltip-title name-compare. If GetItemInfo's base name
+    -- differs from the live tooltip's title line, the title has extra
+    -- text appended (an affix). Uses the existing EC_scanTooltip
+    -- hidden frame so no new tooltip widget is needed.
+    local itemID = GetContainerItemID(bag, slot)
+    if not itemID then
+        return false
+    end
+    local baseName = GetItemInfo(itemID)
+    if not baseName then
+        return false
+    end
+    EC_scanTooltip:ClearLines()
+    EC_scanTooltip:SetBagItem(bag, slot)
+    local titleFS = _G["EbonClearanceScanTooltipTextLeft1"]
+    if not titleFS or not titleFS.GetText then
+        return false
+    end
+    local liveName = titleFS:GetText()
+    return liveName ~= nil and liveName ~= "" and liveName ~= baseName
+end
+
+function EC_compCache.liveTooltipHasAffix(tooltip, link, itemID)
+    if EC_compCache.linkHasAffix(link) then
+        return true
+    end
+    -- Same Layer 2 logic as bagSlotHasAffix but reads TextLeft1 from
+    -- the LIVE tooltip the user is hovering (rather than the hidden
+    -- EC_scanTooltip frame). Used by EC_AnnotateTooltip which already
+    -- has the live tooltip in scope.
+    if not tooltip or not tooltip.GetName or not itemID then
+        return false
+    end
+    local baseName = GetItemInfo(itemID)
+    if not baseName then
+        return false
+    end
+    local tname = tooltip:GetName()
+    if not tname then
+        return false
+    end
+    local titleFS = _G[tname .. "TextLeft1"]
+    if not titleFS or not titleFS.GetText then
+        return false
+    end
+    local liveName = titleFS:GetText()
+    return liveName ~= nil and liveName ~= "" and liveName ~= baseName
 end
 
 -- Driver. Walks bags, opens the first openable item, and recurses via
@@ -3628,6 +3734,22 @@ local function EC_IsSellable(bag, slot, junkOnly)
     if IsEquippedItem(itemID) or blacklisted then
         return false
     end
+    -- v2.19.0: PE roguelite affix protection. Skip Rare (3) / Epic (4)
+    -- items that have a random affix even when their itemID is on the
+    -- Sell List or the auto-rule sweep matched them. The base itemID
+    -- and the affixed itemID are the same; only the per-link suffix /
+    -- tooltip-title differs. Default ON; users can opt out via the
+    -- Keep List Settings panel. White/Green items are NOT covered
+    -- (per user scope), so per-rarity sweep rules still vendor them.
+    if
+        (whitelistPass or qualityPass)
+        and DB.protectAffixedRareItems
+        and quality
+        and quality >= 3
+        and EC_compCache.bagSlotHasAffix(bag, slot)
+    then
+        return false
+    end
     return true, link, itemID, sellPrice, itemCount
 end
 
@@ -3681,13 +3803,26 @@ local function BuildQueue(junkOnly)
                 if id and IsInSet(DB.deleteList, id) then
                     local _, count, locked = GetContainerItemInfo(bag, slot)
                     if count and count > 0 and not locked then
-                        queue[#queue + 1] = {
-                            type = "delete",
-                            bag = bag,
-                            slot = slot,
-                            itemID = id,
-                            count = count,
-                        }
+                        -- v2.19.0: PE roguelite affix protection on
+                        -- the Delete List path. Same gate as
+                        -- EC_IsSellable's sell-time check: a user
+                        -- with the base itemID on Delete must not
+                        -- accidentally destroy a randomly-affixed
+                        -- Rare/Epic copy. The toggle's default ON.
+                        local _, _, quality = GetItemInfo(id)
+                        local affixProtected = DB.protectAffixedRareItems
+                            and quality
+                            and quality >= 3
+                            and EC_compCache.bagSlotHasAffix(bag, slot)
+                        if not affixProtected then
+                            queue[#queue + 1] = {
+                                type = "delete",
+                                bag = bag,
+                                slot = slot,
+                                itemID = id,
+                                count = count,
+                            }
+                        end
                     end
                 end
             end
@@ -4155,6 +4290,25 @@ local function EC_AnnotateTooltip(tooltip)
                         cap
                     )
                 end
+            end
+        end
+    end
+
+    -- v2.19.0: PE roguelite affix protection - tooltip honesty pass.
+    -- If the if/elseif chain above resolved to a would-sell or would-
+    -- delete verdict but DB.protectAffixedRareItems is on AND the item
+    -- is Rare/Epic AND has an affix, override the label to make it
+    -- clear that the merchant cycle won't actually act on this
+    -- specific bag instance. EC_compCache.liveTooltipHasAffix combines
+    -- the link-suffix check (cheap) with a tooltip-title name-compare
+    -- (fallback) so it covers both standard ItemRandomSuffix.dbc and
+    -- any custom PE name-append mechanism.
+    if statusLine and DB.protectAffixedRareItems then
+        local _, _, quality = GetItemInfo(id)
+        if quality and quality >= 3 then
+            local wouldVendor = statusLine:find("Will Sell") or statusLine:find("Will Delete")
+            if wouldVendor and EC_compCache.liveTooltipHasAffix(tooltip, link, id) then
+                statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Random affix|r"
             end
         end
     end
@@ -7480,6 +7634,9 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         if self.autoSetCB then
             self.autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
         end
+        if self.autoAffixCB then
+            self.autoAffixCB:SetChecked(DB.protectAffixedRareItems)
+        end
     end, function(self, content)
         -- Auto-protect handlers used to refresh `self.listUI` directly because
         -- the list lived on the same frame. Now the list lives on the Keep List
@@ -7637,7 +7794,49 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             .. "Tooltip shows |cffffb84dAuto-Protected (Set)|r|cff888888 on items kept by this rule. Removing a set later does not auto-clean items it added; use Alt+Right-Click to drop unwanted entries.|r"
     )
 
-        EC_FitScrollContent(content, autoSetNote)
+    -- v2.19.0 PE roguelite affix protection. The base itemID of an
+    -- affixed item (e.g. "Thorbia's Gauntlets of Fortified by Pain IV")
+    -- is identical to the base, plain version. A user with the base
+    -- itemID on their Sell List or Delete List would inadvertently
+    -- dump the random-affix version, which is meaningfully different
+    -- gear. This toggle is a per-decision gate (no one-shot sync;
+    -- protection runs at sell/delete time only). No Keep List
+    -- entries are stamped - if the user wants the protected items
+    -- on the Keep List explicitly, they Alt+Right-Click to add.
+    local autoAffixCB = CreateFrame(
+        "CheckButton",
+        "EbonClearanceProtectAffixedRareCB",
+        content,
+        "InterfaceOptionsCheckButtonTemplate"
+    )
+    autoAffixCB:SetPoint("TOPLEFT", autoSetNote, "BOTTOMLEFT", -26, -10)
+    autoAffixCB:SetChecked(DB.protectAffixedRareItems)
+    local aaText = _G[autoAffixCB:GetName() .. "Text"]
+    if aaText then
+        aaText:SetText("Protect rare/epic items with random affixes")
+        EC_compCache.setPanelWidth(aaText, 60)
+        aaText:SetJustifyH("LEFT")
+    end
+    autoAffixCB:SetScript("OnClick", function(cb)
+        DB.protectAffixedRareItems = cb:GetChecked() and true or false
+        PlaySound("igMainMenuOptionCheckBoxOn")
+    end)
+    self.autoAffixCB = autoAffixCB
+
+    local autoAffixNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    autoAffixNote:SetPoint("TOPLEFT", autoAffixCB, "BOTTOMLEFT", 26, -2)
+    EC_compCache.setPanelWidth(autoAffixNote, 60)
+    autoAffixNote:SetJustifyH("LEFT")
+    if autoAffixNote.SetWordWrap then
+        autoAffixNote:SetWordWrap(true)
+    end
+    autoAffixNote:SetText(
+        "|cff888888Items with a random suffix (e.g. |cffffb84d'of Fortified by Pain IV'|r|cff888888) won't be sold or deleted even if their itemID is on the Sell List or Delete List. "
+            .. "Project Ebonhold's roguelite affix system makes affixed Rare/Epic gear meaningfully different from the base item - this toggle prevents accidentally dumping the affixed version. "
+            .. "Tooltip shows |cffffb84dProtected - Random affix|r|cff888888 on items kept by this rule. White/Green items are not covered.|r"
+    )
+
+        EC_FitScrollContent(content, autoAffixNote)
     end, true)
 end)
 
@@ -7784,6 +7983,7 @@ local function EC_BuildBugReport()
     add("Auto-Add Equipped: " .. tostring(DB.autoAddEquipped))
     add("Auto-Protect Upgrades: " .. tostring(DB.autoProtectUpgrades))
     add("Auto-Protect Equipment Sets: " .. tostring(DB.autoProtectEquipmentSets))
+    add("Protect Affixed Rare Items: " .. tostring(DB.protectAffixedRareItems))
     add("Enable Only Listed Chars: " .. tostring(DB.enableOnlyListedChars))
     if DB.enableOnlyListedChars then
         local allowed = {}
