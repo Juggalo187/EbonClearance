@@ -4445,6 +4445,39 @@ local function EC_FitScrollContent(content, lastWidget, padding)
     EC_compCache.registerScrollFit(content, lastWidget, pad)
 end
 
+-- v2.17.0: panel OnShow preamble extractor. Replaces the boilerplate
+-- (EnsureDB / EC_UpdatePanelWidth / inited guard / refresh-or-build
+-- branch / optional scroll-wrap) at the top of every Interface Options
+-- panel's OnShow handler. `refresh` is called every OnShow AFTER the
+-- first; `build` is called once under the inited guard. `wrapScroll`
+-- toggles the EC_WrapPanelInScrollFrame call; when true, `build`
+-- receives the scroll-wrap's content frame as its second arg, otherwise
+-- it receives the panel `self`. Either callback may be nil. Hung off
+-- EC_compCache rather than as a file-scope local to stay under Lua
+-- 5.1's 200-locals-per-main-chunk cap (the file is already dense; see
+-- CLAUDE.md and ADDON_GUIDE.md for the discipline). Consolidates the
+-- duplicated preamble across 11 panels (CODE_REVIEW.md item 4) so
+-- future preamble changes - e.g. a UI_SCALE_CHANGED recompute - land
+-- in one place instead of 11.
+function EC_compCache.initPanel(self, refresh, build, wrapScroll)
+    EnsureDB()
+    EC_UpdatePanelWidth()
+    if self.inited then
+        if refresh then
+            refresh(self)
+        end
+        return
+    end
+    self.inited = true
+    local content = self
+    if wrapScroll then
+        content = EC_WrapPanelInScrollFrame(self)
+    end
+    if build then
+        build(self, content)
+    end
+end
+
 local function MakeLabel(parent, text, x, y)
     local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     fs:SetPoint("TOPLEFT", x, y)
@@ -5454,9 +5487,12 @@ local function BuildMainPanel(panel, content, refreshStats)
 end
 
 MainOptions:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-
+    -- Stats helpers stay inside OnShow because RefreshStats captures `self`
+    -- via closure and gets passed in two slots (the EC_compCache.initPanel
+    -- refresh callback, and as the refresh fn handed to BuildMainPanel so
+    -- the stat fields update after the merchant cycle). Re-declaring on
+    -- each OnShow is cheap; the closures are reclaimed once initPanel
+    -- returns.
     local function GetMostItem(countTable)
         local bestID, bestCount = nil, 0
         if type(countTable) ~= "table" then
@@ -5526,19 +5562,14 @@ MainOptions:SetScript("OnShow", function(self)
         end
     end
 
-    if self.inited then
+    EC_compCache.initPanel(self, RefreshStats, function(self, content)
+        -- v2.12.0: scroll-wrap the Main panel so the Slash Commands block
+        -- at the bottom doesn't overlap the OK/Cancel button strip when
+        -- the Interface Options frame is shorter than the panel content.
+        -- Scavenger and Merchant Settings are wrapped the same way.
+        BuildMainPanel(self, content, RefreshStats)
         RefreshStats()
-        return
-    end
-    self.inited = true
-
-    -- v2.12.0: scroll-wrap the Main panel so the Slash Commands block
-    -- at the bottom doesn't overlap the OK/Cancel button strip when
-    -- the Interface Options frame is shorter than the panel content.
-    -- Scavenger and Merchant Settings are wrapped the same way.
-    local content = EC_WrapPanelInScrollFrame(self)
-    BuildMainPanel(self, content, RefreshStats)
-    RefreshStats()
+    end, true)
 end)
 
 InterfaceOptions_AddCategory(MainOptions)
@@ -5566,9 +5597,7 @@ local EC_MERCHANT_MODES = {
 }
 
 MerchantPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.repairCB then
             self.repairCB:SetChecked(DB.repairGear)
         end
@@ -5611,16 +5640,7 @@ MerchantPanel:SetScript("OnShow", function(self)
                 cb._applyInputEnabled()
             end
         end
-        return
-    end
-    self.inited = true
-
-    -- Scroll-wrap the panel: at narrow Interface Options widths the Blue
-    -- (Rare) quality row overflows the safe area and is overlapped by the
-    -- OK/Cancel button strip. Wrapping in a scroll frame keeps every widget
-    -- reachable; the scrollbar auto-hides on wider containers where it fits.
-    local content = EC_WrapPanelInScrollFrame(self)
-
+    end, function(self, content)
     MakeHeader(content, "Merchant Settings", -16)
     -- Panel-specific intro only. Generic "grey junk auto-sells" cross-cut
     -- removed; it's covered on the Main panel.
@@ -6000,6 +6020,7 @@ MerchantPanel:SetScript("OnShow", function(self)
     -- range matches actual content. Purple Epic's bind dropdown is now the
     -- lowest widget on the panel.
     EC_FitScrollContent(content, row4DD)
+    end, true)
 end)
 
 -- Shared "Add from bags" scan row used by both whitelist panels.
@@ -6085,44 +6106,40 @@ WhitelistPanel.name = "Sell List"
 WhitelistPanel.parent = "EbonClearance"
 
 WhitelistPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.listUI then
             self.listUI:Refresh()
         end
-        return
-    end
-    self.inited = true
+    end, function(self)
+        MakeHeader(self, "Sell List", -16)
 
-    MakeHeader(self, "Sell List", -16)
+        -- Panel-specific description only. Cross-cutting info (grey junk
+        -- auto-sell, quality threshold) lives on the Main panel to avoid
+        -- repeating the same explanation on every list page.
+        local descLabel = MakeLabel(
+            self,
+            "Specific items to always auto-sell on this character, regardless of rarity rules. Use the |cffb6ffb6Add from bags|r buttons below to bulk-add by colour, or shift-click / type IDs to add manually. |cffaaaaaaItems are saved and restored by profiles. For items you want sold on every alt, use |cffb6ffb6Account Sell List|r |cffaaaaaainstead.|r",
+            16,
+            -44
+        )
 
-    -- Panel-specific description only. Cross-cutting info (grey junk
-    -- auto-sell, quality threshold) lives on the Main panel to avoid
-    -- repeating the same explanation on every list page.
-    local descLabel = MakeLabel(
-        self,
-        "Specific items to always auto-sell on this character, regardless of rarity rules. Use the |cffb6ffb6Add from bags|r buttons below to bulk-add by colour, or shift-click / type IDs to add manually. |cffaaaaaaItems are saved and restored by profiles. For items you want sold on every alt, use |cffb6ffb6Account Sell List|r |cffaaaaaainstead.|r",
-        16,
-        -44
-    )
+        -- Cascade-anchor the scan row to the description's BOTTOMLEFT so it stays
+        -- below the description regardless of how many lines it wraps to. Then
+        -- the list UI cascades below the scan row and fills the remaining panel
+        -- height via a BOTTOMRIGHT anchor (fixed SetHeight previously caused the
+        -- bottom row to clip past the panel safe area at narrow widths).
+        local scanRow = EC_AddScanByQualityRow(self, descLabel, "whitelist", "the Sell List", function()
+            if self.listUI then
+                self.listUI:Refresh()
+            end
+        end, 0, -10)
 
-    -- Cascade-anchor the scan row to the description's BOTTOMLEFT so it stays
-    -- below the description regardless of how many lines it wraps to. Then
-    -- the list UI cascades below the scan row and fills the remaining panel
-    -- height via a BOTTOMRIGHT anchor (fixed SetHeight previously caused the
-    -- bottom row to clip past the panel safe area at narrow widths).
-    local scanRow = EC_AddScanByQualityRow(self, descLabel, "whitelist", "the Sell List", function()
-        if self.listUI then
-            self.listUI:Refresh()
-        end
-    end, 0, -10)
-
-    self.listUI = CreateListUI(self, "Manual Add (Shift-click item or type ID)", "whitelist", 16, -118)
-    self.listUI:ClearAllPoints()
-    self.listUI:SetPoint("TOPLEFT", scanRow, "BOTTOMLEFT", 0, -16)
-    self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-    self.listUI:Refresh()
+        self.listUI = CreateListUI(self, "Manual Add (Shift-click item or type ID)", "whitelist", 16, -118)
+        self.listUI:ClearAllPoints()
+        self.listUI:SetPoint("TOPLEFT", scanRow, "BOTTOMLEFT", 0, -16)
+        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
+        self.listUI:Refresh()
+    end)
 end)
 
 -- ============================================================
@@ -6133,16 +6150,11 @@ ProfilesPanel.name = "Profiles"
 ProfilesPanel.parent = "EbonClearance"
 
 ProfilesPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.RefreshProfileList then
             self:RefreshProfileList()
         end
-        return
-    end
-    self.inited = true
-
+    end, function(self)
     MakeHeader(self, "Profiles", -16)
     local descLabel = MakeLabel(
         self,
@@ -6436,6 +6448,7 @@ ProfilesPanel:SetScript("OnShow", function(self)
     end)
 
     self:RefreshProfileList()
+    end)
 end)
 
 -- ============================================================
@@ -6530,13 +6543,7 @@ local function EC_ImportWhitelist(str, mode, scope)
 end
 
 ImportExportPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
-        return
-    end
-    self.inited = true
-
+    EC_compCache.initPanel(self, nil, function(self)
     MakeHeader(self, "Import / Export", -16)
 
     -- === EXPORT SECTION ===
@@ -6745,6 +6752,7 @@ ImportExportPanel:SetScript("OnShow", function(self)
         "|cffaaaaaa'Merge' adds imported items to the target list. "
             .. "'Replace' clears the target list first, then adds the imported items.|r"
     )
+    end)
 end)
 
 local DeletePanel = CreateFrame("Frame", "EbonClearanceOptionsDeletion", InterfaceOptionsFramePanelContainer)
@@ -6752,54 +6760,51 @@ DeletePanel.name = "Delete List"
 DeletePanel.parent = "EbonClearance"
 
 DeletePanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.listUI then
             self.listUI:Refresh()
         end
-        return
-    end
-    self.inited = true
+    end, function(self)
+        MakeHeader(self, "Deletion Settings", -16)
+        local delDesc = MakeLabel(self, "If enabled, items on this list will be deleted from your bags.", 16, -44)
+        local delHint = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        delHint:SetPoint("TOPLEFT", delDesc, "BOTTOMLEFT", 0, -4)
+        EC_compCache.setPanelWidth(delHint, 16)
+        delHint:SetJustifyH("LEFT")
+        delHint:SetJustifyV("TOP")
+        if delHint.SetWordWrap then
+            delHint:SetWordWrap(true)
+        end
+        delHint:SetText(
+            "Add Items by Shift-Clicking an item, drag & drop into the text field below, or type the ItemID and press Add."
+        )
 
-    MakeHeader(self, "Deletion Settings", -16)
-    local delDesc = MakeLabel(self, "If enabled, items on this list will be deleted from your bags.", 16, -44)
-    local delHint = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    delHint:SetPoint("TOPLEFT", delDesc, "BOTTOMLEFT", 0, -4)
-    EC_compCache.setPanelWidth(delHint, 16)
-    delHint:SetJustifyH("LEFT")
-    delHint:SetJustifyV("TOP")
-    if delHint.SetWordWrap then
-        delHint:SetWordWrap(true)
-    end
-    delHint:SetText(
-        "Add Items by Shift-Clicking an item, drag & drop into the text field below, or type the ItemID and press Add."
-    )
+        local delCB =
+            CreateFrame("CheckButton", "EbonClearanceEnableDeleteCB", self, "InterfaceOptionsCheckButtonTemplate")
+        delCB:SetPoint("TOPLEFT", delHint, "BOTTOMLEFT", 0, -6)
+        delCB:SetChecked(DB.enableDeletion)
+        local dt = _G[delCB:GetName() .. "Text"]
+        if dt then
+            dt:SetText("Enable item deletion")
+            dt:SetWidth(420)
+            dt:SetJustifyH("LEFT")
+        end
+        delCB:SetScript("OnClick", function()
+            DB.enableDeletion = delCB:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
 
-    local delCB = CreateFrame("CheckButton", "EbonClearanceEnableDeleteCB", self, "InterfaceOptionsCheckButtonTemplate")
-    delCB:SetPoint("TOPLEFT", delHint, "BOTTOMLEFT", 0, -6)
-    delCB:SetChecked(DB.enableDeletion)
-    local dt = _G[delCB:GetName() .. "Text"]
-    if dt then
-        dt:SetText("Enable item deletion")
-        dt:SetWidth(420)
-        dt:SetJustifyH("LEFT")
-    end
-    delCB:SetScript("OnClick", function()
-        DB.enableDeletion = delCB:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
+        self.listUI = CreateListUI(self, "Delete List", "deleteList", 16, -130)
+        -- v2.11.0: anchor BOTTOMRIGHT so the list stretches with the panel
+        -- on Interface Options frame resize - mirrors the Whitelist /
+        -- Blacklist / Account-Whitelist setups. Without this the list box
+        -- stays at its build-time width and the search row + add-matching
+        -- row buttons drift outside the panel boundary on shrink.
+        self.listUI:ClearAllPoints()
+        self.listUI:SetPoint("TOPLEFT", 16, -130)
+        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
+        self.listUI:Refresh()
     end)
-
-    self.listUI = CreateListUI(self, "Delete List", "deleteList", 16, -130)
-    -- v2.11.0: anchor BOTTOMRIGHT so the list stretches with the panel
-    -- on Interface Options frame resize - mirrors the Whitelist /
-    -- Blacklist / Account-Whitelist setups. Without this the list box
-    -- stays at its build-time width and the search row + add-matching
-    -- row buttons drift outside the panel boundary on shrink.
-    self.listUI:ClearAllPoints()
-    self.listUI:SetPoint("TOPLEFT", 16, -130)
-    self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-    self.listUI:Refresh()
 end)
 
 local ScavengerPanel = CreateFrame("Frame", "EbonClearanceOptionsScavenger", InterfaceOptionsFramePanelContainer)
@@ -6808,9 +6813,7 @@ ScavengerPanel.name = "Scavenger Settings"
 ScavengerPanel.parent = "EbonClearance"
 
 ScavengerPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.sumCB then
             self.sumCB:SetChecked(DB.summonGreedy)
         end
@@ -6838,16 +6841,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         if self.fastLootCB then
             self.fastLootCB:SetChecked(DB.fastLoot)
         end
-        return
-    end
-    self.inited = true
-
-    -- Scroll-wrap the panel: at narrow Interface Options widths the bottom
-    -- of this panel (Tip line) overflows the safe area. Wrapping in a scroll
-    -- frame lets all widgets remain reachable; the scrollbar auto-hides on
-    -- wider containers where everything fits.
-    local content = EC_WrapPanelInScrollFrame(self)
-
+    end, function(self, content)
     MakeHeader(content, "Scavenger Settings", -16)
     MakeLabel(
         content,
@@ -7086,6 +7080,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
     -- Size the scroll content to fit the bottom-most widget so the scrollbar
     -- range matches actual content (no excess empty space at the bottom).
     EC_FitScrollContent(content, rightClickHint)
+    end, true)
 end)
 
 local CharPanel = CreateFrame("Frame", "EbonClearanceOptionsCharacter", InterfaceOptionsFramePanelContainer)
@@ -7266,53 +7261,53 @@ local function CreateNameListUI(parent, titleText, setTableName, x, y)
 end
 
 CharPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.onlyCB then
             self.onlyCB:SetChecked(DB.enableOnlyListedChars)
         end
         if self.listUI then
             self.listUI:Refresh()
         end
-        return
-    end
-    self.inited = true
+    end, function(self)
+        MakeHeader(self, "Character Settings", -16)
+        local charDesc = MakeLabel(
+            self,
+            "Prevents this addon from running on characters you didn't intend. If enabled, EbonClearance runs only on characters listed below.",
+            16,
+            -44
+        )
 
-    MakeHeader(self, "Character Settings", -16)
-    local charDesc = MakeLabel(
-        self,
-        "Prevents this addon from running on characters you didn't intend. If enabled, EbonClearance runs only on characters listed below.",
-        16,
-        -44
-    )
+        local cb = CreateFrame(
+            "CheckButton",
+            "EbonClearanceEnableOnlyListedCharsCB",
+            self,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        cb:SetPoint("TOPLEFT", charDesc, "BOTTOMLEFT", 0, -8)
+        cb:SetChecked(DB.enableOnlyListedChars)
 
-    local cb =
-        CreateFrame("CheckButton", "EbonClearanceEnableOnlyListedCharsCB", self, "InterfaceOptionsCheckButtonTemplate")
-    cb:SetPoint("TOPLEFT", charDesc, "BOTTOMLEFT", 0, -8)
-    cb:SetChecked(DB.enableOnlyListedChars)
+        local t = _G[cb:GetName() .. "Text"]
+        if t then
+            t:SetText("Enable only for listed characters")
+            EC_compCache.setPanelWidth(t, 60)
+            t:SetJustifyH("LEFT")
+        end
 
-    local t = _G[cb:GetName() .. "Text"]
-    if t then
-        t:SetText("Enable only for listed characters")
-        EC_compCache.setPanelWidth(t, 60)
-        t:SetJustifyH("LEFT")
-    end
+        cb:SetScript("OnClick", function()
+            DB.enableOnlyListedChars = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.onlyCB = cb
 
-    cb:SetScript("OnClick", function()
-        DB.enableOnlyListedChars = cb:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
+        self.listUI = CreateNameListUI(self, "Allowed Characters", "allowedChars", 16, -130)
+        -- v2.11.0: anchor BOTTOMRIGHT so the list stretches with the panel
+        -- on resize - keeps each row's "Remove" button inside the panel
+        -- boundary even after the user shrinks the Interface Options frame.
+        self.listUI:ClearAllPoints()
+        self.listUI:SetPoint("TOPLEFT", 16, -130)
+        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
+        self.listUI:Refresh()
     end)
-    self.onlyCB = cb
-
-    self.listUI = CreateNameListUI(self, "Allowed Characters", "allowedChars", 16, -130)
-    -- v2.11.0: anchor BOTTOMRIGHT so the list stretches with the panel
-    -- on resize - keeps each row's "Remove" button inside the panel
-    -- boundary even after the user shrinks the Interface Options frame.
-    self.listUI:ClearAllPoints()
-    self.listUI:SetPoint("TOPLEFT", 16, -130)
-    self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-    self.listUI:Refresh()
 end)
 
 -- ============================================================
@@ -7323,49 +7318,45 @@ BlacklistPanel.name = "Keep List"
 BlacklistPanel.parent = "EbonClearance"
 
 BlacklistPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.listUI then
             self.listUI:Refresh()
         end
-        return
-    end
-    self.inited = true
+    end, function(self)
+        -- v2.15.0: the auto-protect toggles (autoAddEquipped, autoProtectUpgrades,
+        -- autoProtectEquipmentSets) plus their explanatory notes used to live on
+        -- this panel and dominated it visually - 3 checkboxes + 3 multi-line notes
+        -- stacked above the actual list. They moved to the new `Keep List Settings`
+        -- sub-panel so this panel matches the Sell List / Delete List / Account
+        -- Sell List rhythm (header + description + hint + list). DB field names
+        -- unchanged so all event handlers, tooltip annotations, and slash commands
+        -- continue to work without modification.
+        MakeHeader(self, "Keep List (Do Not Sell)", -16)
+        local blDesc = MakeLabel(
+            self,
+            "Specific items to permanently protect from auto-sell. Use this for valuable items you'd rather list at the auction house. |cffaaaaaaAuto-protect rules (equipped gear, looted upgrades, Blizzard equipment sets) live on the |r|cffffb84dKeep List Settings|r|cffaaaaaa panel.|r",
+            16,
+            -44
+        )
 
-    -- v2.15.0: the auto-protect toggles (autoAddEquipped, autoProtectUpgrades,
-    -- autoProtectEquipmentSets) plus their explanatory notes used to live on
-    -- this panel and dominated it visually - 3 checkboxes + 3 multi-line notes
-    -- stacked above the actual list. They moved to the new `Keep List Settings`
-    -- sub-panel so this panel matches the Sell List / Delete List / Account
-    -- Sell List rhythm (header + description + hint + list). DB field names
-    -- unchanged so all event handlers, tooltip annotations, and slash commands
-    -- continue to work without modification.
-    MakeHeader(self, "Keep List (Do Not Sell)", -16)
-    local blDesc = MakeLabel(
-        self,
-        "Specific items to permanently protect from auto-sell. Use this for valuable items you'd rather list at the auction house. |cffaaaaaaAuto-protect rules (equipped gear, looted upgrades, Blizzard equipment sets) live on the |r|cffffb84dKeep List Settings|r|cffaaaaaa panel.|r",
-        16,
-        -44
-    )
+        -- Anchored to blDesc so the hint stays below even when the description
+        -- wraps to multiple lines (previous absolute y=-80 overlapped the wrap).
+        local blHint = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        blHint:SetPoint("TOPLEFT", blDesc, "BOTTOMLEFT", 0, -8)
+        EC_compCache.setPanelWidth(blHint, 16)
+        blHint:SetJustifyH("LEFT")
+        blHint:SetJustifyV("TOP")
+        if blHint.SetWordWrap then
+            blHint:SetWordWrap(true)
+        end
+        blHint:SetText("Add items by Shift-Clicking, dragging, or typing the Item ID below.")
 
-    -- Anchored to blDesc so the hint stays below even when the description
-    -- wraps to multiple lines (previous absolute y=-80 overlapped the wrap).
-    local blHint = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    blHint:SetPoint("TOPLEFT", blDesc, "BOTTOMLEFT", 0, -8)
-    EC_compCache.setPanelWidth(blHint, 16)
-    blHint:SetJustifyH("LEFT")
-    blHint:SetJustifyV("TOP")
-    if blHint.SetWordWrap then
-        blHint:SetWordWrap(true)
-    end
-    blHint:SetText("Add items by Shift-Clicking, dragging, or typing the Item ID below.")
-
-    self.listUI = CreateListUI(self, "Protected Items", "blacklist", 16, -130)
-    self.listUI:ClearAllPoints()
-    self.listUI:SetPoint("TOPLEFT", blHint, "BOTTOMLEFT", 0, -16)
-    self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-    self.listUI:Refresh()
+        self.listUI = CreateListUI(self, "Protected Items", "blacklist", 16, -130)
+        self.listUI:ClearAllPoints()
+        self.listUI:SetPoint("TOPLEFT", blHint, "BOTTOMLEFT", 0, -16)
+        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
+        self.listUI:Refresh()
+    end)
 end)
 
 -- ============================================================
@@ -7386,9 +7377,7 @@ BlacklistSettingsPanel.name = "Keep List Settings"
 BlacklistSettingsPanel.parent = "EbonClearance"
 
 BlacklistSettingsPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.autoEquipCB then
             self.autoEquipCB:SetChecked(DB.autoAddEquipped)
         end
@@ -7398,26 +7387,18 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         if self.autoSetCB then
             self.autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
         end
-        return
-    end
-    self.inited = true
-
-    -- Scroll-wrap: three toggles plus three multi-line notes can overflow at
-    -- narrow Interface Options widths. Same wrapper used by Scavenger and
-    -- Merchant Settings.
-    local content = EC_WrapPanelInScrollFrame(self)
-
-    -- Auto-protect handlers used to refresh `self.listUI` directly because
-    -- the list lived on the same frame. Now the list lives on the Keep List
-    -- panel, so toggles refresh that panel's list if it's been initialized.
-    local function refreshKeepListUI()
-        local blPanel = _G["EbonClearanceOptionsBlacklist"]
-        if blPanel and blPanel.listUI then
-            blPanel.listUI:Refresh()
+    end, function(self, content)
+        -- Auto-protect handlers used to refresh `self.listUI` directly because
+        -- the list lived on the same frame. Now the list lives on the Keep List
+        -- panel, so toggles refresh that panel's list if it's been initialized.
+        local function refreshKeepListUI()
+            local blPanel = _G["EbonClearanceOptionsBlacklist"]
+            if blPanel and blPanel.listUI then
+                blPanel.listUI:Refresh()
+            end
         end
-    end
 
-    MakeHeader(content, "Keep List Settings", -16)
+        MakeHeader(content, "Keep List Settings", -16)
     local desc = MakeLabel(
         content,
         "Automatic protection rules. Items matched by any rule below are added to your Keep List automatically and excluded from auto-sell.",
@@ -7563,7 +7544,8 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             .. "Tooltip shows |cffffb84dAuto-Protected (Set)|r|cff888888 on items kept by this rule. Removing a set later does not auto-clean items it added; use Alt+Right-Click to drop unwanted entries.|r"
     )
 
-    EC_FitScrollContent(content, autoSetNote)
+        EC_FitScrollContent(content, autoSetNote)
+    end, true)
 end)
 
 local AccountWhitelistPanel =
@@ -7572,40 +7554,36 @@ AccountWhitelistPanel.name = "Account Sell List"
 AccountWhitelistPanel.parent = "EbonClearance"
 
 AccountWhitelistPanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
+    EC_compCache.initPanel(self, function(self)
         if self.listUI then
             self.listUI:Refresh()
         end
-        return
-    end
-    self.inited = true
+    end, function(self)
+        MakeHeader(self, "Account Sell List", -16)
+        local descLabel = MakeLabel(
+            self,
+            "Specific items to always auto-sell on |cffffff00every|r character on this account. Useful for shared trash like reagents or seasonal items. |cffaaaaaaThis list is not part of profiles - it stays the same when you switch profiles.|r",
+            16,
+            -44
+        )
 
-    MakeHeader(self, "Account Sell List", -16)
-    local descLabel = MakeLabel(
-        self,
-        "Specific items to always auto-sell on |cffffff00every|r character on this account. Useful for shared trash like reagents or seasonal items. |cffaaaaaaThis list is not part of profiles - it stays the same when you switch profiles.|r",
-        16,
-        -44
-    )
+        -- Cascade-anchor the scan row to the description's BOTTOMLEFT so it stays
+        -- below the description regardless of how many lines it wraps to. Then the
+        -- list UI cascades below the scan row. Mirrors WhitelistPanel.
+        local scanRow = EC_AddScanByQualityRow(self, descLabel, "accountWhitelist", "the Account Sell List", function()
+            if self.listUI then
+                self.listUI:Refresh()
+            end
+        end, 0, -10)
 
-    -- Cascade-anchor the scan row to the description's BOTTOMLEFT so it stays
-    -- below the description regardless of how many lines it wraps to. Then the
-    -- list UI cascades below the scan row. Mirrors WhitelistPanel.
-    local scanRow = EC_AddScanByQualityRow(self, descLabel, "accountWhitelist", "the Account Sell List", function()
-        if self.listUI then
-            self.listUI:Refresh()
-        end
-    end, 0, -10)
-
-    self.listUI = CreateListUI(self, "Account-Wide Items", "accountWhitelist", 16, -118)
-    self.listUI:ClearAllPoints()
-    self.listUI:SetPoint("TOPLEFT", scanRow, "BOTTOMLEFT", 0, -16)
-    -- Fill remaining vertical space rather than fixed-height; mirrors
-    -- WhitelistPanel and avoids bottom-row clipping at narrow widths.
-    self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-    self.listUI:Refresh()
+        self.listUI = CreateListUI(self, "Account-Wide Items", "accountWhitelist", 16, -118)
+        self.listUI:ClearAllPoints()
+        self.listUI:SetPoint("TOPLEFT", scanRow, "BOTTOMLEFT", 0, -16)
+        -- Fill remaining vertical space rather than fixed-height; mirrors
+        -- WhitelistPanel and avoids bottom-row clipping at narrow widths.
+        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
+        self.listUI:Refresh()
+    end)
 end)
 
 -- Register sub-panels in alphabetical order

@@ -3,7 +3,7 @@
 A curated backlog of known follow-ups not yet actioned. Each item is
 scoped to be a single-session change unless flagged otherwise.
 
-> **Last refresh:** post-v2.13.4 on 2026-05-08.
+> **Last refresh:** post-v2.17.0 on 2026-05-13.
 > Statuses below verified against the current `EbonClearance.lua`.
 > v2.13.0-v2.13.4 shipped a feature burst (auto-open combat-defer,
 > quest-item safety net, Equipment Manager protection, ElvUI bag
@@ -13,19 +13,15 @@ scoped to be a single-session change unless flagged otherwise.
 > an audit-driven cleanup removing ~148 LOC of dead/vestigial code
 > (dormant vendor-button cluster, unreachable v2.10.0 migration
 > notice, write-only flags, an always-true stub); v2.13.4 closed
-> two correctness gaps from the same audit (the `/ecdebug` stale
-> predicate that produced wrong "would sell" output, and three
-> add-to-list bypass paths that skipped the canonical
-> `EC_AddItemToList` and silently lost origin-tag support on bulk
-> adds). Items 1-5 below remain unresolved through this period.
-> **Item 4 (extract panel OnShow boilerplate) remains elevated**:
-> the count of scroll-wrapped content panels stands at five (Main /
-> Scavenger / Merchant / Profiles / Import-Export). The reactive-
-> layout handler ([EC_compCache.refreshLayouts](../EbonClearance.lua))
-> registers width-snapshot widgets via helper hooks; when item 4 is
-> actioned, the future `EC_InitPanel(self, refresh, build, wrapScroll)`
-> helper should internalise both the scroll-wrap and the registry
-> registration so panel authors don't have to remember to call them.
+> two correctness gaps from the same audit. The v2.14.x-v2.16.x
+> cycle then shipped UI/UX work: v2.14.0 renamed Whitelist/Blacklist/
+> Deletion to Sell/Keep/Delete List + simplified tooltip annotations
+> + the resummon-line polish; v2.15.0 split the Keep List panel
+> (header + list) from a new Keep List Settings panel (auto-protect
+> toggles) + design-language pass on checkbox label case; v2.16.0
+> added Fast Loot (LOOT_READY-driven manual loot vacuum + BoP-bind
+> auto-confirm). v2.17.0 actioned **item 4 below** (panel OnShow
+> boilerplate extraction). Item 4 is now resolved.
 
 > **Audit deferred item 6 (added 2026-05-08)**: the post-v2.13.2
 > audit identified `EC_IsSellable` <-> `EC_AnnotateTooltip` as a
@@ -49,10 +45,11 @@ scoped to be a single-session change unless flagged otherwise.
 
 ## Active backlog
 
-> Items 4 and 5 below were added in a qlty.sh-aligned re-review of the
-> codebase (post-v2.6.0). They surfaced from running the eight default
-> qlty code-smell checks plus a Lua best-practice sweep against the
-> file as it stands today.
+> Item 4 below was added in a qlty.sh-aligned re-review of the codebase
+> (post-v2.6.0). It surfaced from running the eight default qlty
+> code-smell checks plus a Lua best-practice sweep. The original item 4
+> (extract panel OnShow boilerplate) was actioned in v2.17.0 and moved
+> to Resolved; what was item 5 is now numbered 4 below.
 
 ### 1. Consolidate the two chat-filter systems - medium impact, medium risk
 
@@ -122,48 +119,7 @@ concrete localisation request lands.
 
 ---
 
-### 4. Extract panel OnShow boilerplate - medium impact, low risk
-
-Verified across the file: 10 Interface Options panels each start
-with the same five-line preamble:
-
-```lua
-SomePanel:SetScript("OnShow", function(self)
-    EnsureDB()
-    EC_UpdatePanelWidth()
-    if self.inited then
-        -- panel-specific refresh of dynamic widgets
-        return
-    end
-    self.inited = true
-    -- panel-specific static widget build
-end)
-```
-
-qlty's "similar code" smell catches exactly this. Real fix: a single
-`EC_InitPanel(self, refresh, build)` helper that takes a refresh
-callback (called every OnShow) and a build callback (called once
-under the `inited` guard). Each panel's OnShow then becomes:
-
-```lua
-SomePanel:SetScript("OnShow", function(self)
-    EC_InitPanel(self, function() --[[ refresh ]] end,
-                       function() --[[ build ]] end)
-end)
-```
-
-Adding a new panel goes from ~30 lines of preamble + body to ~5
-lines plus the panel-specific bodies. Any future preamble change
-(for example a width-recompute on `UI_SCALE_CHANGED`) then lands in
-one helper instead of ten copy/paste sites.
-
-The pattern is mechanically identical across all ten panels, so the
-extraction is a paste-into-helper exercise rather than a logic
-rewrite.
-
----
-
-### 5. Named tuning constants (`TUNING` table) - low impact, very low risk
+### 4. Named tuning constants (`TUNING` table) - low impact, very low risk
 
 Coverage is currently partial. The codebase already has named
 constants for some tuning values - `EC_STUCK_MOVEMENT_THRESHOLD`,
@@ -199,6 +155,32 @@ code.
 ---
 
 ## Resolved
+
+### Extract panel OnShow boilerplate - DONE (v2.17.0)
+
+Actioned in v2.17.0. New helper `EC_compCache.initPanel(self, refresh,
+build, wrapScroll)` consolidates the 5-line preamble (EnsureDB +
+EC_UpdatePanelWidth + inited guard + refresh-or-build branch +
+optional scroll-wrap) that every Interface Options panel's OnShow
+shared. All 11 panels migrated (MainOptions, CharPanel, ScavengerPanel,
+MerchantPanel, ProfilesPanel, ImportExportPanel, DeletePanel,
+BlacklistPanel, BlacklistSettingsPanel, WhitelistPanel,
+AccountWhitelistPanel). Helper is hung off `EC_compCache` rather than
+a file-scope local to stay under Lua 5.1's 200-locals-per-main-chunk
+cap (CLAUDE.md discipline).
+
+The `wrapScroll` arg internalises the `EC_WrapPanelInScrollFrame` call
+for panels that need it (MainOptions, ScavengerPanel, MerchantPanel,
+BlacklistSettingsPanel). The test-layout-reactivity test 6 was updated
+to recognise the new `end, true)` closer as evidence of scroll-wrap via
+the helper, in addition to the literal inline `EC_WrapPanelInScrollFrame`
+call. Old test had a block-boundary bug that grabbed too much source
+across adjacent panels; v2.17.0 fixed by scoping each panel's check to
+the start of the next panel's OnShow rather than the (far-away) first
+`InterfaceOptions_AddCategory` line.
+
+Adding a new panel is now a 5-line OnShow + the panel-specific bodies,
+instead of ~30 lines of preamble + body.
 
 ### Luacheck clean-sweep - DONE (post-v2.6.0)
 

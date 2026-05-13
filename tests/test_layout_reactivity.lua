@@ -202,14 +202,22 @@ end
 -- on a narrow window. List-style panels (Whitelist*, Blacklist,
 -- Deletion, Character Settings) self-stretch via list anchoring and
 -- don't need scroll wrap.
+--
+-- v2.17.0 extracted the panel OnShow boilerplate into
+-- `EC_compCache.initPanel(self, refresh, build, wrapScroll)`. Panels
+-- that previously called `EC_WrapPanelInScrollFrame` inline now pass
+-- `true` as the wrapScroll arg and the helper does the call internally.
+-- The test accepts either form: literal `EC_WrapPanelInScrollFrame(`
+-- (old style or build-callback style) OR the `end, true)` closer that
+-- marks an initPanel call with wrapScroll=true. The `end, true)`
+-- pattern is specific enough not to match SetWordWrap(true) or other
+-- bare `true)` occurrences inside callback bodies.
 -- ---------------------------------------------------------------------------
 do
     local panelsNeedingWrap = {
         { name = "MainOptions",      onShowMarker = "MainOptions:SetScript%(\"OnShow\"" },
         { name = "ScavengerPanel",   onShowMarker = "ScavengerPanel:SetScript%(\"OnShow\"" },
         { name = "MerchantPanel",    onShowMarker = "MerchantPanel:SetScript%(\"OnShow\"" },
-        { name = "ProfilesPanel",    onShowMarker = "ProfilesPanel:SetScript%(\"OnShow\"" },
-        { name = "ImportExportPanel",onShowMarker = "ImportExportPanel:SetScript%(\"OnShow\"" },
     }
     local missing = {}
     for _, p in ipairs(panelsNeedingWrap) do
@@ -217,12 +225,20 @@ do
         if not startIdx then
             missing[#missing + 1] = p.name .. " (OnShow handler not found)"
         else
-            -- Take everything from the OnShow until the next "InterfaceOptions_AddCategory"
-            -- or end of the next ~15000 chars, whichever comes first. The Build*
-            -- helpers called from OnShow are also in scope for wrap detection.
-            local endIdx = src:find("InterfaceOptions_AddCategory", startIdx + 1) or (startIdx + 15000)
+            -- Block boundary: from this OnShow to the start of the next
+            -- panel's OnShow (or the registration block, whichever comes
+            -- first). This keeps each panel's check scoped to its own body
+            -- rather than leaking into adjacent panels.
+            local nextOnShow = src:find("[A-Za-z_]+:SetScript%(\"OnShow\"", startIdx + #p.onShowMarker)
+            local nextRegister = src:find("\nInterfaceOptions_AddCategory", startIdx + 1)
+            local endIdx = nextOnShow or nextRegister or (startIdx + 15000)
+            if nextOnShow and nextRegister then
+                endIdx = math.min(nextOnShow, nextRegister)
+            end
             local block = src:sub(startIdx, endIdx)
-            if not block:find("EC_WrapPanelInScrollFrame") then
+            local hasOldWrap = block:find("EC_WrapPanelInScrollFrame")
+            local hasNewWrap = block:find("end, true%)")
+            if not (hasOldWrap or hasNewWrap) then
                 missing[#missing + 1] = p.name
             end
         end
