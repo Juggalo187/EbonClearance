@@ -3,7 +3,7 @@
 A curated backlog of known follow-ups not yet actioned. Each item is
 scoped to be a single-session change unless flagged otherwise.
 
-> **Last refresh:** post-v2.17.0 on 2026-05-13.
+> **Last refresh:** post-v2.18.0 on 2026-05-13.
 > Statuses below verified against the current `EbonClearance.lua`.
 > v2.13.0-v2.13.4 shipped a feature burst (auto-open combat-defer,
 > quest-item safety net, Equipment Manager protection, ElvUI bag
@@ -45,11 +45,14 @@ scoped to be a single-session change unless flagged otherwise.
 
 ## Active backlog
 
-> Item 4 below was added in a qlty.sh-aligned re-review of the codebase
+> Item 3 below was added in a qlty.sh-aligned re-review of the codebase
 > (post-v2.6.0). It surfaced from running the eight default qlty
-> code-smell checks plus a Lua best-practice sweep. The original item 4
-> (extract panel OnShow boilerplate) was actioned in v2.17.0 and moved
-> to Resolved; what was item 5 is now numbered 4 below.
+> code-smell checks plus a Lua best-practice sweep. The original items 2
+> and 4 (split CreateListUI and extract panel OnShow boilerplate) were
+> actioned in v2.18.0 and v2.17.0 respectively and moved to Resolved.
+> Items 1 (chat-filter consolidation) and 3 (TUNING constants) remain.
+> Item 2 was reused to renumber the former L10n stub item, since it's
+> still parked. Numbering now: 1 chat-filter, 2 L10n stub, 3 TUNING.
 
 ### 1. Consolidate the two chat-filter systems - medium impact, medium risk
 
@@ -75,32 +78,7 @@ do side-by-side testing in a stable zone before deleting.
 
 ---
 
-### 2. Split [`CreateListUI`](../EbonClearance.lua) - high impact, low risk
-
-`CreateListUI` is now **369 lines** (was 227 when this doc was first
-written). Since then the v2.x.0 series added the "Add matching in
-bags:" row, account / character scope handling, and tooltip-warm
-refresh logic - all bolted onto the same closure.
-
-Suggested split (still the right shape, plus the new responsibilities
-above):
-
-- `BuildListHeader(parent, titleText)` - title + EditBox + search.
-- `BuildListSortControls(parent, onSortChange)` - 4 sort buttons.
-- `BuildListMatchRow(parent, setTableName, refreshFn)` - the
-  "Add matching in bags:" row + handler.
-- `BuildListScrollArea(parent)` - the scroll frame + child.
-- `MakeListRow(parent)` - one row factory; returns a frame with
-  `:SetItem(id, name)` and `:Clear()` methods.
-- `RefreshList(listFrame, items)` - the former nested closure.
-
-Each helper is pure layout; no shared mutable state. Extracting pays
-off every time a panel uses the list widget (whitelist, blacklist,
-delete-list, account whitelist, any future list).
-
----
-
-### 3. L10n stub - low cost, future-proofing
+### 2. L10n stub - low cost, future-proofing
 
 Even without AceLocale, a trivial passthrough makes future
 localisation mechanical:
@@ -119,7 +97,7 @@ concrete localisation request lands.
 
 ---
 
-### 4. Named tuning constants (`TUNING` table) - low impact, very low risk
+### 3. Named tuning constants (`TUNING` table) - low impact, very low risk
 
 Coverage is currently partial. The codebase already has named
 constants for some tuning values - `EC_STUCK_MOVEMENT_THRESHOLD`,
@@ -155,6 +133,41 @@ code.
 ---
 
 ## Resolved
+
+### Split `CreateListUI` - DONE (v2.18.0)
+
+Actioned in v2.18.0. Five helper functions extracted onto `EC_compCache`
+(same discipline as `EC_compCache.initPanel`):
+
+- `EC_compCache.buildListHeaderRow(box, titleText, setTableName)` returns
+  `(input, addBtn, clearAllBtn)`. Wires focus-tracking + drag-to-receive
+  on the input as pure layout; OnClick handlers stay in CreateListUI.
+- `EC_compCache.buildListSearchAndSortRow(box, setTableName)` returns
+  `(search, sortIDBtn, sortNameBtn)`. No OnClick wiring.
+- `EC_compCache.buildListMatchRow(box, setTableName)` returns
+  `(matchInput, matchBtn)`. No OnClick wiring.
+- `EC_compCache.buildListScrollArea(box, w, setTableName)` returns
+  `(scroll, content)`. Installs the auto-hide scrollbar hook and the
+  OnSizeChanged reactive-width hook internally.
+- `EC_compCache.makeListRowFactory(content, setTableName)` returns a
+  small table `{ getRow, hideAllRows, setActiveRows }`. Encapsulates
+  the `rowPool` and `activeRows` state.
+
+`CreateListUI` shrunk from 407 LOC to 261 LOC (~36% reduction). The
+remaining body holds `sortMode` + `pendingRetry` state, the
+`MatchesSearch` helper, the `Refresh` closure (too entangled to extract
+cleanly), and all OnClick wiring. The wiring necessarily stays inline
+because the handlers need to call `Refresh` which is defined in the same
+scope.
+
+Test 2 in `tests/test_layout_reactivity.lua` was updated to follow the
+OnSizeChanged hook call into `EC_compCache.buildListScrollArea` (it now
+lives in the helper instead of inline in CreateListUI). The structural
+invariant - "the reactive-width hook chain stays intact" - is unchanged;
+the test just had to learn where the hook moved to.
+
+Zero behaviour change. Every list panel (Sell List, Keep List, Delete
+List, Account Sell List) renders and behaves identically to v2.17.0.
 
 ### Extract panel OnShow boilerplate - DONE (v2.17.0)
 

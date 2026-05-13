@@ -151,6 +151,11 @@ A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([s
 
 ## Changelog
 
+### v2.18.0
+
+- **Refactor: split `CreateListUI` (407-line monster) into five small helpers on `EC_compCache`.** The list widget used by every list panel (Sell List, Account Sell List, Keep List, Delete List) had accreted manual-add row, sort controls, search input, "Add matching in bags" row, scroll area, row pool, and refresh closure across v2.x.0 releases - all in one 400-line function. Pure layout chunks now live in `EC_compCache.buildListHeaderRow` / `buildListSearchAndSortRow` / `buildListMatchRow` / `buildListScrollArea` / `makeListRowFactory`. Each helper has a single responsibility and is individually grep-able. `CreateListUI` shrunk to 261 LOC (~36% reduction) and only holds state, the `Refresh` closure, and OnClick wiring that needs `Refresh` in scope.
+- **Pure refactor; zero behaviour change.** Every list panel renders and behaves identically to v2.17.0. Existing user settings carry forward unchanged. The `docs/CODE_REVIEW.md` backlog item 2 is now marked Resolved. `tests/test_layout_reactivity.lua` test 2 was updated to follow the OnSizeChanged hook call into `EC_compCache.buildListScrollArea` (the structural invariant - reactive-width hook chain intact - is unchanged; the test just had to learn where the hook moved to).
+
 ### v2.17.0
 
 - **Refactor: extracted the Interface Options panel OnShow boilerplate into a single helper.** All 11 panels (Main, Character Settings, Scavenger Settings, Merchant Settings, Profiles, Import/Export, Delete List, Keep List, Keep List Settings, Sell List, Account Sell List) previously started with the same 5-line preamble (`EnsureDB` + `EC_UpdatePanelWidth` + `inited` guard + refresh-or-build branch + optional scroll-wrap). The new `EC_compCache.initPanel(self, refresh, build, wrapScroll)` helper consolidates that into one place, so adding a new panel goes from ~30 lines of preamble + body to ~5 lines plus the panel-specific bodies, and any future preamble change (e.g. a `UI_SCALE_CHANGED` width recompute) lands once instead of 11 times. Hung off `EC_compCache` rather than as a file-scope local to stay under Lua 5.1's 200-locals-per-main-chunk cap.

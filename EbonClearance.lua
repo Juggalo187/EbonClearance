@@ -4478,22 +4478,15 @@ function EC_compCache.initPanel(self, refresh, build, wrapScroll)
     end
 end
 
-local function MakeLabel(parent, text, x, y)
-    local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    fs:SetPoint("TOPLEFT", x, y)
-    fs:SetWidth(EC_PANEL_WIDTH - x)
-    fs:SetJustifyH("LEFT")
-    fs:SetJustifyV("TOP")
-    -- v2.11.0: register the label's width with the reactive layout
-    -- registry so it re-wraps when the panel container resizes.
-    EC_compCache.registerWidth(fs, x)
-    if fs.SetWordWrap then
-        fs:SetWordWrap(true)
-    end
-    fs:SetText(text)
-    return fs
-end
-
+-- StyleInputBox: applied to every InputBoxTemplate EditBox we use. v2.18.0
+-- moved this up from its old position below CreateListUI so the new
+-- EC_compCache.buildListHeaderRow / buildListSearchAndSortRow /
+-- buildListMatchRow helpers (which call it during their pure-layout build)
+-- can see it as an upvalue. Forward-reference discipline: Lua file-scope
+-- locals are only visible to code AFTER their declaration; the v2.18.0
+-- split inadvertently placed the helpers BEFORE StyleInputBox, which
+-- worked at parse time but exploded at first OnShow with
+-- "attempt to call global 'StyleInputBox' (a nil value)".
 local function StyleInputBox(editBox)
     if not editBox then
         return
@@ -4536,136 +4529,36 @@ local function StyleInputBox(editBox)
     end
 end
 
-local function CreateListUI(parent, titleText, setTableName, x, y)
-    local w = EC_PANEL_WIDTH - x
-    local box = CreateFrame("Frame", nil, parent)
-    box:SetPoint("TOPLEFT", x, y)
-    -- Height chosen to keep the whole box inside a standard InterfaceOptions
-    -- sub-panel. Callers may override via listUI:SetHeight(n) if they need more
-    -- or less room (e.g. WhitelistPanel has extra controls above it).
-    box:SetSize(w, 280)
-
-    local title = box:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 0, 0)
-    title:SetText(titleText)
-
-    local input = CreateFrame("EditBox", "EbonClearanceIDInput_" .. setTableName, box, "InputBoxTemplate")
-    input:SetAutoFocus(false)
-    input:SetSize(140, 20)
-    input:SetPoint("TOPLEFT", 0, -24)
-    input:SetNumeric(true)
-    input:SetMaxLetters(10)
-    input:SetText("")
-    StyleInputBox(input)
-
-    local addBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    addBtn:SetSize(60, 20)
-    addBtn:SetPoint("LEFT", input, "RIGHT", 8, 0)
-    addBtn:SetText("Add")
-
-    -- "Clear All" button on the input row, anchored hard-right and visually
-    -- separated from the Add flow. Wipes every entry in the list with a
-    -- confirmation popup. Wired below.
-    local clearAllBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    clearAllBtn:SetSize(80, 20)
-    clearAllBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -24)
-    clearAllBtn:SetText("Clear All")
-
-    input:SetScript("OnEditFocusGained", function(self)
-        EC_activeIDBox = self
-    end)
-    input:SetScript("OnEditFocusLost", function(self)
-        if EC_activeIDBox == self then
-            EC_activeIDBox = nil
-        end
-    end)
-    input:SetScript("OnReceiveDrag", function(self)
-        local ctype, cid = GetCursorInfo()
-        if ctype == "item" and cid then
-            self:SetText(tostring(cid))
-            self:HighlightText()
-            ClearCursor()
-        end
-    end)
-
-    local sortMode = "id_asc" -- default: sort by ID ascending
-
-    -- Search row: Search box then ID, Name sort buttons all on one line
-    local searchLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    searchLabel:SetPoint("TOPLEFT", 0, -52)
-    searchLabel:SetText("Search:")
-
-    local sortNameBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    sortNameBtn:SetSize(62, 20)
-    sortNameBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -52)
-    sortNameBtn:SetText("Name \226\150\178")
-
-    local sortIDBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    sortIDBtn:SetSize(50, 20)
-    sortIDBtn:SetPoint("RIGHT", sortNameBtn, "LEFT", -4, 0)
-    sortIDBtn:SetText("ID \226\150\178")
-
-    local search = CreateFrame("EditBox", "EbonClearanceSearchInput_" .. setTableName, box, "InputBoxTemplate")
-    search:SetAutoFocus(false)
-    search:SetHeight(20)
-    search:SetPoint("LEFT", searchLabel, "RIGHT", 8, 0)
-    search:SetPoint("RIGHT", sortIDBtn, "LEFT", -8, 0)
-    search:SetMaxLetters(40)
-    search:SetText("")
-    StyleInputBox(search)
-
-    -- Bag-scan "Add matching" row: scan bags for items whose name contains the
-    -- typed substring and add each match to this list.
-    local matchLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    matchLabel:SetPoint("TOPLEFT", 0, -76)
-    matchLabel:SetText("Add matching in bags:")
-
-    local matchBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-    matchBtn:SetSize(80, 20)
-    matchBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -76)
-    matchBtn:SetText("Add Match")
-
-    local matchInput = CreateFrame("EditBox", "EbonClearanceMatchInput_" .. setTableName, box, "InputBoxTemplate")
-    matchInput:SetAutoFocus(false)
-    matchInput:SetHeight(20)
-    matchInput:SetPoint("LEFT", matchLabel, "RIGHT", 8, 0)
-    matchInput:SetPoint("RIGHT", matchBtn, "LEFT", -8, 0)
-    matchInput:SetMaxLetters(40)
-    matchInput:SetText("")
-    StyleInputBox(matchInput)
-
-    local scroll =
-        CreateFrame("ScrollFrame", "EbonClearanceListScroll_" .. setTableName, box, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 0, -102)
-    scroll:SetPoint("BOTTOMRIGHT", -26, 8)
-
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(w - 26, 1)
-    scroll:SetScrollChild(content)
-    -- Auto-hide the scroll bar (arrows + thumb) when content fits the visible
-    -- area. Wired once here; OnScrollRangeChanged fires on every Refresh that
-    -- changes content height, so visibility tracks the list automatically.
-    EC_HookScrollbarAutoHide(scroll)
-
-    -- v2.11.0: when the panel resizes the box stretches via its
-    -- BOTTOMRIGHT anchor (set externally), scroll stretches with the
-    -- box, but content (a ScrollChild) needs explicit SetWidth -
-    -- ScrollChild doesn't auto-track parent. Hook OnSizeChanged to keep
-    -- content width in step. Rows inside the content already track via
-    -- TOPLEFT/TOPRIGHT anchors so they stretch with content automatically.
-    box:SetScript("OnSizeChanged", function(self, width)
-        if not width or width <= 0 then
-            return
-        end
-        if content and content.SetWidth then
-            content:SetWidth(width - 26)
-        end
-    end)
-
+-- v2.18.0: CreateListUI scroll-area extraction. Builds the scroll frame +
+-- ScrollChild content + the auto-hide scrollbar hook + the OnSizeChanged
+-- reactive-width hook that keeps the ScrollChild's width in step with the
+-- box on Interface Options frame resize. Returns (scroll, content). Hung
+-- off EC_compCache rather than as a file-scope local to stay under Lua
+-- 5.1's 200-locals-per-main-chunk cap (CLAUDE.md discipline). Part of the
+-- CODE_REVIEW.md item 2 split of CreateListUI.
+-- v2.18.0: CreateListUI row-factory extraction. Encapsulates the row
+-- pool (`rowPool`) and the active-row count (`activeRows`) that the
+-- list widget uses to display its rows. Returns a small table with
+-- three methods: `getRow(index)` mints or returns a pooled row frame
+-- with a Remove button + label FontString, `hideAllRows()` hides every
+-- currently active row and resets the count, `setActiveRows(n)` lets
+-- the caller (Refresh) report how many rows are now displayed so the
+-- next hideAllRows knows the upper bound.
+--
+-- Why expose setActiveRows: in the inline-CreateListUI version the
+-- Refresh closure mutated `activeRows` directly as an upvalue. After
+-- extraction the state lives inside the factory's closure, so Refresh
+-- needs an explicit setter. Same data flow, just routed through a
+-- method call.
+--
+-- Row layout: 22 px tall, full width via TOPLEFT/TOPRIGHT anchors set
+-- by Refresh on each placement. Remove button is right-anchored, label
+-- text fills the gap between row's left edge and the button.
+function EC_compCache.makeListRowFactory(content, setTableName)
     local rowPool = {}
     local activeRows = 0
 
-    local function GetRow(index)
+    local function getRow(index)
         if rowPool[index] then
             return rowPool[index]
         end
@@ -4697,7 +4590,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
         return row
     end
 
-    local function HideAllRows()
+    local function hideAllRows()
         for i = 1, activeRows do
             if rowPool[i] then
                 rowPool[i]:Hide()
@@ -4706,6 +4599,206 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
         end
         activeRows = 0
     end
+
+    local function setActiveRows(n)
+        activeRows = n
+    end
+
+    return {
+        getRow = getRow,
+        hideAllRows = hideAllRows,
+        setActiveRows = setActiveRows,
+    }
+end
+
+-- v2.18.0: CreateListUI header-row extraction. Builds the title
+-- FontString + ID-input EditBox + Add Button + Clear All Button.
+-- Also wires the input's focus-tracking handlers (EC_activeIDBox is the
+-- shift-click-to-add target) and the drag-to-receive handler that
+-- populates the input with an itemID when a bag item is dropped onto
+-- it - these are pure layout (don't depend on Refresh), so they live
+-- here. Add and Clear All button OnClick handlers stay in CreateListUI
+-- because they call Refresh. Returns (input, addBtn, clearAllBtn).
+function EC_compCache.buildListHeaderRow(box, titleText, setTableName)
+    local title = box:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 0, 0)
+    title:SetText(titleText)
+
+    local input = CreateFrame("EditBox", "EbonClearanceIDInput_" .. setTableName, box, "InputBoxTemplate")
+    input:SetAutoFocus(false)
+    input:SetSize(140, 20)
+    input:SetPoint("TOPLEFT", 0, -24)
+    input:SetNumeric(true)
+    input:SetMaxLetters(10)
+    input:SetText("")
+    StyleInputBox(input)
+
+    local addBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+    addBtn:SetSize(60, 20)
+    addBtn:SetPoint("LEFT", input, "RIGHT", 8, 0)
+    addBtn:SetText("Add")
+
+    -- "Clear All" button on the input row, anchored hard-right and visually
+    -- separated from the Add flow. Wipes every entry in the list with a
+    -- confirmation popup. OnClick wired by caller (needs Refresh).
+    local clearAllBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+    clearAllBtn:SetSize(80, 20)
+    clearAllBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -24)
+    clearAllBtn:SetText("Clear All")
+
+    input:SetScript("OnEditFocusGained", function(self)
+        EC_activeIDBox = self
+    end)
+    input:SetScript("OnEditFocusLost", function(self)
+        if EC_activeIDBox == self then
+            EC_activeIDBox = nil
+        end
+    end)
+    input:SetScript("OnReceiveDrag", function(self)
+        local ctype, cid = GetCursorInfo()
+        if ctype == "item" and cid then
+            self:SetText(tostring(cid))
+            self:HighlightText()
+            ClearCursor()
+        end
+    end)
+
+    return input, addBtn, clearAllBtn
+end
+
+-- v2.18.0: CreateListUI search-and-sort-row extraction. Builds the
+-- "Search:" label + search input + sort-by-ID button + sort-by-Name button,
+-- all on one line at y=-52 within the box. Pure layout - no OnClick
+-- wiring; caller attaches handlers after Refresh exists. Returns
+-- (search, sortIDBtn, sortNameBtn). The sort buttons use right-pointing
+-- triangle glyphs ("\226\150\178") by default; the OnClick handlers in
+-- CreateListUI swap to down-pointing ("\226\150\188") to indicate
+-- descending order.
+function EC_compCache.buildListSearchAndSortRow(box, setTableName)
+    local searchLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    searchLabel:SetPoint("TOPLEFT", 0, -52)
+    searchLabel:SetText("Search:")
+
+    local sortNameBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+    sortNameBtn:SetSize(62, 20)
+    sortNameBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -52)
+    sortNameBtn:SetText("Name \226\150\178")
+
+    local sortIDBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+    sortIDBtn:SetSize(50, 20)
+    sortIDBtn:SetPoint("RIGHT", sortNameBtn, "LEFT", -4, 0)
+    sortIDBtn:SetText("ID \226\150\178")
+
+    local search = CreateFrame("EditBox", "EbonClearanceSearchInput_" .. setTableName, box, "InputBoxTemplate")
+    search:SetAutoFocus(false)
+    search:SetHeight(20)
+    search:SetPoint("LEFT", searchLabel, "RIGHT", 8, 0)
+    search:SetPoint("RIGHT", sortIDBtn, "LEFT", -8, 0)
+    search:SetMaxLetters(40)
+    search:SetText("")
+    StyleInputBox(search)
+
+    return search, sortIDBtn, sortNameBtn
+end
+
+-- v2.18.0: CreateListUI match-row extraction. Builds the
+-- "Add matching in bags:" label + match-input EditBox + Add Match button
+-- (anchored at y=-76 within the box, with the input filling the gap
+-- between label and button). Pure layout - no OnClick wiring; caller
+-- attaches handlers after Refresh exists. Returns (matchInput, matchBtn).
+function EC_compCache.buildListMatchRow(box, setTableName)
+    local matchLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    matchLabel:SetPoint("TOPLEFT", 0, -76)
+    matchLabel:SetText("Add matching in bags:")
+
+    local matchBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+    matchBtn:SetSize(80, 20)
+    matchBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -76)
+    matchBtn:SetText("Add Match")
+
+    local matchInput = CreateFrame("EditBox", "EbonClearanceMatchInput_" .. setTableName, box, "InputBoxTemplate")
+    matchInput:SetAutoFocus(false)
+    matchInput:SetHeight(20)
+    matchInput:SetPoint("LEFT", matchLabel, "RIGHT", 8, 0)
+    matchInput:SetPoint("RIGHT", matchBtn, "LEFT", -8, 0)
+    matchInput:SetMaxLetters(40)
+    matchInput:SetText("")
+    StyleInputBox(matchInput)
+
+    return matchInput, matchBtn
+end
+
+function EC_compCache.buildListScrollArea(box, w, setTableName)
+    local scroll =
+        CreateFrame("ScrollFrame", "EbonClearanceListScroll_" .. setTableName, box, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 0, -102)
+    scroll:SetPoint("BOTTOMRIGHT", -26, 8)
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(w - 26, 1)
+    scroll:SetScrollChild(content)
+    -- Auto-hide the scroll bar (arrows + thumb) when content fits the visible
+    -- area. Wired once here; OnScrollRangeChanged fires on every Refresh that
+    -- changes content height, so visibility tracks the list automatically.
+    EC_HookScrollbarAutoHide(scroll)
+
+    -- v2.11.0: when the panel resizes the box stretches via its
+    -- BOTTOMRIGHT anchor (set externally), scroll stretches with the
+    -- box, but content (a ScrollChild) needs explicit SetWidth -
+    -- ScrollChild doesn't auto-track parent. Hook OnSizeChanged to keep
+    -- content width in step. Rows inside the content already track via
+    -- TOPLEFT/TOPRIGHT anchors so they stretch with content automatically.
+    box:SetScript("OnSizeChanged", function(self, width)
+        if not width or width <= 0 then
+            return
+        end
+        if content and content.SetWidth then
+            content:SetWidth(width - 26)
+        end
+    end)
+
+    return scroll, content
+end
+
+local function MakeLabel(parent, text, x, y)
+    local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    fs:SetPoint("TOPLEFT", x, y)
+    fs:SetWidth(EC_PANEL_WIDTH - x)
+    fs:SetJustifyH("LEFT")
+    fs:SetJustifyV("TOP")
+    -- v2.11.0: register the label's width with the reactive layout
+    -- registry so it re-wraps when the panel container resizes.
+    EC_compCache.registerWidth(fs, x)
+    if fs.SetWordWrap then
+        fs:SetWordWrap(true)
+    end
+    fs:SetText(text)
+    return fs
+end
+
+local function CreateListUI(parent, titleText, setTableName, x, y)
+    local w = EC_PANEL_WIDTH - x
+    local box = CreateFrame("Frame", nil, parent)
+    box:SetPoint("TOPLEFT", x, y)
+    -- Height chosen to keep the whole box inside a standard InterfaceOptions
+    -- sub-panel. Callers may override via listUI:SetHeight(n) if they need more
+    -- or less room (e.g. WhitelistPanel has extra controls above it).
+    box:SetSize(w, 280)
+
+    local input, addBtn, clearAllBtn = EC_compCache.buildListHeaderRow(box, titleText, setTableName)
+
+    local sortMode = "id_asc" -- default: sort by ID ascending
+
+    -- Search row: Search box then ID, Name sort buttons all on one line
+    local search, sortIDBtn, sortNameBtn = EC_compCache.buildListSearchAndSortRow(box, setTableName)
+
+    -- Bag-scan "Add matching" row: scan bags for items whose name contains the
+    -- typed substring and add each match to this list.
+    local matchInput, matchBtn = EC_compCache.buildListMatchRow(box, setTableName)
+
+    local scroll, content = EC_compCache.buildListScrollArea(box, w, setTableName)
+
+    local rowFactory = EC_compCache.makeListRowFactory(content, setTableName)
 
     local function MatchesSearch(id, name, searchText)
         if not searchText or searchText == "" then
@@ -4725,7 +4818,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
     local pendingRetry = false
 
     local function Refresh()
-        HideAllRows()
+        rowFactory.hideAllRows()
 
         local searchText = ""
         if search and search.GetText then
@@ -4781,7 +4874,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
 
             if MatchesSearch(id, name, searchText) then
                 shown = shown + 1
-                local row = GetRow(shown)
+                local row = rowFactory.getRow(shown)
                 row:ClearAllPoints()
                 -- v2.11.0: anchor both TOPLEFT and TOPRIGHT so the row
                 -- stretches with the (resizable) content frame.
@@ -4801,7 +4894,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
             end
         end
 
-        activeRows = shown
+        rowFactory.setActiveRows(shown)
         content:SetHeight(math.max(1, (shown * 22) + 8))
         -- Scroll-bar visibility auto-updates via the OnScrollRangeChanged hook
         -- wired in EC_HookScrollbarAutoHide(scroll) below; SetHeight here

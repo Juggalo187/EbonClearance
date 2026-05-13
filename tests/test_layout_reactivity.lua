@@ -86,29 +86,56 @@ end
 -- Test 2: CreateListUI and CreateNameListUI must each install an
 -- OnSizeChanged hook on their `box` so the ScrollChild content (and
 -- therefore the rows anchored to it) tracks parent resize.
+--
+-- v2.18.0 split CreateListUI: the scroll-area setup (including the
+-- OnSizeChanged hook) moved into `EC_compCache.buildListScrollArea`,
+-- which CreateListUI calls. The reactivity chain is unchanged; the
+-- hook just lives in the extracted helper instead of inline. The
+-- check follows the call by accepting the hook anywhere in either the
+-- function's own body or the buildListScrollArea helper's body.
+-- CreateNameListUI hasn't been split; its hook stays inline.
 -- ---------------------------------------------------------------------------
 do
-    local function hasOnSizeChanged(funcName)
-        local body = src:match("local function " .. funcName .. ".-end\n$")
-        if not body then
-            -- Fallback: take everything from the function definition to the
-            -- next "local function " (or end of file) - good enough for the
-            -- structural check and avoids needing a real Lua parser.
-            local startIdx = src:find("local function " .. funcName)
-            if not startIdx then
-                return nil, "function " .. funcName .. " not found"
-            end
-            local nextIdx = src:find("\nlocal function ", startIdx + 1) or #src
-            body = src:sub(startIdx, nextIdx)
+    local function bodyOf(funcName, funcPrefix)
+        -- funcPrefix is "local function " or "function " (for table methods)
+        local startIdx = src:find(funcPrefix .. funcName)
+        if not startIdx then
+            return nil
         end
-        return body:find('box:SetScript%("OnSizeChanged"') ~= nil, body
+        -- Take everything from this function definition to the next
+        -- function (top-level local or table-method) - good enough for the
+        -- structural check and avoids needing a real Lua parser.
+        local nextLocal = src:find("\nlocal function ", startIdx + 1) or #src
+        local nextTbl = src:find("\nfunction [A-Za-z_]+%.[A-Za-z_]+", startIdx + 1) or #src
+        local nextIdx = math.min(nextLocal, nextTbl)
+        return src:sub(startIdx, nextIdx)
     end
 
-    local ok1 = hasOnSizeChanged("CreateListUI")
-    check("CreateListUI installs box:OnSizeChanged", ok1,
-        "missing - rows inside CreateListUI will not stretch with the panel on resize")
+    local function listBodyHasHook(funcName)
+        local body = bodyOf(funcName, "local function ")
+        if not body then
+            return nil
+        end
+        return body:find('box:SetScript%("OnSizeChanged"') ~= nil
+    end
 
-    local ok2 = hasOnSizeChanged("CreateNameListUI")
+    local function helperHasHook(helperName)
+        local body = bodyOf(helperName, "function EC_compCache%.")
+        if not body then
+            return nil
+        end
+        return body:find('box:SetScript%("OnSizeChanged"') ~= nil
+    end
+
+    -- CreateListUI: hook may live inline OR in buildListScrollArea (v2.18.0+).
+    local listInline = listBodyHasHook("CreateListUI")
+    local listInHelper = helperHasHook("buildListScrollArea")
+    check("CreateListUI installs box:OnSizeChanged",
+        listInline or listInHelper,
+        "missing - rows inside CreateListUI will not stretch with the panel on resize"
+            .. " (checked CreateListUI body and EC_compCache.buildListScrollArea)")
+
+    local ok2 = listBodyHasHook("CreateNameListUI")
     check("CreateNameListUI installs box:OnSizeChanged", ok2,
         "missing - rows inside CreateNameListUI will not stretch with the panel on resize")
 end
