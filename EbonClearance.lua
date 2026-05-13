@@ -177,6 +177,14 @@ local EC_compCache = {
     -- the cache resets naturally on /reload because it lives in this
     -- module-local table and isn't persisted.
     bindCache = {},
+    -- v2.20.0 Chance-on-hit cache. Same per-itemID caching pattern as
+    -- bindCache: chance-on-hit is a stable property (same itemID
+    -- always either has or doesn't have the proc line), so we cache
+    -- the boolean result keyed by itemID and skip the tooltip scan on
+    -- subsequent lookups. Cache resets naturally on /reload because
+    -- this table lives in the module-local EC_compCache and isn't
+    -- persisted. Filled lazily by EC_compCache.itemHasChanceOnHit.
+    chanceOnHitCache = {},
     -- v2.10.0 resummon-print debounce. v2.9.2 added the "Greedy Scavenger
     -- resummoned." chat line on every successful CallCompanion in the
     -- recovery path, plus a 2 s post-call cooldown to avoid back-to-back
@@ -705,6 +713,16 @@ local function EnsureDB()
     -- name-compare fallback for any custom PE mechanism).
     if type(DB.protectAffixedRareItems) ~= "boolean" then
         DB.protectAffixedRareItems = true
+    end
+    -- v2.20.0: Chance-on-hit protection. PE lets players EXTRACT proc
+    -- spells from weapons (the green `Chance on hit:` tooltip line)
+    -- and apply them to other items, so an item with a Chance-on-hit
+    -- proc is meaningfully different from the base itemID even when
+    -- the user lists the base for selling. Default ON; users who
+    -- don't use the extraction system can toggle it off. No quality
+    -- filter (the proc text is the signal, not the rarity).
+    if type(DB.protectChanceOnHitItems) ~= "boolean" then
+        DB.protectChanceOnHitItems = true
     end
     -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
     -- effectively enabled, EC_HandleLootReady drains every slot in the
@@ -1957,18 +1975,26 @@ function EC_compCache.linkHasAffix(link)
     return n ~= nil and n ~= 0
 end
 
+-- v2.20.0: narrowed affix detection. The previous v2.19.0 logic
+-- returned true on ANY non-zero suffix-DBC field (Layer 1) OR any
+-- tooltip-title that differed from GetItemInfo's base name (Layer 2),
+-- which conflated PE roguelite affixes with standard 3.3.5a random
+-- suffixes (`of the Bear`, `of the Sorcerer`, etc.). Bug: standard
+-- random-suffix items were being protected as if they were PE
+-- roguelite affixes, blocking legitimate vendor sales.
+--
+-- Discriminator: PE roguelite affixes always end with a roman-numeral
+-- rank (I, II, III, IV, ...). Standard ItemRandomSuffix.dbc entries
+-- don't. So both checks now require BOTH "tooltip title differs from
+-- base name" AND "tooltip title ends with a roman-numeral rank".
+--
+-- linkHasAffix is retained as a diagnostic helper (it still correctly
+-- reports whether the suffix-DBC field is non-zero) but is no longer
+-- consulted in the protection decision.
 function EC_compCache.bagSlotHasAffix(bag, slot)
     if not bag or not slot then
         return false
     end
-    local link = GetContainerItemLink(bag, slot)
-    if EC_compCache.linkHasAffix(link) then
-        return true
-    end
-    -- Layer 2: tooltip-title name-compare. If GetItemInfo's base name
-    -- differs from the live tooltip's title line, the title has extra
-    -- text appended (an affix). Uses the existing EC_scanTooltip
-    -- hidden frame so no new tooltip widget is needed.
     local itemID = GetContainerItemID(bag, slot)
     if not itemID then
         return false
@@ -1984,17 +2010,18 @@ function EC_compCache.bagSlotHasAffix(bag, slot)
         return false
     end
     local liveName = titleFS:GetText()
-    return liveName ~= nil and liveName ~= "" and liveName ~= baseName
+    if not liveName or liveName == "" or liveName == baseName then
+        return false
+    end
+    -- Rank suffix: roman-numeral pattern at end (I, II, III, IV, V,
+    -- VI, ..., M). PE goes I-IV today; the broader pattern leaves room.
+    return liveName:find(" [IVXLCDM]+$") ~= nil
 end
 
 function EC_compCache.liveTooltipHasAffix(tooltip, link, itemID)
-    if EC_compCache.linkHasAffix(link) then
-        return true
-    end
-    -- Same Layer 2 logic as bagSlotHasAffix but reads TextLeft1 from
-    -- the LIVE tooltip the user is hovering (rather than the hidden
-    -- EC_scanTooltip frame). Used by EC_AnnotateTooltip which already
-    -- has the live tooltip in scope.
+    -- link arg retained for backwards-compat with the v2.19.0 signature
+    -- but no longer used (the discriminator is now the tooltip title's
+    -- rank suffix, not the link's suffix-DBC field).
     if not tooltip or not tooltip.GetName or not itemID then
         return false
     end
@@ -2011,7 +2038,91 @@ function EC_compCache.liveTooltipHasAffix(tooltip, link, itemID)
         return false
     end
     local liveName = titleFS:GetText()
-    return liveName ~= nil and liveName ~= "" and liveName ~= baseName
+    if not liveName or liveName == "" or liveName == baseName then
+        return false
+    end
+    return liveName:find(" [IVXLCDM]+$") ~= nil
+end
+
+-- ---------------------------------------------------------------------------
+-- v2.20.0: PE Chance-on-hit detection
+-- ---------------------------------------------------------------------------
+-- Project Ebonhold lets players EXTRACT proc spells from weapons (the
+-- green `Chance on hit:` tooltip line) and apply them to other items.
+-- So an item with a Chance-on-hit proc is meaningfully different from
+-- the base itemID even when the user has the base itemID on their
+-- Sell List or Delete List. EC_compCache.itemHasChanceOnHit /
+-- liveTooltipHasChanceOnHit are the detection helpers; gated by
+-- DB.protectChanceOnHitItems in EC_IsSellable and BuildQueue's
+-- delete fallback.
+--
+-- Caching: chance-on-hit is a STABLE per-itemID property (unlike
+-- random-affix instances), so a per-itemID boolean cache is correct
+-- and efficient. EC_compCache.chanceOnHitCache holds the result; it
+-- resets naturally on /reload because EC_compCache itself isn't
+-- persisted across sessions.
+function EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
+    if not itemID then
+        return false
+    end
+    if EC_compCache.chanceOnHitCache[itemID] ~= nil then
+        return EC_compCache.chanceOnHitCache[itemID]
+    end
+    if not bag or not slot then
+        return false
+    end
+    -- ITEM_SPELL_TRIGGER_ONPROC is the Blizzard localized constant for
+    -- the "Chance on hit:" tooltip line. Fall back to the enUS literal
+    -- if it's missing (defensive; PE is enUS).
+    local needle = ITEM_SPELL_TRIGGER_ONPROC or "Chance on hit:"
+    EC_scanTooltip:ClearLines()
+    EC_scanTooltip:SetBagItem(bag, slot)
+    local result = false
+    for i = 1, 30 do
+        local line = _G["EbonClearanceScanTooltipTextLeft" .. i]
+        if not line then
+            break
+        end
+        local txt = line:GetText()
+        if txt and txt:find(needle, 1, true) then
+            result = true
+            break
+        end
+    end
+    EC_compCache.chanceOnHitCache[itemID] = result
+    return result
+end
+
+function EC_compCache.liveTooltipHasChanceOnHit(tooltip, itemID)
+    if itemID and EC_compCache.chanceOnHitCache[itemID] ~= nil then
+        return EC_compCache.chanceOnHitCache[itemID]
+    end
+    if not tooltip or not tooltip.NumLines or not tooltip.GetName then
+        return false
+    end
+    local tname = tooltip:GetName()
+    if not tname then
+        return false
+    end
+    local needle = ITEM_SPELL_TRIGGER_ONPROC or "Chance on hit:"
+    local n = tooltip:NumLines() or 0
+    local result = false
+    -- Start at line 2: line 1 is the item name; chance-on-hit lines
+    -- never appear as the title.
+    for i = 2, n do
+        local fs = _G[tname .. "TextLeft" .. i]
+        if fs and fs.GetText then
+            local txt = fs:GetText()
+            if txt and txt:find(needle, 1, true) then
+                result = true
+                break
+            end
+        end
+    end
+    if itemID then
+        EC_compCache.chanceOnHitCache[itemID] = result
+    end
+    return result
 end
 
 -- Driver. Walks bags, opens the first openable item, and recurses via
@@ -3739,14 +3850,29 @@ local function EC_IsSellable(bag, slot, junkOnly)
     -- Sell List or the auto-rule sweep matched them. The base itemID
     -- and the affixed itemID are the same; only the per-link suffix /
     -- tooltip-title differs. Default ON; users can opt out via the
-    -- Keep List Settings panel. White/Green items are NOT covered
+    -- Protection Settings panel. White/Green items are NOT covered
     -- (per user scope), so per-rarity sweep rules still vendor them.
+    -- v2.20.0: narrowed detection requires rank-suffix in name to
+    -- avoid misfiring on standard ItemRandomSuffix.dbc entries.
     if
         (whitelistPass or qualityPass)
         and DB.protectAffixedRareItems
         and quality
         and quality >= 3
         and EC_compCache.bagSlotHasAffix(bag, slot)
+    then
+        return false
+    end
+    -- v2.20.0: PE Chance-on-hit protection. Skip items with a "Chance
+    -- on hit:" proc line in their tooltip - on Project Ebonhold these
+    -- spells can be extracted and applied to other items, so the
+    -- base-itemID-on-Sell-List match is misleading. No quality filter
+    -- (chance-on-hit is a stable per-itemID property; extraction
+    -- works on any quality).
+    if
+        (whitelistPass or qualityPass)
+        and DB.protectChanceOnHitItems
+        and EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
     then
         return false
     end
@@ -3809,12 +3935,16 @@ local function BuildQueue(junkOnly)
                         -- with the base itemID on Delete must not
                         -- accidentally destroy a randomly-affixed
                         -- Rare/Epic copy. The toggle's default ON.
+                        -- v2.20.0: also gate on Chance-on-hit
+                        -- protection (no quality filter).
                         local _, _, quality = GetItemInfo(id)
                         local affixProtected = DB.protectAffixedRareItems
                             and quality
                             and quality >= 3
                             and EC_compCache.bagSlotHasAffix(bag, slot)
-                        if not affixProtected then
+                        local procProtected = DB.protectChanceOnHitItems
+                            and EC_compCache.itemHasChanceOnHit(bag, slot, id)
+                        if not affixProtected and not procProtected then
                             queue[#queue + 1] = {
                                 type = "delete",
                                 bag = bag,
@@ -4299,10 +4429,11 @@ local function EC_AnnotateTooltip(tooltip)
     -- delete verdict but DB.protectAffixedRareItems is on AND the item
     -- is Rare/Epic AND has an affix, override the label to make it
     -- clear that the merchant cycle won't actually act on this
-    -- specific bag instance. EC_compCache.liveTooltipHasAffix combines
-    -- the link-suffix check (cheap) with a tooltip-title name-compare
-    -- (fallback) so it covers both standard ItemRandomSuffix.dbc and
-    -- any custom PE name-append mechanism.
+    -- specific bag instance.
+    -- v2.20.0: liveTooltipHasAffix now requires the rank-suffix
+    -- pattern in the title, narrowing the check so standard
+    -- ItemRandomSuffix.dbc entries (`of the Bear`, `of the Sorcerer`)
+    -- don't get protected as PE roguelite affixes.
     if statusLine and DB.protectAffixedRareItems then
         local _, _, quality = GetItemInfo(id)
         if quality and quality >= 3 then
@@ -4310,6 +4441,21 @@ local function EC_AnnotateTooltip(tooltip)
             if wouldVendor and EC_compCache.liveTooltipHasAffix(tooltip, link, id) then
                 statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Random affix|r"
             end
+        end
+    end
+
+    -- v2.20.0: Chance-on-hit protection - tooltip honesty pass. If
+    -- the would-vendor verdict survived the affix override AND the
+    -- chance-on-hit toggle is on AND the item has a proc line, swap
+    -- the label. Runs AFTER the affix branch so an item that's BOTH
+    -- affixed AND has chance-on-hit shows the more-specific affix
+    -- label (the affix is the rarer / more distinctive signal). No
+    -- quality filter here (chance-on-hit detection is per-itemID and
+    -- extraction works on any quality on PE).
+    if statusLine and DB.protectChanceOnHitItems then
+        local wouldVendor = statusLine:find("Will Sell") or statusLine:find("Will Delete")
+        if wouldVendor and EC_compCache.liveTooltipHasChanceOnHit(tooltip, id) then
+            statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Chance on hit|r"
         end
     end
 
@@ -7282,7 +7428,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
     -- our anchor (autoOpenNote) is itself indented +26 to align with the
     -- auto-open checkbox label. Back-shift the x by -26 to put fastLootCB
     -- on the panel's left margin, level with autoOpenCB above. Same trick
-    -- the Keep List Settings panel uses to keep its toggle stack
+    -- the Protection Settings panel uses to keep its toggle stack
     -- left-aligned beneath each toggle's wrapped explanatory note.
     fastLootCB:ClearAllPoints()
     fastLootCB:SetPoint("TOPLEFT", autoOpenNote, "BOTTOMLEFT", -26, -10)
@@ -7573,7 +7719,7 @@ BlacklistPanel:SetScript("OnShow", function(self)
         -- v2.15.0: the auto-protect toggles (autoAddEquipped, autoProtectUpgrades,
         -- autoProtectEquipmentSets) plus their explanatory notes used to live on
         -- this panel and dominated it visually - 3 checkboxes + 3 multi-line notes
-        -- stacked above the actual list. They moved to the new `Keep List Settings`
+        -- stacked above the actual list. They moved to the new `Protection Settings`
         -- sub-panel so this panel matches the Sell List / Delete List / Account
         -- Sell List rhythm (header + description + hint + list). DB field names
         -- unchanged so all event handlers, tooltip annotations, and slash commands
@@ -7581,7 +7727,7 @@ BlacklistPanel:SetScript("OnShow", function(self)
         MakeHeader(self, "Keep List (Do Not Sell)", -16)
         local blDesc = MakeLabel(
             self,
-            "Specific items to permanently protect from auto-sell. Use this for valuable items you'd rather list at the auction house. |cffaaaaaaAuto-protect rules (equipped gear, looted upgrades, Blizzard equipment sets) live on the |r|cffffb84dKeep List Settings|r|cffaaaaaa panel.|r",
+            "Specific items to permanently protect from auto-sell. Use this for valuable items you'd rather list at the auction house. |cffaaaaaaAuto-protect rules (equipped gear, looted upgrades, equipment sets, random affixes, Chance-on-hit procs) live on the |r|cffffb84dProtection Settings|r|cffaaaaaa panel.|r",
             16,
             -44
         )
@@ -7607,7 +7753,9 @@ BlacklistPanel:SetScript("OnShow", function(self)
 end)
 
 -- ============================================================
--- v2.15.0 Keep List Settings sub-panel
+-- v2.15.0 Protection Settings sub-panel (renamed from "Keep List Settings"
+-- in v2.20.0 when the panel grew to cover affix + chance-on-hit protection
+-- alongside the original Keep-List auto-protect toggles).
 -- ============================================================
 -- Holds the auto-protect toggles + explanatory notes that previously
 -- cluttered the Keep List panel. Schema and behaviour are identical to the
@@ -7620,7 +7768,7 @@ end)
 -- drive the same protection without any wiring changes.
 local BlacklistSettingsPanel =
     CreateFrame("Frame", "EbonClearanceOptionsBlacklistSettings", InterfaceOptionsFramePanelContainer)
-BlacklistSettingsPanel.name = "Keep List Settings"
+BlacklistSettingsPanel.name = "Protection Settings"
 BlacklistSettingsPanel.parent = "EbonClearance"
 
 BlacklistSettingsPanel:SetScript("OnShow", function(self)
@@ -7637,6 +7785,9 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         if self.autoAffixCB then
             self.autoAffixCB:SetChecked(DB.protectAffixedRareItems)
         end
+        if self.procCB then
+            self.procCB:SetChecked(DB.protectChanceOnHitItems)
+        end
     end, function(self, content)
         -- Auto-protect handlers used to refresh `self.listUI` directly because
         -- the list lived on the same frame. Now the list lives on the Keep List
@@ -7648,7 +7799,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             end
         end
 
-        MakeHeader(content, "Keep List Settings", -16)
+        MakeHeader(content, "Protection Settings", -16)
     local desc = MakeLabel(
         content,
         "Automatic protection rules. Items matched by any rule below are added to your Keep List automatically and excluded from auto-sell.",
@@ -7836,7 +7987,47 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             .. "Tooltip shows |cffffb84dProtected - Random affix|r|cff888888 on items kept by this rule. White/Green items are not covered.|r"
     )
 
-        EC_FitScrollContent(content, autoAffixNote)
+    -- v2.20.0 Chance-on-hit protection. Sibling toggle to the affix
+    -- check above: Project Ebonhold lets players extract a weapon's
+    -- "Chance on hit:" proc spell and apply it to another item, so an
+    -- item with that proc text is meaningfully different from the
+    -- base itemID. Same gate-at-decision-time design as the affix
+    -- toggle. No quality filter because chance-on-hit is a stable
+    -- per-itemID property and extraction works regardless of rarity.
+    local procCB = CreateFrame(
+        "CheckButton",
+        "EbonClearanceProtectChanceOnHitCB",
+        content,
+        "InterfaceOptionsCheckButtonTemplate"
+    )
+    procCB:SetPoint("TOPLEFT", autoAffixNote, "BOTTOMLEFT", -26, -10)
+    procCB:SetChecked(DB.protectChanceOnHitItems)
+    local pcText = _G[procCB:GetName() .. "Text"]
+    if pcText then
+        pcText:SetText("Protect items with Chance on hit: effects")
+        EC_compCache.setPanelWidth(pcText, 60)
+        pcText:SetJustifyH("LEFT")
+    end
+    procCB:SetScript("OnClick", function(cb)
+        DB.protectChanceOnHitItems = cb:GetChecked() and true or false
+        PlaySound("igMainMenuOptionCheckBoxOn")
+    end)
+    self.procCB = procCB
+
+    local procNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    procNote:SetPoint("TOPLEFT", procCB, "BOTTOMLEFT", 26, -2)
+    EC_compCache.setPanelWidth(procNote, 60)
+    procNote:SetJustifyH("LEFT")
+    if procNote.SetWordWrap then
+        procNote:SetWordWrap(true)
+    end
+    procNote:SetText(
+        "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc (the green tooltip line on some weapons) won't be sold or deleted even if their itemID is on the Sell List or Delete List. "
+            .. "Project Ebonhold lets players extract these spells and apply them to other items, so the base itemID match is misleading. "
+            .. "Tooltip shows |cffffb84dProtected - Chance on hit|r|cff888888 on items kept by this rule. All qualities covered (the proc text itself is the signal, not the rarity).|r"
+    )
+
+        EC_FitScrollContent(content, procNote)
     end, true)
 end)
 
@@ -7984,6 +8175,7 @@ local function EC_BuildBugReport()
     add("Auto-Protect Upgrades: " .. tostring(DB.autoProtectUpgrades))
     add("Auto-Protect Equipment Sets: " .. tostring(DB.autoProtectEquipmentSets))
     add("Protect Affixed Rare Items: " .. tostring(DB.protectAffixedRareItems))
+    add("Protect Chance-on-Hit Items: " .. tostring(DB.protectChanceOnHitItems))
     add("Enable Only Listed Chars: " .. tostring(DB.enableOnlyListedChars))
     if DB.enableOnlyListedChars then
         local allowed = {}
