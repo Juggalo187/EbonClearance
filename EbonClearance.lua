@@ -3865,15 +3865,24 @@ local function EC_IsSellable(bag, slot, junkOnly)
     end
     -- v2.20.0: PE Chance-on-hit protection. Skip items with a "Chance
     -- on hit:" proc line in their tooltip - on Project Ebonhold these
-    -- spells can be extracted and applied to other items, so the
-    -- base-itemID-on-Sell-List match is misleading. No quality filter
-    -- (chance-on-hit is a stable per-itemID property; extraction
-    -- works on any quality).
+    -- spells can be extracted and applied to other items.
+    -- v2.20.1: narrowed to auto-rule sweep only. Mirrors the v2.13.x
+    -- quest-item safety-net design above: when the user explicitly
+    -- lists a chance-on-hit itemID on Sell List, they typically have
+    -- already extracted the proc spell and want to dump the now-
+    -- worthless base. Explicit user intent overrides the safety net;
+    -- only the auto-rule sweep (qualityPass) is gated.
     if
-        (whitelistPass or qualityPass)
+        qualityPass
         and DB.protectChanceOnHitItems
         and EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
     then
+        qualityPass = false
+    end
+    -- After the chance-on-hit downgrade, if no positive sell signal
+    -- remains (isJunk / qualityPass / whitelistPass), the item is no
+    -- longer sellable. Recheck the predicate the main guard uses.
+    if not (isJunk or qualityPass or whitelistPass) then
         return false
     end
     return true, link, itemID, sellPrice, itemCount
@@ -3935,16 +3944,23 @@ local function BuildQueue(junkOnly)
                         -- with the base itemID on Delete must not
                         -- accidentally destroy a randomly-affixed
                         -- Rare/Epic copy. The toggle's default ON.
-                        -- v2.20.0: also gate on Chance-on-hit
-                        -- protection (no quality filter).
+                        -- v2.20.1: chance-on-hit protection NO LONGER
+                        -- applies on the delete path. Delete List
+                        -- entries are always explicit user intent
+                        -- (added via Alt+Right-Click, manual entry,
+                        -- or the Delete List panel) - the user has
+                        -- said "destroy items with this ID". Don't
+                        -- override explicit destruction. Affix
+                        -- protection KEEPS protecting the delete path
+                        -- because affixed-instance detection is per-
+                        -- link and the user can't anticipate which
+                        -- specific bag copy will roll an affix.
                         local _, _, quality = GetItemInfo(id)
                         local affixProtected = DB.protectAffixedRareItems
                             and quality
                             and quality >= 3
                             and EC_compCache.bagSlotHasAffix(bag, slot)
-                        local procProtected = DB.protectChanceOnHitItems
-                            and EC_compCache.itemHasChanceOnHit(bag, slot, id)
-                        if not affixProtected and not procProtected then
+                        if not affixProtected then
                             queue[#queue + 1] = {
                                 type = "delete",
                                 bag = bag,
@@ -4444,17 +4460,22 @@ local function EC_AnnotateTooltip(tooltip)
         end
     end
 
-    -- v2.20.0: Chance-on-hit protection - tooltip honesty pass. If
-    -- the would-vendor verdict survived the affix override AND the
-    -- chance-on-hit toggle is on AND the item has a proc line, swap
-    -- the label. Runs AFTER the affix branch so an item that's BOTH
-    -- affixed AND has chance-on-hit shows the more-specific affix
-    -- label (the affix is the rarer / more distinctive signal). No
-    -- quality filter here (chance-on-hit detection is per-itemID and
-    -- extraction works on any quality on PE).
+    -- v2.20.0: Chance-on-hit protection - tooltip honesty pass.
+    -- v2.20.1: narrowed to "Will Sell - <rarity>" verdicts (the
+    -- quality-rule sweep labels). Plain "Will Sell" (whitelist match)
+    -- and "Will Delete" (Delete List match) stay as-is because they
+    -- represent explicit user intent; chance-on-hit protection no
+    -- longer overrides those (the user has typically already
+    -- extracted the proc and is dumping the base item).
+    --
+    -- Discriminator: quality-rule labels always have " - " separator
+    -- after "Will Sell" (e.g. "Will Sell - Green iLvl 25 (cap 35)").
+    -- The plain whitelist label is just "Will Sell" with no separator.
+    -- Lua pattern "Will Sell %- " (escaped dash) matches only the
+    -- quality-rule variant.
     if statusLine and DB.protectChanceOnHitItems then
-        local wouldVendor = statusLine:find("Will Sell") or statusLine:find("Will Delete")
-        if wouldVendor and EC_compCache.liveTooltipHasChanceOnHit(tooltip, id) then
+        local autoRuleSell = statusLine:find("Will Sell %- ")
+        if autoRuleSell and EC_compCache.liveTooltipHasChanceOnHit(tooltip, id) then
             statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Chance on hit|r"
         end
     end
@@ -8022,9 +8043,9 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         procNote:SetWordWrap(true)
     end
     procNote:SetText(
-        "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc (the green tooltip line on some weapons) won't be sold or deleted even if their itemID is on the Sell List or Delete List. "
-            .. "Project Ebonhold lets players extract these spells and apply them to other items, so the base itemID match is misleading. "
-            .. "Tooltip shows |cffffb84dProtected - Chance on hit|r|cff888888 on items kept by this rule. All qualities covered (the proc text itself is the signal, not the rarity).|r"
+        "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc (the green tooltip line on some weapons) are protected from the per-rarity quality-threshold sweep but |cffffff00not|r|cff888888 from explicit Sell List or Delete List entries. "
+            .. "Once you've extracted the proc spell via Project Ebonhold's extraction system, the base item is worthless - add its itemID to the Sell List (Alt+Right-Click or manual entry) and it'll vendor on the next merchant cycle. "
+            .. "Tooltip shows |cffffb84dProtected - Chance on hit|r|cff888888 when the quality sweep would otherwise catch it. All qualities covered (the proc text is the signal, not the rarity).|r"
     )
 
         EC_FitScrollContent(content, procNote)

@@ -151,6 +151,13 @@ A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([s
 
 ## Changelog
 
+### v2.20.1
+
+- **Refinement: Chance-on-hit protection now applies to the auto-rule sweep only.** v2.20.0 protected items with a `Chance on hit:` proc against BOTH the per-rarity quality-threshold sweep AND explicit Sell/Delete List entries. That's too strict for chance-on-hit, where item value is finite (once you extract the proc spell via Project Ebonhold's extraction system, the base item is worthless and the user typically lists it for vendoring). v2.20.1 mirrors EC's existing v2.13.x quest-item safety-net design: explicit user intent (Sell List entry, Delete List entry, Alt+Right-Click `Sell Now`) overrides the safety net; only the auto-rule sweep is gated.
+- **Affix protection unchanged.** Affixes are random per-instance and the user can't anticipate which copy will be affixed when listing an itemID, so the strict "protect even when listed" design from v2.19.0/v2.20.0 stays in place. The two protections now have intentionally different semantics: affix protection is strict (can't be bypassed by listing); chance-on-hit protection is auto-rule-only (listed items pass through).
+- **Tooltip annotation narrowed accordingly.** A chance-on-hit weapon on the Sell List now shows `[EC] Will Sell` (plain) instead of `[EC] Protected - Chance on hit`. A chance-on-hit weapon matched by the quality sweep still shows `[EC] Protected - Chance on hit`.
+- **Protection Settings panel note updated** to reflect the new behavior.
+
 ### v2.20.0
 
 - **Bugfix: narrowed v2.19.0 affix detection to avoid misfiring on standard random suffixes.** `Darkcloth Shoulders of the Sorcerer` was being incorrectly protected as having a PE roguelite affix, blocking legitimate vendor sales. Root cause: v2.19.0's link-suffix check returned true for any non-zero `ItemRandomSuffix.dbc` entry, conflating standard vanilla-era suffixes (`of the Bear`, `of the Sorcerer`, etc.) with PE's roguelite affix system. Fix: detection now requires the tooltip title to BOTH differ from the base name AND end with a roman-numeral rank (` [IVXLCDM]+$` at end). PE affixes always have a rank (`of Inner Light I`, `of Inner Light II`, `of Fortified by Pain IV`); standard random suffixes don't. The link-suffix helper (`EC_compCache.linkHasAffix`) is retained as a diagnostic but no longer drives the protection decision.
