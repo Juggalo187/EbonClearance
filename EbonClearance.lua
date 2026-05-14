@@ -5081,6 +5081,20 @@ function EC_compCache.buildListScrollArea(box, w, setTableName)
     return scroll, content
 end
 
+-- ---------------------------------------------------------------------------
+-- Panel-text principle (v2.20.2)
+-- ---------------------------------------------------------------------------
+-- Panel descriptions (yellow MakeLabel) and grey checkbox notes
+-- (|cff888888...|r) should answer one of three questions for the
+-- player:
+--   1. What does this do?
+--   2. When does it apply?
+--   3. How do I override it?
+-- If a sentence explains WHY a feature exists, cites version history,
+-- or names an internal mechanism, cut it. The player doesn't care; we
+-- have CLAUDE.md and source comments for that. Same lens applies when
+-- adding a new toggle or panel description.
+
 local function MakeLabel(parent, text, x, y)
     local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     fs:SetPoint("TOPLEFT", x, y)
@@ -7463,7 +7477,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         fastLootNote:SetWordWrap(true)
     end
     fastLootNote:SetText(
-        "|cff888888Speeds up |cffffff00manual|r|cff888888 looting (corpses you click, fishing, gift bags, dungeon/raid loot, mailbox attachments). Does |cffffff00not|r|cff888888 affect |cffff7f7fGreedy Scavenger|r|cff888888 autonomous looting - that bypasses the loot window server-side and is already instant. Honours Blizzard's |cffffff00Auto Loot|r|cff888888 setting (also auto-confirms |cffffb84dBoP|r|cff888888 popups while on, so items bind without interrupting the drain).|r"
+        "|cff888888Speeds up manual looting (corpses, fishing, gift bags, dungeon/raid loot, mailbox). Honours Blizzard's |cffffff00Auto Loot|r|cff888888 setting. |cffff7f7fGreedy Scavenger|r|cff888888 looting is already instant and isn't affected.|r"
     )
 
     -- v2.10.0: the v2.9.0 editable companion-name input boxes were removed
@@ -7488,7 +7502,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         rightClickHint:SetWordWrap(true)
     end
     rightClickHint:SetText(
-        "|cffffb84dTip:|r |cff888888Alt+Right-Click any item in your bags for a quick-action menu (whitelist, blacklist, delete, sell now).|r"
+        "|cffffb84dTip:|r |cff888888Alt+Right-Click any item in your bags for a quick-action menu (Sell, Keep, Delete, Sell Now).|r"
     )
 
     -- Size the scroll content to fit the bottom-most widget so the scrollbar
@@ -7870,7 +7884,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoEquipNote:SetWordWrap(true)
     end
     autoEquipNote:SetText(
-        "|cff888888Adds your currently equipped gear to the Keep list on toggle, then auto-adds anything you equip later so replaced upgrades sliding into bags are automatically protected from auto-sell rules. The bag tooltip explains why each item is kept; Alt+Right-Click an item to remove it if you want it sold.|r"
+        "|cff888888Adds your equipped gear to the Keep List, and anything you equip later. Alt+Right-Click an item to remove it.|r"
     )
 
     -- v2.11.0 auto-protect upgrades. The companion to v2.10.0's auto-
@@ -7914,12 +7928,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoUpgradeNote:SetWordWrap(true)
     end
     autoUpgradeNote:SetText(
-        "|cff888888Watches new bag items and auto-adds any whose item level beats your currently equipped gear in the same slot. |r"
-            .. "|cffaaaaaaRedundant when Merchant Settings uses |cffffff00Use equipped iLvl|r|cffaaaaaa "
-            .. "(the dynamic cap already excludes upgrades from auto-sell). "
-            .. "Useful when you switch a rarity to a fixed |cffffff00max iLvl|r|cffaaaaaa "
-            .. "above your equipped iLvl - then an upgrade falling below that cap could "
-            .. "vendor without this protection.|r"
+        "|cff888888Auto-Keeps bag items with a higher iLvl than your current gear in the same slot.|r"
     )
 
     -- v2.13.0 Equipment Manager protection. Catches the dual-spec /
@@ -7961,9 +7970,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoSetNote:SetWordWrap(true)
     end
     autoSetNote:SetText(
-        "|cff888888Adds every item in your saved Blizzard equipment-manager sets to the Keep list, and re-syncs whenever you save or modify a set. "
-            .. "Useful for hybrids and dual-spec players whose off-set gear sits in bags between swaps. "
-            .. "Tooltip shows |cffffb84dAuto-Protected (Set)|r|cff888888 on items kept by this rule. Removing a set later does not auto-clean items it added; use Alt+Right-Click to drop unwanted entries.|r"
+        "|cff888888Auto-Keeps every item in your saved equipment-manager sets. Removing a set doesn't drop its items from the Keep List - Alt+Right-Click to remove them.|r"
     )
 
     -- v2.19.0 PE roguelite affix protection. The base itemID of an
@@ -8003,9 +8010,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoAffixNote:SetWordWrap(true)
     end
     autoAffixNote:SetText(
-        "|cff888888Items with a random suffix (e.g. |cffffb84d'of Fortified by Pain IV'|r|cff888888) won't be sold or deleted even if their itemID is on the Sell List or Delete List. "
-            .. "Project Ebonhold's roguelite affix system makes affixed Rare/Epic gear meaningfully different from the base item - this toggle prevents accidentally dumping the affixed version. "
-            .. "Tooltip shows |cffffb84dProtected - Random affix|r|cff888888 on items kept by this rule. White/Green items are not covered.|r"
+        "|cff888888Blue/Purple items with a random affix (e.g. |cffffb84d'of Fortified by Pain IV'|r|cff888888) are never sold or deleted, even when their itemID is listed.|r"
     )
 
     -- v2.20.0 Chance-on-hit protection. Sibling toggle to the affix
@@ -8043,9 +8048,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         procNote:SetWordWrap(true)
     end
     procNote:SetText(
-        "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc (the green tooltip line on some weapons) are protected from the per-rarity quality-threshold sweep but |cffffff00not|r|cff888888 from explicit Sell List or Delete List entries. "
-            .. "Once you've extracted the proc spell via Project Ebonhold's extraction system, the base item is worthless - add its itemID to the Sell List (Alt+Right-Click or manual entry) and it'll vendor on the next merchant cycle. "
-            .. "Tooltip shows |cffffb84dProtected - Chance on hit|r|cff888888 when the quality sweep would otherwise catch it. All qualities covered (the proc text is the signal, not the rarity).|r"
+        "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc are skipped by the quality-threshold sweep. Explicitly listing them on the Sell or Delete List still works.|r"
     )
 
         EC_FitScrollContent(content, procNote)

@@ -151,6 +151,12 @@ A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([s
 
 ## Changelog
 
+### v2.20.2
+
+- **Tightened the grey explanatory notes across the Protection Settings and Scavenger Settings panels.** The 6 longest notes had been written explaining design rationale, version history, and edge cases - useful for me when implementing, useless to the player using the panel. New principle: notes answer "what does this do, when does it apply, how do I override it" and nothing else. The 5 Protection Settings toggles now have one-sentence notes (down from 2-4 sentences each); the Fast Loot note is one sentence shorter; the right-click context-menu hint was also using pre-v2.14.0 list names (`whitelist, blacklist, delete`) and now reads `Sell, Keep, Delete, Sell Now`.
+- **Added a principle comment near `MakeLabel`** so future contributors apply the same lens when writing new panel text.
+- Pure text/docs change; zero behaviour change, zero schema change.
+
 ### v2.20.1
 
 - **Refinement: Chance-on-hit protection now applies to the auto-rule sweep only.** v2.20.0 protected items with a `Chance on hit:` proc against BOTH the per-rarity quality-threshold sweep AND explicit Sell/Delete List entries. That's too strict for chance-on-hit, where item value is finite (once you extract the proc spell via Project Ebonhold's extraction system, the base item is worthless and the user typically lists it for vendoring). v2.20.1 mirrors EC's existing v2.13.x quest-item safety-net design: explicit user intent (Sell List entry, Delete List entry, Alt+Right-Click `Sell Now`) overrides the safety net; only the auto-rule sweep is gated.
