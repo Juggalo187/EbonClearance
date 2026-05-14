@@ -725,14 +725,19 @@ local function EnsureDB()
         DB.protectChanceOnHitItems = true
     end
     -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
-    -- effectively enabled, EC_HandleLootReady drains every slot in the
-    -- loot window the moment LOOT_READY fires, so the loot frame
-    -- flashes briefly or skips entirely. Pairs with the auto-loot
-    -- cycle: faster per-kill looting = bag-full threshold trips
-    -- sooner = vendor cycle turns over faster. Default off so
-    -- existing users keep the standard loot-window behaviour and
-    -- BoP-bind safety prompts. Pattern borrowed from FasterLoot
-    -- (others/FasterLoot/FasterLoot.lua).
+    -- effectively enabled, EC_HandleLootReady queues every slot in the
+    -- loot window for draining, so the loot frame flashes briefly or
+    -- skips entirely. Pairs with the auto-loot cycle: faster per-kill
+    -- looting = bag-full threshold trips sooner = vendor cycle turns
+    -- over faster. Default off so existing users keep the standard
+    -- loot-window behaviour and BoP-bind safety prompts. Pattern
+    -- borrowed from FasterLoot (others/FasterLoot/FasterLoot.lua).
+    --
+    -- v2.21.0 retrofit: drain is now queue-based with a ~110 ms
+    -- throttle per slot (was: tight loop over GetNumLootItems in one
+    -- frame), reducing disconnect risk on busy private servers. The
+    -- toggle, schema, and BoP-bind auto-confirm are unchanged from
+    -- v2.16.0; only the internal draining is refactored.
     if type(DB.fastLoot) ~= "boolean" then
         DB.fastLoot = false
     end
@@ -1734,13 +1739,22 @@ local EC_merchantReminderTimer = 0
 -- the write to leak into _G if the function is parsed before the local exists.
 local EC_autoOpenInFlight = false
 
--- v2.16.0: Fast Loot last-fire timestamp. EC_HandleLootReady debounces on
--- this so a burst of LOOT_READY events (which can fire several times for the
--- same loot interaction) doesn't cause repeated LootSlot storms. Same
--- forward-declaration discipline as EC_autoOpenInFlight: the handler writes
--- this and we don't want the write to leak to _G if the function parses
--- before the local exists.
-local EC_lastFastLootTime = 0
+-- v2.21.0: Fast Loot queue state hung off EC_compCache to stay under
+-- Lua 5.1's 200-locals-per-main-chunk cap (CLAUDE.md discipline). The
+-- queue replaces v2.16.0's tight-loop drain with a slot-index queue
+-- that drains via OnUpdate throttle, reducing per-frame LootSlot
+-- pressure to mitigate disconnect risk on busy 3.3.5a private
+-- servers. EC_compCache.lootQueue is initialised here so the OnUpdate
+-- driver (built lazily in EC_HandleLootReady) can reach it via
+-- EC_compCache. Resets naturally on /reload and on every LOOT_READY
+-- (re-population wipes + refills).
+EC_compCache.lootQueue = {
+    slots = {},
+    isProcessing = false,
+    lastLootAt = 0,
+    delay = 0.11, -- 110 ms; matches the reference implementation's default
+    frame = nil, -- built lazily in EC_HandleLootReady on first call
+}
 
 -- Auto-loot cycle: react to bag-full as soon as the game tells us a bag
 -- changed. Same body as the old 5-second poll; called from BAG_UPDATE so the
@@ -2125,6 +2139,47 @@ function EC_compCache.liveTooltipHasChanceOnHit(tooltip, itemID)
     return result
 end
 
+-- v2.21.0: pre-flight bag-space check used by the Fast Loot queue
+-- before each LootSlot call. Returns true if the item can fit (free
+-- slot in a compatible bag, OR room in an existing stack). False
+-- means bags are too full - the queue defers, and the loot window
+-- stays open for the player to deal with manually. Money and items
+-- with no link (currency drops) always return true since they don't
+-- consume bag space.
+function EC_compCache.canLootItem(link)
+    if not link then
+        return true
+    end
+    local itemFamily = GetItemFamily and GetItemFamily(link) or 0
+    local totalFree = 0
+    for i = 0, NUM_BAG_SLOTS do
+        local free, bagFamily = GetContainerNumFreeSlots(i)
+        bagFamily = bagFamily or 0
+        -- bagFamily 0 = generic bag, accepts anything. Non-zero =
+        -- specialty bag (quiver, soul shard pouch, etc.) - only
+        -- accepts items whose family bit matches.
+        if free and (bagFamily == 0 or (itemFamily and bit.band(itemFamily, bagFamily) > 0)) then
+            totalFree = totalFree + free
+        end
+    end
+    if totalFree > 0 then
+        return true
+    end
+    -- Bags full but check if the item can stack into an existing
+    -- partial stack of the same item.
+    local have = GetItemCount and GetItemCount(link) or 0
+    if have > 0 then
+        local _, _, _, _, _, _, _, stackSize = GetItemInfo(link)
+        if stackSize and stackSize > 1 then
+            local remainder = have % stackSize
+            if remainder > 0 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- Driver. Walks bags, opens the first openable item, and recurses via
 -- EC_Delay if more remain. EC_autoOpenInFlight coalesces BAG_UPDATE bursts
 -- so we never stack `UseContainerItem` calls within the inter-item delay.
@@ -2183,23 +2238,29 @@ local function EC_HandleAutoOpenContainers()
     end
 end
 
--- v2.16.0: Fast Loot driver. On LOOT_READY, if DB.fastLoot is on AND
--- Blizzard's auto-loot mode is effectively enabled, iterate the loot
--- window's slots backwards and call LootSlot on each so the items vacuum
--- into bags instantly. The loot frame briefly appears or skips entirely.
--- Pattern borrowed from FasterLoot (others/FasterLoot/FasterLoot.lua).
+-- v2.21.0: Fast Loot driver. Replaces v2.16.0's tight-loop drain
+-- (which fired N LootSlot calls in one frame and risked anti-flood
+-- disconnect on busy 3.3.5a private servers) with a queue + OnUpdate
+-- throttle: on LOOT_READY, the slot indices are pushed into
+-- EC_lootQueue.slots and the OnUpdate driver below drains one slot
+-- every EC_LOOT_QUEUE_DELAY seconds. Each pop re-validates the slot
+-- and pre-checks bag space before calling LootSlot. The 0.3 s
+-- LOOT_READY debounce from v2.16.0 is gone - re-populating the queue
+-- on a fresh LOOT_READY is idempotent (wipe + refill).
 --
--- The "auto-loot is effectively on right now?" check is FasterLoot's:
--- autoLootDefault is the CVar setting, AUTOLOOTTOGGLE is the modifier
--- key (typically Shift) that inverts auto-loot for one interaction. When
--- the CVar's value matches whether the modifier is held, auto-loot is
--- OFF for this loot (user is explicitly opting OUT - or didn't opt IN);
--- when they differ, auto-loot is ON. Skip when off so the user keeps the
--- standard loot window for selective looting.
+-- The "auto-loot is effectively on right now?" check is unchanged
+-- from v2.16.0: autoLootDefault is the CVar setting, AUTOLOOTTOGGLE
+-- is the modifier key (typically Shift) that inverts auto-loot for
+-- one interaction. When the CVar's value matches whether the
+-- modifier is held, auto-loot is OFF for this loot (user is
+-- explicitly opting OUT - or didn't opt IN); when they differ,
+-- auto-loot is ON. Skip when off so the user keeps the standard
+-- loot window for selective looting.
 --
--- 0.3 s debounce: LOOT_READY can fire multiple times in a single loot
--- interaction. After the first firing drains all slots, subsequent fires
--- within 0.3 s would just be wasted work. Same pattern FasterLoot uses.
+-- BoP-bind auto-confirm (also v2.16.0) is unchanged: the
+-- hooksecurefunc on LootSlot fires whether the call comes from the
+-- old tight loop or the new queue. Fast Loot users still don't see
+-- the bind popup.
 local function EC_HandleLootReady()
     if not DB or not DB.fastLoot then
         return
@@ -2207,13 +2268,62 @@ local function EC_HandleLootReady()
     if GetCVarBool("autoLootDefault") == IsModifiedClick("AUTOLOOTTOGGLE") then
         return
     end
-    if (GetTime() - EC_lastFastLootTime) < 0.3 then
+    local n = GetNumLootItems()
+    if n == 0 then
         return
     end
-    EC_lastFastLootTime = GetTime()
-    for i = GetNumLootItems(), 1, -1 do
-        LootSlot(i)
+    local q = EC_compCache.lootQueue
+    -- Lazy-build the OnUpdate driver frame on first LOOT_READY. Lives
+    -- for the rest of the session; cheap when DB.fastLoot is off
+    -- because the OnUpdate body bails on isProcessing == false.
+    if not q.frame then
+        q.frame = CreateFrame("Frame")
+        q.frame:SetScript("OnUpdate", function(self, elapsed)
+            local qs = EC_compCache.lootQueue
+            if not qs.isProcessing then
+                return
+            end
+            -- Cap elapsed so a long pause (Alt-Tab, /reload) doesn't
+            -- void the next throttle window and drain in a burst.
+            if elapsed > 0.1 then
+                elapsed = 0.1
+            end
+            if (GetTime() - qs.lastLootAt) < qs.delay then
+                return
+            end
+            if #qs.slots == 0 then
+                qs.isProcessing = false
+                return
+            end
+            local slotIdx = qs.slots[1]
+            table.remove(qs.slots, 1)
+            -- Per-slot revalidation: server-side loot state can
+            -- desync from the snapshot at LOOT_READY (a slot can
+            -- become invalid before we reach it).
+            local _, _, _, _, locked = GetLootSlotInfo(slotIdx)
+            if locked then
+                -- BoP / roll item: leave for player. The existing
+                -- BoP-bind auto-confirm hook only fires AFTER a
+                -- successful LootSlot, so skipping here leaves the
+                -- loot window open for manual handling.
+                return
+            end
+            -- Bag-space pre-check: avoids ERR_INV_FULL spam in the
+            -- chat frame when bags are full.
+            local link = GetLootSlotLink(slotIdx)
+            if link and not EC_compCache.canLootItem(link) then
+                return
+            end
+            qs.lastLootAt = GetTime()
+            LootSlot(slotIdx)
+        end)
     end
+    wipe(q.slots)
+    for i = n, 1, -1 do
+        q.slots[#q.slots + 1] = i
+    end
+    q.isProcessing = true
+    q.lastLootAt = 0
 end
 
 -- ===========================================================================

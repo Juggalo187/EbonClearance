@@ -30,7 +30,7 @@ A World of Warcraft addon built for **Project Ebonhold**, designed to take the f
 
 **Auto-open lootable containers** - Optional toggle on the Scavenger Settings panel. When enabled, EbonClearance opens any "Right Click to Open" container in your bags as soon as it lands - gift bags, treasure pouches, freebie pouches, etc. Lockboxes that need a key or lockpick are skipped. Combat-paused.
 
-**Fast Loot** - Optional toggle on the Scavenger Settings panel (default OFF). Speeds up **manual** looting - corpses you click, fishing catches, gift bags / quest chests / mailbox attachments, dungeon and raid loot windows, profession openables. EbonClearance vacuums every slot the moment `LOOT_READY` fires so the loot frame flashes briefly or skips entirely. Does **not** affect the Greedy Scavenger's autonomous corpse looting - that bypasses the player's loot pipeline server-side and is already as instant as the server allows. Honours Blizzard's `Auto Loot` CVar (so selective looting still works when you toggle auto-loot off, or shift-click for a one-off). BoP-bind popups are auto-confirmed while Fast Loot is on so items bind without interrupting the drain - turn Fast Loot off to restore the Blizzard safety prompt.
+**Fast Loot** - Optional toggle on the Scavenger Settings panel (default OFF). Speeds up **manual** looting - corpses you click, fishing catches, gift bags / quest chests / mailbox attachments, dungeon and raid loot windows, profession openables. EbonClearance queues every slot in the loot window the moment `LOOT_READY` fires and drains them via a ~110 ms throttle, so the loot frame flashes briefly or skips entirely. The queue is throttled (not a tight loop) to reduce disconnect risk on busy or laggy private servers, and each slot is re-validated immediately before looting (handles server-side desync). A pre-flight bag-space check skips items that wouldn't fit, leaving them in the window for manual handling. Does **not** affect the Greedy Scavenger's autonomous corpse looting - that bypasses the player's loot pipeline server-side and is already as instant as the server allows. Honours Blizzard's `Auto Loot` CVar (so selective looting still works when you toggle auto-loot off, or shift-click for a one-off). BoP-bind popups are auto-confirmed while Fast Loot is on so items bind without interrupting the drain - turn Fast Loot off to restore the Blizzard safety prompt.
 
 **Right-click bag-item menu** - Alt+Right-Click any item in your bags to add it to a Sell List (character or account), Keep List, or Delete List, or to sell it immediately. Saves a trip to the settings panel for one-off list edits. A small grey "Alt+Right-Click for EbonClearance menu" hint on bag-item tooltips makes the shortcut discoverable.
 
@@ -150,6 +150,14 @@ Working on the addon? There's developer documentation under [docs/](docs/):
 A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check EbonClearance.lua` and `luacheck EbonClearance.lua` before opening a PR.
 
 ## Changelog
+
+### v2.21.0
+
+- **Fast Loot safety upgrade: queue + throttle replaces the v2.16.0 tight loop.** The previous Fast Loot implementation fired `N` `LootSlot` calls in one frame on `LOOT_READY` - the exact pattern that triggers anti-flood disconnect protection on busy / laggy 3.3.5a private servers. v2.21.0 queues slot indices and drains them via an `OnUpdate` throttle (one slot every ~110 ms), which is much gentler on the server. The toggle, the schema (`DB.fastLoot`), the BoP-bind auto-confirm hook, and the `autoLootDefault` CVar gate are all unchanged - this is a refactor of the internal driver only.
+- **Per-slot re-validation**: before each `LootSlot` call the driver re-checks `GetLootSlotInfo` so server-side loot state desync (a slot becoming locked or invalid between `LOOT_READY` and the queue's turn) is handled cleanly. Locked items are skipped and left in the loot window for manual handling.
+- **Bag-space pre-check**: a new `EC_compCache.canLootItem(link)` helper checks free bag slots (item-family aware, so specialty bags like quivers aren't mistaken for storage) and existing-stack room before queuing each `LootSlot` call. If an item wouldn't fit, the slot is skipped and the loot window stays open - cleaner than letting the server reject and spam `ERR_INV_FULL` to the chat frame.
+- The 0.3 s `LOOT_READY` debounce from v2.16.0 is gone (the queue is naturally idempotent - re-populating on a fresh `LOOT_READY` just wipes and refills).
+- No new DB fields, no migration, no UI change. Existing users with Fast Loot on get the safety upgrade automatically; everyone else is unaffected.
 
 ### v2.20.2
 
