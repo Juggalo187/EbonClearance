@@ -129,6 +129,14 @@ A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([s
 
 ## Changelog
 
+### v2.24.0
+
+- **Perf fix: BAG_UPDATE storm during pet AOE looting no longer freezes the game.** The Greedy Scavenger picking up 5 items fired 5 BAG_UPDATE events in under 100 ms; each event ran a full 5-bag walk + per-Rare/Epic tooltip scan for the Process Bags rearm + an upgrade-detection pass + container auto-open scan. On busy farming runs that compounded into 1.5 s freezes.
+- **Fix 1: `rearmProcessButton` now skips when Process Bags is unused.** Gated on `panel:IsShown()` OR a keybind being set on the cast button. Users who never open Process Bags pay zero cost on BAG_UPDATE for the rearm path (was the dominant cost). Users with a `Process Next` keybind still get the rearm so the hold-key-to-drain workflow keeps working.
+- **Fix 2: BAG_UPDATE deferred work now coalesces on a 120 ms idle window.** New shared `OnUpdate` frame (`EC_compCache.bagUpdateFrame`) waits for the burst to settle, then runs `EC_HandleAutoOpenContainers`, `checkBagsForUpgrades`, `rearmProcessButton`, and the panel refresh (when shown) ONCE per burst rather than per event. `EC_HandleBagFullForCycle` stays synchronous so the auto-loot cycle's threshold response is unchanged (its internal 1.5 s hysteresis already debounces bag fluctuations).
+- **Fix 3: `bagSlotAffixData` cache keyed by `itemString`.** Repeat affix scans across rearm bursts are now O(1). Stores `false` for "scanned, no affix" so non-affixed items also skip the tooltip scan on re-encounter. Per-session, cleared on `/reload` (same lifecycle as `bindCache` / `processCache` / `chanceOnHitCache`).
+- **No schema, no UI, no behaviour change.** Pure perf refactor. Existing toggles, settings, lists, and protections all work identically.
+
 ### v2.23.0
 
 - **Affix-aware protection: exact-rank duplicate gate.** A new opt-in child checkbox on the Protection Settings panel sits under the existing `Protect items with random affixes (Rare/Epic)` toggle. When on, EC lets bag drops of an affix you already own at the same rank fall through to your normal sell / Delete List / Process Bags Disenchant rules. Different ranks of the same affix stay protected so the player can still collect all four. Default off so v2.22.0 upgraders see no behaviour change until they opt in.

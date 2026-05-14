@@ -25,3 +25,6 @@ jobs:
 
       - name: Layout-reactivity regression tests
         run: lua5.1 tests/test_layout_reactivity.lua
+
+      - name: Perf guardrail regression tests
+        run: lua5.1 tests/test_perf_guardrails.lua

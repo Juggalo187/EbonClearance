@@ -882,6 +882,43 @@ The 200-local cap influenced the implementation: the helpers
 junk-drawer for v2.9.x state) rather than as module-scope `local function`
 declarations. Same pattern as `PROF_LOOT_SPELLS`.
 
+### BAG_UPDATE handler must coalesce bursts (v2.24.0+)
+
+The Greedy Scavenger picking up N items in an AOE pull fires N
+BAG_UPDATE events in <100 ms. Any work in the BAG_UPDATE branch that
+walks all 5 bags or scans tooltip text per Rare/Epic item compounds:
+N events × bag walk = lag spike. v2.22.0 and v2.23.0 each added new
+work to the BAG_UPDATE branch without coalescing; the combined cost
+hit 1.5 s freezes during AOE farming.
+
+The rule: **BAG_UPDATE must route deferred work through
+`EC_compCache.bagUpdateFrame`** (a single shared OnUpdate frame that
+waits 120 ms for the burst to settle, then fires the heavy chain
+once). Direct calls to `rearmProcessButton`, `checkBagsForUpgrades`,
+`HandleAutoOpenContainers`, or `refreshProcessPanel` from inside
+the BAG_UPDATE branch are caught by
+[tests/test_perf_guardrails.lua](../tests/test_perf_guardrails.lua).
+
+The one exception is `EC_HandleBagFullForCycle`, which stays
+synchronous because its internal 1.5 s hysteresis already debounces
+and the bag-full cycle wants the first trip across the threshold
+without extra delay.
+
+Two adjacent rules in the same vein:
+
+1. **Heavy per-bag-walk helpers should be gated on whether the user
+   is actively using the feature.** `rearmProcessButton` early-returns
+   when `panel:IsShown() == false` AND `GetBindingKey(...)` returns
+   nil. Users who never open Process Bags pay zero cost. The hold-
+   key-to-drain workflow still works because the keybind check keeps
+   the rearm running when a binding exists.
+
+2. **Per-instance affix scans must cache by `itemString`, not by
+   `itemID`.** Two stacks of the same itemID can carry different
+   affix rolls; the suffix-DBC field in the link distinguishes them.
+   `bagSlotAffixData` follows this pattern via
+   `EC_compCache.affixDataCache`.
+
 ### Bind-type detection shares `EC_scanTooltip` (v2.10.0+)
 
 The per-rarity `bindFilter` rule reads bind type via the same hidden

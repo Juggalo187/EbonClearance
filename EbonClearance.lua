@@ -1865,6 +1865,44 @@ end
 local EC_scanTooltip = CreateFrame("GameTooltip", "EbonClearanceScanTooltip", UIParent, "GameTooltipTemplate")
 EC_scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
 
+-- v2.24.0: BAG_UPDATE coalescing frame. The Greedy Scavenger looting
+-- 5 items in <100 ms fires 5 BAG_UPDATE events; running the full
+-- deferred-work chain (auto-open containers, upgrade scan, Process
+-- Bags rearm, panel refresh) per-event caused 1.5 s freezes in
+-- v2.22.0+v2.23.0. This frame's OnUpdate watches a "burst settled"
+-- accumulator and fires the work once after the configured idle
+-- window. EC_HandleBagFullForCycle stays synchronous (kept inline in
+-- the OnEvent branch) so the bag-full cycle's responsiveness is
+-- unchanged. State on EC_compCache to stay under Lua 5.1's 200-
+-- locals cap.
+EC_compCache.bagUpdatePending = false
+EC_compCache.bagUpdateAccum = 0
+EC_compCache.BAG_UPDATE_DEBOUNCE_S = 0.12  -- 120 ms idle window
+EC_compCache.bagUpdateFrame = CreateFrame("Frame")
+EC_compCache.bagUpdateFrame:Hide()
+EC_compCache.bagUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
+    EC_compCache.bagUpdateAccum = EC_compCache.bagUpdateAccum + elapsed
+    if EC_compCache.bagUpdateAccum < EC_compCache.BAG_UPDATE_DEBOUNCE_S then
+        return
+    end
+    self:Hide()
+    EC_compCache.bagUpdatePending = false
+    -- Burst settled. Fire the deferred work once.
+    if EC_HandleAutoOpenContainers then
+        EC_HandleAutoOpenContainers()
+    end
+    if EC_compCache.checkBagsForUpgrades then
+        EC_compCache.checkBagsForUpgrades()
+    end
+    if EC_compCache.rearmProcessButton then
+        EC_compCache.rearmProcessButton()
+    end
+    local pbp = _G["EbonClearanceOptionsProcessBags"]
+    if pbp and pbp:IsShown() and EC_compCache.refreshProcessPanel then
+        EC_compCache.refreshProcessPanel()
+    end
+end)
+
 -- True iff the slotted item shows ITEM_OPENABLE in its tooltip and is not
 -- locked. ITEM_OPENABLE is the standard Blizzard locale string ("<Right
 -- Click to Open>" in enUS) used by every container, gift bag, and
@@ -2199,6 +2237,15 @@ end
 -- bagSlotHasAffix is a thin boolean wrapper so existing call sites
 -- (EC_IsSellable, BuildQueue, buildProcessSummary) keep working
 -- unchanged.
+-- v2.24.0: per-instance affix cache keyed by itemString. The
+-- itemString fragment captures the suffix-DBC field, so two stacks
+-- with different affix rolls are distinct keys naturally. Cleared on
+-- /reload (same lifecycle as bindCache / processCache /
+-- chanceOnHitCache - per-session, not persisted to DB). Stores
+-- `false` for "scanned, no affix" to avoid rescanning bag items that
+-- aren't affixed.
+EC_compCache.affixDataCache = {}
+
 function EC_compCache.bagSlotAffixData(bag, slot)
     if not bag or not slot then
         return nil
@@ -2206,6 +2253,14 @@ function EC_compCache.bagSlotAffixData(bag, slot)
     local itemID = GetContainerItemID(bag, slot)
     if not itemID then
         return nil
+    end
+    local link = GetContainerItemLink(bag, slot)
+    local itemString = link and link:match("item[%-?%d:]+")
+    if itemString then
+        local cached = EC_compCache.affixDataCache[itemString]
+        if cached ~= nil then
+            return cached or nil  -- `false` means "scanned, no affix"
+        end
     end
     local baseName = GetItemInfo(itemID)
     if not baseName then
@@ -2219,9 +2274,15 @@ function EC_compCache.bagSlotAffixData(bag, slot)
     end
     local data = EC_compCache.parseAffixFromTitle(titleFS:GetText(), baseName)
     if not data then
+        if itemString then
+            EC_compCache.affixDataCache[itemString] = false
+        end
         return nil
     end
     data.description = EC_compCache.scanTooltipForAffixDesc("EbonClearanceScanTooltip")
+    if itemString then
+        EC_compCache.affixDataCache[itemString] = data
+    end
     return data
 end
 
@@ -8908,6 +8969,23 @@ function EC_compCache.rearmProcessButton()
     if not panel or not panel.castBtn then
         return
     end
+    -- v2.24.0 perf: skip the full bag walk + tooltip scans when the
+    -- user isn't actively using the Process Bags workflow. Two cases
+    -- where we still need to arm:
+    --   1. Panel is shown - user is interacting with the list, so
+    --      the cast button's macrotext must point at the current
+    --      next-item.
+    --   2. Cast button has a keybind - user might press it from
+    --      anywhere (e.g. hold-key-to-drain a herb stack mid-farm).
+    -- If neither, the macrotext won't be observed, so skipping saves
+    -- ~100 slot checks + per-Rare/Epic tooltip scans per BAG_UPDATE.
+    -- This was the dominant cost during pet AOE looting (1.5 s freezes
+    -- reported by the user during v2.22.0+v2.23.0 testing).
+    local hasBinding = GetBindingKey
+        and GetBindingKey("CLICK EbonClearanceProcessCastBtn:LeftButton") ~= nil
+    if not panel:IsShown() and not hasBinding then
+        return
+    end
     if InCombatLockdown and InCombatLockdown() then
         -- PLAYER_REGEN_ENABLED handler retries when combat exits.
         return
@@ -10449,24 +10527,17 @@ f:SetScript("OnEvent", function(self, event, ...)
             EC_compCache.refreshKnownAffixes()
         end
     elseif event == "BAG_UPDATE" then
-        -- Bag-full handler runs first; the open driver yields via the `running`
-        -- guard if the vendor cycle is already active.
+        -- v2.24.0 perf: bag-full handler stays synchronous so the
+        -- cycle's responsiveness across the free-slot threshold is
+        -- unchanged (its internal 1.5 s hysteresis already debounces
+        -- transient bag fluctuations). Everything else goes through
+        -- EC_compCache.bagUpdateFrame's 120 ms debounce - pet AOE
+        -- looting fires one BAG_UPDATE per slot filled, and doing the
+        -- full deferred-work chain per-event caused 1.5 s freezes.
         EC_HandleBagFullForCycle()
-        EC_HandleAutoOpenContainers()
-        -- v2.11.0 auto-protect-upgrades. No-op unless DB.autoProtectUpgrades
-        -- is on. Per-itemID dedupe via EC_compCache.upgradeProcessed keeps
-        -- the steady-state cost to one GetItemInfo lookup per never-seen
-        -- bag item.
-        EC_compCache.checkBagsForUpgrades()
-        -- v2.22.0: re-arm the Process Bags cast button so the next click
-        -- targets a current bag slot. Bails on combat lockdown; the
-        -- PLAYER_REGEN_ENABLED branch catches up on combat exit. Also
-        -- refreshes the panel rows if it's currently open.
-        EC_compCache.rearmProcessButton()
-        local pbp = _G["EbonClearanceOptionsProcessBags"]
-        if pbp and pbp:IsShown() and EC_compCache.refreshProcessPanel then
-            EC_compCache.refreshProcessPanel()
-        end
+        EC_compCache.bagUpdatePending = true
+        EC_compCache.bagUpdateAccum = 0
+        EC_compCache.bagUpdateFrame:Show()
     elseif event == "LOOT_READY" then
         -- v2.16.0: Fast Loot driver. Self-gates on DB.fastLoot and on
         -- Blizzard's autoLootDefault CVar so non-Fast-Loot users pay
