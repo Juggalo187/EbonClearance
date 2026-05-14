@@ -1,4 +1,5 @@
--- EbonClearance - auto-vendoring + clearance addon for Project Ebonhold (3.3.5a)
+-- EbonClearance - bag manager for Project Ebonhold (3.3.5a): vendoring,
+-- deletion, looting, protection rules, profession processing.
 -- Author:  Serv
 -- Source:  https://github.com/powerfulqa/EbonClearance
 -- License: see LICENSE; attribution preservation is required.
@@ -185,6 +186,11 @@ local EC_compCache = {
     -- this table lives in the module-local EC_compCache and isn't
     -- persisted. Filled lazily by EC_compCache.itemHasChanceOnHit.
     chanceOnHitCache = {},
+    -- v2.22.0 Process-mode cache. Maps itemID to one of
+    -- "Disenchant" | "Mill" | "Prospect" | "none", or nil if not yet
+    -- scanned. Stable property per itemID. Filled lazily by the
+    -- can* helpers below.
+    processCache = {},
     -- v2.10.0 resummon-print debounce. v2.9.2 added the "Greedy Scavenger
     -- resummoned." chat line on every successful CallCompanion in the
     -- recovery path, plus a 2 s post-call cooldown to avoid back-to-back
@@ -723,6 +729,21 @@ local function EnsureDB()
     -- filter (the proc text is the signal, not the rarity).
     if type(DB.protectChanceOnHitItems) ~= "boolean" then
         DB.protectChanceOnHitItems = true
+    end
+    -- v2.22.0: Process Bags panel. Lets the player batch-cast their
+    -- profession spells (Disenchant / Mill / Prospect) on eligible
+    -- bag items via a secure-button macro. Soulbound DE is opt-in
+    -- (default OFF) because it's irreversible; DE quality cap
+    -- defaults to Epic (max permissive). Ignored items are
+    -- per-character (DB, not ADB) since profession alts vary.
+    if type(DB.processIncludeSoulbound) ~= "boolean" then
+        DB.processIncludeSoulbound = false
+    end
+    if type(DB.processMaxDEQuality) ~= "number" or DB.processMaxDEQuality < 2 or DB.processMaxDEQuality > 4 then
+        DB.processMaxDEQuality = 4
+    end
+    if type(DB.processIgnored) ~= "table" then
+        DB.processIgnored = {}
     end
     -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
     -- effectively enabled, EC_HandleLootReady queues every slot in the
@@ -2178,6 +2199,239 @@ function EC_compCache.canLootItem(link)
         end
     end
     return false
+end
+
+-- ---------------------------------------------------------------------------
+-- v2.22.0 Process Bags helpers
+-- ---------------------------------------------------------------------------
+-- Three profession spells let players turn eligible bag items into
+-- crafting materials: Disenchant (13262, requires Enchanting),
+-- Milling (51005, requires Inscription), Prospecting (31252,
+-- requires Jewelcrafting). The Process Bags panel scans bags and
+-- offers a secure-button macro to cast the appropriate spell on one
+-- queued item at a time. Eligibility caches are per-itemID because
+-- the underlying property is stable. Spell IDs and helpers all hung
+-- off EC_compCache to stay under Lua 5.1's 200-locals cap.
+
+EC_compCache.SPELL_DISENCHANT = 13262
+EC_compCache.SPELL_MILLING = 51005
+EC_compCache.SPELL_PROSPECTING = 31252
+
+function EC_compCache.canDisenchant(itemID)
+    if not itemID then
+        return false
+    end
+    if not IsSpellKnown or not IsSpellKnown(EC_compCache.SPELL_DISENCHANT) then
+        return false
+    end
+    if not IsEquippableItem or not IsEquippableItem(itemID) then
+        return false
+    end
+    local _, _, quality = GetItemInfo(itemID)
+    if not quality then
+        return false
+    end
+    -- DE works on Uncommon (2) through Epic (4). Quality 5+ (Legendary,
+    -- Artifact, Heirloom) is treated as not-disenchantable.
+    return quality >= 2 and quality <= 4
+end
+
+-- Tooltip-scan helper shared by canMill / canProspect. Caches the
+-- result per itemID via processCache. Returns true if the item's
+-- tooltip contains the given marker string (ITEM_MILLABLE or
+-- ITEM_PROSPECTABLE).
+function EC_compCache.processTooltipHasLine(bag, slot, itemID, marker, modeName)
+    if not bag or not slot or not itemID or not marker then
+        return false
+    end
+    EC_scanTooltip:ClearLines()
+    EC_scanTooltip:SetBagItem(bag, slot)
+    for i = 1, 30 do
+        local line = _G["EbonClearanceScanTooltipTextLeft" .. i]
+        if not line then
+            break
+        end
+        local txt = line:GetText()
+        if txt and txt == marker then
+            EC_compCache.processCache[itemID] = modeName
+            return true
+        end
+    end
+    return false
+end
+
+function EC_compCache.canMill(bag, slot, itemID)
+    if not IsSpellKnown or not IsSpellKnown(EC_compCache.SPELL_MILLING) then
+        return false
+    end
+    if not itemID then
+        return false
+    end
+    local cached = EC_compCache.processCache[itemID]
+    if cached == "Mill" then
+        return true
+    end
+    if cached == "Disenchant" or cached == "Prospect" or cached == "none" then
+        return false
+    end
+    -- Not yet scanned: check the tooltip for ITEM_MILLABLE marker.
+    local marker = ITEM_MILLABLE or "Millable"
+    return EC_compCache.processTooltipHasLine(bag, slot, itemID, marker, "Mill")
+end
+
+function EC_compCache.canProspect(bag, slot, itemID)
+    if not IsSpellKnown or not IsSpellKnown(EC_compCache.SPELL_PROSPECTING) then
+        return false
+    end
+    if not itemID then
+        return false
+    end
+    local cached = EC_compCache.processCache[itemID]
+    if cached == "Prospect" then
+        return true
+    end
+    if cached == "Disenchant" or cached == "Mill" or cached == "none" then
+        return false
+    end
+    local marker = ITEM_PROSPECTABLE or "Prospectable"
+    return EC_compCache.processTooltipHasLine(bag, slot, itemID, marker, "Prospect")
+end
+
+-- Tooltip-scan to check Soulbound status. The DE quality cap and
+-- soulbound-include settings are applied here so the returned list
+-- already respects user prefs.
+function EC_compCache.processIsSoulbound(bag, slot)
+    EC_scanTooltip:ClearLines()
+    EC_scanTooltip:SetBagItem(bag, slot)
+    for i = 1, 30 do
+        local line = _G["EbonClearanceScanTooltipTextLeft" .. i]
+        if not line then
+            break
+        end
+        local txt = line:GetText()
+        if txt == ITEM_SOULBOUND then
+            return true
+        end
+    end
+    return false
+end
+
+-- Build an ordered list of process-eligible entries for the panel UI
+-- and the cast-button rearm. Returns an array of entries; each entry:
+--   { bag, slot, itemID, link, count, mode, spellName, perCast, casts }
+-- Sorted: Disenchant first (by quality desc), then Mill, then Prospect.
+-- Honours: Keep List exclude, currently-equipped exclude, ignored
+-- list exclude, soulbound-toggle (DE only), DE quality cap.
+function EC_compCache.buildProcessSummary()
+    local results = {}
+    if not DB then
+        return results
+    end
+    local maxQ = DB.processMaxDEQuality or 4
+    local includeSB = DB.processIncludeSoulbound == true
+    local ignored = DB.processIgnored or {}
+    for bag = 0, 4 do
+        local slots = GetContainerNumSlots(bag)
+        for slot = 1, slots do
+            local itemID = GetContainerItemID(bag, slot)
+            local link = GetContainerItemLink(bag, slot)
+            local _, count = GetContainerItemInfo(bag, slot)
+            -- Intentionally not filtering on `locked` here: a slot is
+            -- briefly locked during the half-second a /cast on it
+            -- resolves, and excluding it would make the BAG_UPDATE
+            -- driven rearm lose the armedItemString lookup, fall
+            -- through to armedMode, and jump the cursor to a different
+            -- entry (then jump back once the slot unlocks). Keeping
+            -- locked slots in the list keeps the cursor stable across
+            -- the cast window. The /use macro would fail harmlessly
+            -- against a locked slot if the player click landed there
+            -- anyway.
+            if itemID and link and count and count > 0 then
+                local itemString = link:match("item[%-?%d:]+")
+                local skip = false
+                if itemString and ignored[itemString] then
+                    skip = true
+                end
+                if not skip and IsInSet and IsInSet(DB.blacklist, itemID) then
+                    skip = true
+                end
+                if not skip and IsEquippedItem and IsEquippedItem(itemID) then
+                    skip = true
+                end
+                if not skip then
+                    local mode, spellName, perCast
+                    if EC_compCache.canDisenchant(itemID) then
+                        local _, _, quality = GetItemInfo(itemID)
+                        local affixGuarded = quality
+                            and quality >= 3
+                            and DB.protectAffixedRareItems
+                            and EC_compCache.bagSlotHasAffix
+                            and EC_compCache.bagSlotHasAffix(bag, slot)
+                        if quality and quality <= maxQ and not affixGuarded then
+                            if includeSB or not EC_compCache.processIsSoulbound(bag, slot) then
+                                mode = "Disenchant"
+                                spellName = GetSpellInfo and GetSpellInfo(EC_compCache.SPELL_DISENCHANT) or "Disenchant"
+                                perCast = 1
+                            end
+                        end
+                    elseif EC_compCache.canMill(bag, slot, itemID) then
+                        if count >= 5 then
+                            mode = "Mill"
+                            spellName = GetSpellInfo and GetSpellInfo(EC_compCache.SPELL_MILLING) or "Milling"
+                            perCast = 5
+                        end
+                    elseif EC_compCache.canProspect(bag, slot, itemID) then
+                        if count >= 5 then
+                            mode = "Prospect"
+                            spellName = GetSpellInfo and GetSpellInfo(EC_compCache.SPELL_PROSPECTING) or "Prospecting"
+                            perCast = 5
+                        end
+                    end
+                    if mode then
+                        local _, _, quality = GetItemInfo(itemID)
+                        results[#results + 1] = {
+                            bag = bag,
+                            slot = slot,
+                            itemID = itemID,
+                            itemString = itemString,
+                            link = link,
+                            count = count,
+                            mode = mode,
+                            spellName = spellName,
+                            perCast = perCast,
+                            casts = math.floor(count / perCast),
+                            quality = quality or 1,
+                        }
+                    end
+                end
+            end
+        end
+    end
+    -- Sort: Disenchant first, then Mill, then Prospect. Within mode:
+    -- DE by quality desc (Epic before Rare before Uncommon), Mill /
+    -- Prospect alphabetically by item name.
+    local modeOrder = { Disenchant = 1, Mill = 2, Prospect = 3 }
+    table.sort(results, function(a, b)
+        if a.mode ~= b.mode then
+            return modeOrder[a.mode] < modeOrder[b.mode]
+        end
+        if a.mode == "Disenchant" then
+            if a.quality ~= b.quality then
+                return a.quality > b.quality
+            end
+        end
+        local na = (GetItemInfo(a.itemID)) or ""
+        local nb = (GetItemInfo(b.itemID)) or ""
+        return na < nb
+    end)
+    return results
+end
+
+-- Returns the first entry from buildProcessSummary, or nil. Used by
+-- the secure cast button to find the next thing to arm.
+function EC_compCache.findNextProcessable()
+    local list = EC_compCache.buildProcessSummary()
+    return list[1]
 end
 
 -- Driver. Walks bags, opens the first openable item, and recurses via
@@ -5581,7 +5835,7 @@ local function EC_CreateMinimapButton()
     btn:SetSize(31, 31)
     btn:SetFrameStrata("MEDIUM")
     btn:SetFrameLevel(8)
-    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
     btn:RegisterForDrag("LeftButton")
 
     -- Circular background
@@ -5640,6 +5894,15 @@ local function EC_CreateMinimapButton()
         if button == "LeftButton" then
             InterfaceOptionsFrame_OpenToCategory(MainOptions)
             InterfaceOptionsFrame_OpenToCategory(MainOptions)
+        elseif button == "MiddleButton" then
+            local pbp = _G["EbonClearanceOptionsProcessBags"]
+            if pbp and InterfaceOptionsFrame_OpenToCategory then
+                -- Double-call is the 3.3.5a workaround for the first
+                -- OpenToCategory landing on the parent's main panel
+                -- instead of the requested sub-panel.
+                InterfaceOptionsFrame_OpenToCategory(pbp)
+                InterfaceOptionsFrame_OpenToCategory(pbp)
+            end
         elseif button == "RightButton" then
             if not DB then
                 return
@@ -5661,7 +5924,7 @@ local function EC_CreateMinimapButton()
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("EbonClearance")
-        GameTooltip:AddLine("Left-click: Options  |  Right-click: Toggle Addon", 1, 1, 1)
+        GameTooltip:AddLine("Left: Options  |  Middle: Process Bags  |  Right: Toggle Addon", 1, 1, 1)
         local stateStr = (DB and DB.enabled ~= false) and "|cff00ff00Enabled|r" or "|cffff4444Disabled|r"
         GameTooltip:AddLine("Status: " .. stateStr)
         local freeSlots = EC_GetFreeBagSlots()
@@ -5901,7 +6164,7 @@ local function BuildMainPanel(panel, content, refreshStats)
 
     local welcomeLabel = MakeLabel(
         content,
-        "Welcome to |cffb6ffb6EbonClearance|r! Automatic vendoring and item management for Project Ebonhold.",
+        "Welcome to |cffb6ffb6EbonClearance|r! Bag management for Project Ebonhold: vendoring, deletion, looting, protection rules, and profession processing.",
         16,
         -52
     )
@@ -5914,7 +6177,7 @@ local function BuildMainPanel(panel, content, refreshStats)
         descLabel2:SetWordWrap(true)
     end
     descLabel2:SetText(
-        "Greys auto-sell. Whites and greens with iLvl below your equipped gear in the same slot also auto-sell by default, and upgrades you loot are auto-protected. Use the |cffb6ffb6Sell List|r (per-character or account-wide) to mark specific items for sale, the |cffb6ffb6Keep List|r to permanently protect items, and |cffb6ffb6Merchant Settings|r to tune the auto-sell rules per rarity. |cff888888Tip: Alt+Right-Click any bag item for a quick-action menu.|r"
+        "Greys auto-sell. Whites and greens with iLvl below your equipped gear in the same slot also auto-sell by default, and upgrades you loot are auto-protected. Use the |cffb6ffb6Sell List|r (per-character or account-wide) to mark specific items for sale, the |cffb6ffb6Keep List|r to permanently protect items, |cffb6ffb6Merchant Settings|r to tune the auto-sell rules per rarity, and |cffb6ffb6Process Bags|r to disenchant, mill, or prospect bag items from one button. |cff888888Tip: Alt+Right-Click any bag item for a quick-action menu.|r"
     )
 
     -- Stats fontstrings. Stacked vertically; each attaches its ref to `panel`
@@ -8203,6 +8466,551 @@ AccountWhitelistPanel:SetScript("OnShow", function(self)
     end)
 end)
 
+-- ============================================================
+-- v2.22.0 Process Bags panel
+-- ============================================================
+-- Lets the player batch-cast Disenchant / Milling / Prospecting on
+-- eligible bag items via a SecureActionButton macro. The button's
+-- macrotext is rewritten between casts to point at the next queued
+-- item; the user clicks (hardware event) to fire each cast. Re-arm
+-- happens on BAG_UPDATE so the queue follows the actual bag state
+-- after each successful cast.
+local ProcessBagsPanel = CreateFrame("Frame", "EbonClearanceOptionsProcessBags", InterfaceOptionsFramePanelContainer)
+ProcessBagsPanel.name = "Process Bags"
+ProcessBagsPanel.parent = "EbonClearance"
+
+-- Re-arms the SecureActionButton's macrotext with the next eligible
+-- queue entry. No-op during combat lockdown (SetAttribute is
+-- protected). Hung off EC_compCache so the BAG_UPDATE / panel /
+-- registration code paths can all reach it.
+function EC_compCache.rearmProcessButton()
+    local panel = _G["EbonClearanceOptionsProcessBags"]
+    if not panel or not panel.castBtn then
+        return
+    end
+    if InCombatLockdown and InCombatLockdown() then
+        -- PLAYER_REGEN_ENABLED handler retries when combat exits.
+        return
+    end
+    -- Cursor priority on each rearm:
+    --   1. (armedBag, armedSlot): the exact bag slot the user picked.
+    --      Unique even when two stacks of the same item exist (itemID
+    --      and itemString are identical for e.g. two Copper Ore
+    --      stacks). Survives transient bag-slot locks during cast
+    --      resolution because we include locked slots in the list.
+    --   2. armedMode: sticky preference set by the skip button. Used
+    --      when the original slot is empty (DE consumed, mill/prospect
+    --      stack drained below 5) - hunts for the next entry of the
+    --      same mode.
+    --   3. armedIndex (clamped): fallback for fresh-open / no prior
+    --      cursor state.
+    local list = EC_compCache.buildProcessSummary()
+    local entry
+    if #list > 0 then
+        local idx
+        if EC_compCache.armedBag and EC_compCache.armedSlot then
+            for i = 1, #list do
+                if list[i].bag == EC_compCache.armedBag and list[i].slot == EC_compCache.armedSlot then
+                    idx = i
+                    break
+                end
+            end
+        end
+        if not idx and EC_compCache.armedMode then
+            for i = 1, #list do
+                if list[i].mode == EC_compCache.armedMode then
+                    idx = i
+                    break
+                end
+            end
+            if not idx then
+                EC_compCache.armedMode = nil
+            end
+        end
+        if not idx then
+            idx = EC_compCache.armedIndex or 1
+            if idx < 1 or idx > #list then
+                idx = 1
+            end
+        end
+        entry = list[idx]
+        EC_compCache.armedIndex = idx
+        EC_compCache.armedBag = entry.bag
+        EC_compCache.armedSlot = entry.slot
+    end
+    if entry then
+        panel.castBtn:SetAttribute(
+            "macrotext",
+            string.format("/cast %s\n/use %d %d", entry.spellName, entry.bag, entry.slot)
+        )
+        panel.castBtn:Enable()
+        if panel.castBtnLabel then
+            local short = (GetItemInfo(entry.itemID)) or "item"
+            -- Mode label only; the dynamic item name lives on the
+            -- separate label below the button so a long item name
+            -- can't overflow the fixed button width.
+            panel.castBtnLabel:SetText(string.format("Process Next (%s)", entry.mode))
+        end
+        if panel.nextItemLabel then
+            local short = (GetItemInfo(entry.itemID)) or "item"
+            panel.nextItemLabel:SetText(string.format("|cffaaaaaaNext:|r %s", short))
+        end
+    else
+        panel.castBtn:SetAttribute("macrotext", "")
+        panel.castBtn:Disable()
+        if panel.castBtnLabel then
+            panel.castBtnLabel:SetText("Process Next")
+        end
+        if panel.nextItemLabel then
+            panel.nextItemLabel:SetText("|cffaaaaaaNothing eligible.|r")
+        end
+    end
+    EC_compCache.updateProcessSelection()
+end
+
+-- Repaints the persistent "armed" highlight on the row whose entryIndex
+-- matches EC_compCache.armedIndex. Called from rearm so any cursor
+-- change (skip arrow, left-click on a row, BAG_UPDATE re-arm) reflects
+-- in the list immediately. Cheap loop; rows table is small.
+function EC_compCache.updateProcessSelection()
+    local panel = _G["EbonClearanceOptionsProcessBags"]
+    if not panel or not panel.rows then
+        return
+    end
+    local armed = EC_compCache.armedIndex
+    for i = 1, #panel.rows do
+        local row = panel.rows[i]
+        if row and row.sel then
+            if row:IsShown() and row.entryIndex == armed then
+                row.sel:SetAlpha(0.45)
+            else
+                row.sel:SetAlpha(0)
+            end
+        end
+    end
+end
+
+-- Advance the armed-cast target by one entry in the current list and
+-- remember the chosen mode so the BAG_UPDATE re-arm stays on that mode
+-- after the next successful cast (until no more entries of that mode
+-- remain).
+function EC_compCache.skipProcessTarget()
+    local list = EC_compCache.buildProcessSummary()
+    if #list == 0 then
+        return
+    end
+    local idx = (EC_compCache.armedIndex or 1) + 1
+    if idx > #list then
+        idx = 1
+    end
+    EC_compCache.armedIndex = idx
+    EC_compCache.armedMode = list[idx].mode
+    EC_compCache.armedBag = list[idx].bag
+    EC_compCache.armedSlot = list[idx].slot
+    EC_compCache.rearmProcessButton()
+end
+
+-- Refreshes the scrolling item list AND re-arms the cast button.
+-- Called from OnShow, the Refresh button, and BAG_UPDATE.
+function EC_compCache.refreshProcessPanel()
+    local panel = _G["EbonClearanceOptionsProcessBags"]
+    if not panel or not panel.rows then
+        return
+    end
+    -- Update the Clear Ignored button (visible/labelled with current count).
+    if panel.clearIgnoredBtn then
+        local n = 0
+        for _ in pairs(DB.processIgnored or {}) do
+            n = n + 1
+        end
+        if n > 0 then
+            panel.clearIgnoredBtn:SetText(string.format("Clear Ignored (%d)", n))
+            panel.clearIgnoredBtn:Show()
+        else
+            panel.clearIgnoredBtn:Hide()
+        end
+    end
+    -- Hide all existing rows
+    for i = 1, #panel.rows do
+        panel.rows[i]:Hide()
+    end
+    for i = 1, #(panel.headers or {}) do
+        panel.headers[i]:Hide()
+    end
+    local list = EC_compCache.buildProcessSummary()
+    if #list == 0 then
+        if panel.emptyState then
+            panel.emptyState:Show()
+        end
+        EC_compCache.rearmProcessButton()
+        return
+    end
+    if panel.emptyState then
+        panel.emptyState:Hide()
+    end
+    -- Group rows by mode with a section header above each group.
+    -- rowAnchor is positioned in the build callback just below the
+    -- dropdown so rows/headers don't overlap the panel's top controls.
+    local anchor = panel.rowAnchor or panel.content
+    local rowY = 0
+    local rowIdx = 0
+    local headerIdx = 0
+    local lastMode = nil
+    local modeCounts = {}
+    for i = 1, #list do
+        modeCounts[list[i].mode] = (modeCounts[list[i].mode] or 0) + 1
+    end
+    for i = 1, #list do
+        local entry = list[i]
+        if entry.mode ~= lastMode then
+            headerIdx = headerIdx + 1
+            local header = panel.headers and panel.headers[headerIdx]
+            if not header then
+                header = panel.content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+                EC_compCache.setPanelWidth(header, 16)
+                header:SetJustifyH("LEFT")
+                panel.headers = panel.headers or {}
+                panel.headers[headerIdx] = header
+            end
+            header:ClearAllPoints()
+            header:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, rowY)
+            header:SetText(string.format("|cffffb84d%s|r |cffaaaaaa(%d)|r", entry.mode:upper(), modeCounts[entry.mode]))
+            header:Show()
+            rowY = rowY - 18
+            lastMode = entry.mode
+        end
+        rowIdx = rowIdx + 1
+        local row = panel.rows[rowIdx]
+        if not row then
+            row = CreateFrame("Button", nil, panel.content)
+            row:SetHeight(20)
+            row:EnableMouse(true)
+            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+            local txt = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            txt:SetPoint("LEFT", row, "LEFT", 16, 0)
+            txt:SetPoint("RIGHT", row, "RIGHT", -16, 0)
+            txt:SetJustifyH("LEFT")
+            row.text = txt
+            -- sel: persistent "armed" highlight. Yellow tint via the
+            -- ADD blend so it doesn't fight the hover texture above.
+            local sel = row:CreateTexture(nil, "BACKGROUND")
+            sel:SetAllPoints(row)
+            sel:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+            sel:SetBlendMode("ADD")
+            sel:SetVertexColor(1.0, 0.85, 0.3)
+            sel:SetAlpha(0)
+            row.sel = sel
+            local hl = row:CreateTexture(nil, "ARTWORK")
+            hl:SetAllPoints(row)
+            hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+            hl:SetBlendMode("ADD")
+            hl:SetAlpha(0)
+            row:SetScript("OnEnter", function(self)
+                hl:SetAlpha(0.3)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if self.bag and self.slot then
+                    GameTooltip:SetBagItem(self.bag, self.slot)
+                elseif self.itemLink then
+                    GameTooltip:SetHyperlink(self.itemLink)
+                end
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function()
+                hl:SetAlpha(0)
+                GameTooltip:Hide()
+            end)
+            row:SetScript("OnClick", function(self, button)
+                if button == "RightButton" and self.itemString then
+                    DB.processIgnored = DB.processIgnored or {}
+                    DB.processIgnored[self.itemString] = true
+                    PrintNicef(
+                        "Ignored |cffb6ffb6%s|r in Process Bags. Click |cffffb84dClear Ignored|r on the panel to restore.",
+                        (GetItemInfo(self.itemID)) or "item"
+                    )
+                    EC_compCache.refreshProcessPanel()
+                    PlaySound("igMainMenuOptionCheckBoxOn")
+                elseif button == "LeftButton" and self.entryIndex and self.entryMode then
+                    -- Pick this row as the armed target directly.
+                    EC_compCache.armedIndex = self.entryIndex
+                    EC_compCache.armedMode = self.entryMode
+                    EC_compCache.armedBag = self.bag
+                    EC_compCache.armedSlot = self.slot
+                    EC_compCache.rearmProcessButton()
+                    PlaySound("igMainMenuOptionCheckBoxOn")
+                end
+            end)
+            panel.rows[rowIdx] = row
+        end
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", anchor, "TOPLEFT", 16, rowY)
+        row:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -16, rowY)
+        row.bag = entry.bag
+        row.slot = entry.slot
+        row.itemID = entry.itemID
+        row.itemString = entry.itemString
+        row.itemLink = entry.link
+        row.entryIndex = rowIdx
+        row.entryMode = entry.mode
+        if entry.perCast and entry.perCast > 1 then
+            row.text:SetText(
+                string.format(
+                    "%s  |cffaaaaaax%d -> %d cast%s|r",
+                    entry.link,
+                    entry.count,
+                    entry.casts,
+                    entry.casts == 1 and "" or "s"
+                )
+            )
+        else
+            row.text:SetText(string.format("%s  |cffaaaaaax%d|r", entry.link, entry.count))
+        end
+        row:Show()
+        rowY = rowY - 20
+    end
+    -- Grow content so rows fit below rowAnchor. The cast/refresh
+    -- buttons live on the panel itself (outside the scroll), so the
+    -- content only needs to cover the top controls + list.
+    if panel.content and panel.content.SetHeight and panel.rowAnchorOffset then
+        local listH = math.abs(rowY) + 8
+        panel.content:SetHeight(panel.rowAnchorOffset + listH + 16)
+    end
+    EC_compCache.rearmProcessButton()
+end
+
+ProcessBagsPanel:SetScript("OnShow", function(self)
+    EC_compCache.initPanel(self, function(self)
+        if self.includeSoulboundCB then
+            self.includeSoulboundCB:SetChecked(DB.processIncludeSoulbound)
+        end
+        if self.UpdateDEDropdownText then
+            self:UpdateDEDropdownText()
+        end
+        -- Reset the armed cursor so re-opening the panel starts fresh
+        -- rather than honouring a stale skip from a previous session.
+        EC_compCache.armedIndex = 1
+        EC_compCache.armedMode = nil
+        EC_compCache.armedBag = nil
+        EC_compCache.armedSlot = nil
+        EC_compCache.refreshProcessPanel()
+    end, function(self, content)
+        MakeHeader(content, "Process Bags", -16)
+        local desc = MakeLabel(
+            content,
+            "Disenchant, mill, or prospect bag items via your known profession spells. |cffffd870Left-click|r a row to select it as the next cast. |cffffd870Right-click|r a row to hide it from this list (use |cffffb84dClear Ignored|r to restore). The |cffffb84d>|r arrow cycles through the queue. Click |cffffb84dProcess Next|r to cast on the selected row.",
+            16,
+            -44
+        )
+
+        local tip = MakeLabel(
+            content,
+            "|cff888888Tip: bind a key to Process Next under Key Bindings and hold it to drain a stack on the GCD - 3.3.5a's per-cast hardware-event rule + the 1.5 s profession GCD mean one click per cast is the fastest path.|r",
+            16,
+            -44
+        )
+        tip:ClearAllPoints()
+        tip:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -8)
+
+        local sbCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceProcessIncludeSoulboundCB",
+            content,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        sbCB:SetPoint("TOPLEFT", tip, "BOTTOMLEFT", 0, -10)
+        sbCB:SetChecked(DB.processIncludeSoulbound)
+        local sbText = _G[sbCB:GetName() .. "Text"]
+        if sbText then
+            sbText:SetText("Include Soulbound items (Disenchant only)")
+            EC_compCache.setPanelWidth(sbText, 60)
+            sbText:SetJustifyH("LEFT")
+        end
+        sbCB:SetScript("OnClick", function(cb)
+            DB.processIncludeSoulbound = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            EC_compCache.refreshProcessPanel()
+        end)
+        self.includeSoulboundCB = sbCB
+
+        -- DE quality cap dropdown
+        local ddLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        ddLabel:SetPoint("TOPLEFT", sbCB, "BOTTOMLEFT", 0, -10)
+        ddLabel:SetText("Disenchant up to:")
+
+        local dd = CreateFrame("Frame", "EbonClearanceProcessDEQualityDD", content, "UIDropDownMenuTemplate")
+        dd:SetPoint("LEFT", ddLabel, "RIGHT", -8, -2)
+        local qualityNames = { [2] = "Green", [3] = "Blue", [4] = "Epic" }
+        UIDropDownMenu_SetWidth(dd, 100)
+        local function ddSet(q)
+            DB.processMaxDEQuality = q
+            UIDropDownMenu_SetText(dd, qualityNames[q] or "Epic")
+            CloseDropDownMenus()
+            EC_compCache.refreshProcessPanel()
+        end
+        UIDropDownMenu_Initialize(dd, function()
+            for _, q in ipairs({ 2, 3, 4 }) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = qualityNames[q]
+                info.value = q
+                info.checked = (DB.processMaxDEQuality == q)
+                info.func = function()
+                    ddSet(q)
+                end
+                UIDropDownMenu_AddButton(info)
+            end
+        end)
+        UIDropDownMenu_SetText(dd, qualityNames[DB.processMaxDEQuality or 4] or "Epic")
+        function self:UpdateDEDropdownText()
+            UIDropDownMenu_SetText(dd, qualityNames[DB.processMaxDEQuality or 4] or "Epic")
+        end
+
+        -- Clear-ignored button. Sits to the right of the DE dropdown.
+        -- Hidden when there's nothing to clear so the panel doesn't
+        -- carry chrome for a never-used state.
+        local clearBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+        clearBtn:SetSize(150, 20)
+        clearBtn:SetPoint("LEFT", dd, "RIGHT", 8, 2)
+        clearBtn:SetText("Clear Ignored (0)")
+        clearBtn:Hide()
+        clearBtn:SetScript("OnClick", function()
+            DB.processIgnored = {}
+            PrintNice("Process Bags ignored list cleared.")
+            EC_compCache.refreshProcessPanel()
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        clearBtn:SetScript("OnEnter", function(b)
+            GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            GameTooltip:SetText("Clear ignored list")
+            GameTooltip:AddLine(
+                "|cffaaaaaaRestores every item you've right-clicked to hide. Per-character.|r",
+                1,
+                1,
+                1,
+                true
+            )
+            GameTooltip:Show()
+        end)
+        clearBtn:SetScript("OnLeave", GameTooltip_Hide)
+        self.clearIgnoredBtn = clearBtn
+
+        -- rowAnchor frame: a zero-height anchor parked below the
+        -- dropdown so the dynamic rows / section headers stack from a
+        -- known Y without overlapping the static controls above.
+        local rowAnchor = CreateFrame("Frame", nil, content)
+        rowAnchor:SetPoint("TOPLEFT", ddLabel, "BOTTOMLEFT", 0, -20)
+        rowAnchor:SetPoint("TOPRIGHT", content, "TOPRIGHT", -16, 0)
+        rowAnchor:SetHeight(1)
+        self.rowAnchor = rowAnchor
+        -- Approximate vertical space reserved above rowAnchor (header +
+        -- desc + tip + checkbox + dropdown + paddings). Used by
+        -- SetHeight in refresh so the scroll content grows from the
+        -- proper origin.
+        self.rowAnchorOffset = 200
+
+        -- Empty state pinned to rowAnchor so it sits where the list
+        -- would begin.
+        local empty = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        empty:SetPoint("TOPLEFT", rowAnchor, "TOPLEFT", 0, -4)
+        EC_compCache.setPanelWidth(empty, 16)
+        empty:SetJustifyH("LEFT")
+        if empty.SetWordWrap then
+            empty:SetWordWrap(true)
+        end
+        empty:SetText(
+            "|cff888888No eligible items. Learn Disenchant, Milling, or Prospecting and pick up some loot to fill this list.|r"
+        )
+        empty:Hide()
+        self.emptyState = empty
+
+        self.content = content
+        self.rows = {}
+        self.headers = {}
+
+        -- Cast/refresh buttons live on the panel itself (not the scroll
+        -- content) so they don't slide around as the list collapses
+        -- under them. The scroll frame is re-anchored below to reserve
+        -- a fixed 56 px strip at the panel's bottom for the buttons.
+        local castBtn = CreateFrame(
+            "Button",
+            "EbonClearanceProcessCastBtn",
+            self,
+            "SecureActionButtonTemplate,UIPanelButtonTemplate"
+        )
+        castBtn:SetSize(200, 24)
+        castBtn:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 16, 16)
+        castBtn:SetAttribute("type", "macro")
+        castBtn:SetAttribute("macrotext", "")
+        castBtn:RegisterForClicks("AnyUp")
+        castBtn:SetText("Process Next")
+        self.castBtn = castBtn
+        self.castBtnLabel = castBtn:GetFontString()
+
+        -- Skip arrow: advances the armed cast target to the next list
+        -- entry. Lets the user reach Mill / Prospect without first
+        -- processing every Disenchant row. Sticky on mode (see
+        -- EC_compCache.skipProcessTarget) so the next BAG_UPDATE
+        -- re-arm stays on the picked mode until it runs out.
+        local skipBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        skipBtn:SetSize(28, 22)
+        skipBtn:SetPoint("LEFT", castBtn, "RIGHT", 4, 1)
+        skipBtn:SetText(">")
+        skipBtn:SetScript("OnClick", function()
+            EC_compCache.skipProcessTarget()
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        skipBtn:SetScript("OnEnter", function(b)
+            GameTooltip:SetOwner(b, "ANCHOR_TOP")
+            GameTooltip:SetText("Skip to next item")
+            GameTooltip:AddLine(
+                "|cffaaaaaaCycle through the queue without casting. Sticks to the picked mode until it's empty.|r",
+                1,
+                1,
+                1,
+                true
+            )
+            GameTooltip:Show()
+        end)
+        skipBtn:SetScript("OnLeave", GameTooltip_Hide)
+
+        local refreshBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        refreshBtn:SetSize(100, 22)
+        refreshBtn:SetPoint("LEFT", skipBtn, "RIGHT", 8, 0)
+        refreshBtn:SetText("Refresh")
+        refreshBtn:SetScript("OnClick", function()
+            -- Refresh resets the armed cursor + mode preference: the
+            -- user is asking for a fresh start.
+            EC_compCache.armedIndex = 1
+            EC_compCache.armedMode = nil
+            EC_compCache.armedBag = nil
+            EC_compCache.armedSlot = nil
+            EC_compCache.refreshProcessPanel()
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+
+        -- Dynamic "Next: ..." label above the cast button. The item
+        -- name lives here (not in the button label) so a long item
+        -- name can't overlap the button chrome.
+        local nextLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        nextLbl:SetPoint("BOTTOMLEFT", castBtn, "TOPLEFT", 0, 4)
+        nextLbl:SetPoint("BOTTOMRIGHT", refreshBtn, "TOPRIGHT", 0, 4)
+        nextLbl:SetJustifyH("LEFT")
+        nextLbl:SetText("")
+        self.nextItemLabel = nextLbl
+
+        -- Shrink the scroll frame from the bottom so it doesn't run
+        -- under the button strip. EC_WrapPanelInScrollFrame anchored it
+        -- to BOTTOMRIGHT(-26, 6); reserve 56 px for the button row +
+        -- "Next:" label + padding.
+        local scroll = _G[self:GetName() .. "Scroll"]
+        if scroll then
+            scroll:ClearAllPoints()
+            scroll:SetPoint("TOPLEFT", 0, 0)
+            scroll:SetPoint("BOTTOMRIGHT", -26, 62)
+        end
+
+        EC_compCache.refreshProcessPanel()
+    end, true)
+end)
+
 -- Register sub-panels in alphabetical order
 InterfaceOptions_AddCategory(CharPanel)
 InterfaceOptions_AddCategory(ScavengerPanel)
@@ -8212,6 +9020,7 @@ InterfaceOptions_AddCategory(ImportExportPanel)
 InterfaceOptions_AddCategory(DeletePanel)
 InterfaceOptions_AddCategory(BlacklistPanel)
 InterfaceOptions_AddCategory(BlacklistSettingsPanel)
+InterfaceOptions_AddCategory(ProcessBagsPanel)
 InterfaceOptions_AddCategory(WhitelistPanel)
 InterfaceOptions_AddCategory(AccountWhitelistPanel)
 
@@ -9124,6 +9933,10 @@ f:SetScript("OnEvent", function(self, event, ...)
         -- one branch.
         EC_compCache.combatDeferredAnnounced = false
         EC_HandleAutoOpenContainers()
+        -- v2.22.0: Process Bags cast-button re-arm. SetAttribute is blocked
+        -- during combat, so any re-arm attempts from BAG_UPDATE bail and
+        -- this combat-exit catch-up restores a current macrotext.
+        EC_compCache.rearmProcessButton()
     elseif event == "EQUIPMENT_SETS_CHANGED" then
         -- v2.13.0: live re-sync of Blizzard equipment-manager sets onto
         -- the Keep list. Silent variant suppresses the chat summary so
@@ -9145,6 +9958,15 @@ f:SetScript("OnEvent", function(self, event, ...)
         -- the steady-state cost to one GetItemInfo lookup per never-seen
         -- bag item.
         EC_compCache.checkBagsForUpgrades()
+        -- v2.22.0: re-arm the Process Bags cast button so the next click
+        -- targets a current bag slot. Bails on combat lockdown; the
+        -- PLAYER_REGEN_ENABLED branch catches up on combat exit. Also
+        -- refreshes the panel rows if it's currently open.
+        EC_compCache.rearmProcessButton()
+        local pbp = _G["EbonClearanceOptionsProcessBags"]
+        if pbp and pbp:IsShown() and EC_compCache.refreshProcessPanel then
+            EC_compCache.refreshProcessPanel()
+        end
     elseif event == "LOOT_READY" then
         -- v2.16.0: Fast Loot driver. Self-gates on DB.fastLoot and on
         -- Blizzard's autoLootDefault CVar so non-Fast-Loot users pay

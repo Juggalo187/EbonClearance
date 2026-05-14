@@ -1,5 +1,6 @@
 <Bindings>
     <Binding name="CLICK EbonClearanceTargetMerchantButton:LeftButton" header="EBONCLEARANCE"/>
+    <Binding name="CLICK EbonClearanceProcessCastBtn:LeftButton"/>
     <Binding name="EBONCLEARANCE_TOGGLE_SETTINGS" category="EbonClearance">
         EbonClearance_ToggleSettings()
     </Binding>

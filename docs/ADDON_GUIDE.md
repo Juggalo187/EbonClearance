@@ -896,7 +896,7 @@ the same treatment as `ITEM_OPENABLE` / `LOCKED` in `EC_IsOpenable`.
 
 Items with no bind line at all (consumables, reagents, trade goods, quest
 items) return `"any"`. Critically, `"any"` is matched by neither `"boe"`
-nor `"bop"` filters — so a `BoE only` rule on Blue does NOT sweep up
+nor `"bop"` filters - so a `BoE only` rule on Blue does NOT sweep up
 reagents that happen to be blue quality. This matches user mental model
 ("sell BoE blues only" should not touch reagents) and is the reason the
 filter check is INSIDE the `qualityPass` branch, not outside it.

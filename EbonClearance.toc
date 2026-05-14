@@ -1,6 +1,6 @@
 ## Interface: 30300
 ## Title: |cff66ccffEbonClearance|r |cffFFFF00[v2.21.0]|r
-## Notes: |cffffb84dProject Ebonhold Selling addon|r. Sell-List-based auto-vendoring, item deletion control and Greedy Scavenger management.
+## Notes: |cffffb84dProject Ebonhold bag manager|r. Vendoring, deletion, looting, protection rules, and profession processing (disenchant / mill / prospect).
 ## Author: Serv
 ## X-Website: https://github.com/powerfulqa/EbonClearance
 ## Version: v2.21.0
