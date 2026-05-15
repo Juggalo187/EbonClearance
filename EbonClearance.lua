@@ -5576,13 +5576,36 @@ local function EC_AnnotateTooltip(tooltip)
     -- v2.26.0: chance-on-hit state is always surfaced when the item
     -- has the proc, regardless of whether the auto-rule sweep would
     -- fire. Epic items (default quality rule off) still show the
-    -- protection state. Two states: unmarked (Protected) or marked
-    -- Allowed (account-wide ADB.allowedProcs override). The state
-    -- replaces any prior statusLine since it's the load-bearing
-    -- decision for whether the item will auto-sell.
+    -- protection state.
+    --
+    -- Unmarked items always show "Protected - Chance on hit" (the
+    -- protection overrides any other status).
+    --
+    -- Marked items show the actual destination so the user can see
+    -- where the item will go: explicit list membership (Account Sell,
+    -- Character Sell, Delete) takes the specific label; otherwise
+    -- the item will fall through to the quality-rule sweep and the
+    -- label is plain "Allowed - Sell". Keep List membership wins
+    -- everything else; we don't override the Kept label.
     if DB.protectChanceOnHitItems and EC_compCache.liveTooltipHasChanceOnHit(tooltip, id) then
         if ADB.allowedProcs and ADB.allowedProcs[id] then
-            statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Proc|r"
+            if IsInSet(DB.blacklist, id) then
+                -- Kept wins; leave the earlier Protected / Auto-
+                -- Protected label alone.
+            elseif IsInSet(DB.deleteList, id) and DB.enableDeletion then
+                statusLine = "|cff66ccff[EC]|r |cffff4444Allowed - Delete|r"
+            elseif ADB and ADB.whitelist and IsInSet(ADB.whitelist, id) then
+                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Account Sell|r"
+            elseif IsInSet(DB.whitelist, id) then
+                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Character Sell|r"
+            else
+                -- Marked allowed but no specific list chosen. "Allowed
+                -- - Sell" reads as "this will be auto-sold" which is
+                -- misleading - releasing the protection just opens
+                -- the item up to the user's decision. The label is a
+                -- call to action: pick a list.
+                statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+            end
         else
             statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Chance on hit|r"
         end

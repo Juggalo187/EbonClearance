@@ -456,12 +456,24 @@ end
 -- ---------------------------------------------------------------------------
 do
     local hasProtectedLabel = src:find("Protected %- Chance on hit") ~= nil
-    local hasAllowedLabel = src:find("Allowed %- Proc") ~= nil
+    local hasSellLabel = src:find("Allowed %- Choose List") ~= nil
+    local hasAccountSellLabel = src:find("Allowed %- Account Sell") ~= nil
+    local hasCharSellLabel = src:find("Allowed %- Character Sell") ~= nil
+    local hasDeleteLabel = src:find("Allowed %- Delete") ~= nil
     check("tooltip annotation emits 'Protected - Chance on hit' for unmarked items",
           hasProtectedLabel)
-    check("tooltip annotation emits 'Allowed - Proc' for marked items",
-          hasAllowedLabel,
-          "v2.26.0: marked items get the green 'Allowed - Proc' label so the user can see the override took effect")
+    check("tooltip annotation emits 'Allowed - Choose List' when no list chosen",
+          hasSellLabel,
+          "v2.26.0: marked items with no list membership get a call-to-action label, not the misleading 'Allowed - Sell'")
+    check("tooltip annotation emits 'Allowed - Account Sell' when on Account Sell List",
+          hasAccountSellLabel,
+          "marked + on ADB.whitelist - label must reflect the actual destination")
+    check("tooltip annotation emits 'Allowed - Character Sell' when on Character Sell List",
+          hasCharSellLabel,
+          "marked + on DB.whitelist - label must reflect the actual destination")
+    check("tooltip annotation emits 'Allowed - Delete' when on Delete List",
+          hasDeleteLabel,
+          "marked + on DB.deleteList - label must reflect the actual destination")
 end
 
 -- ---------------------------------------------------------------------------
