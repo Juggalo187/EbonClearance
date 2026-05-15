@@ -31,8 +31,9 @@ The protection chain runs before any sell / delete / process decision. Order of 
 - **Auto-protect looted upgrades** (default OFF) - bag drops above your equipped iLvl get auto-Kept. Mostly redundant when quality rules use `Use equipped iLvl`.
 - **Auto-protect equipment-manager sets** - items used in any Blizzard equipment manager set get auto-Kept.
 - **Affix protection (Rare/Epic)** - Project Ebonhold's per-instance roguelite affix items (those with a roman-numeral rank suffix) are detected via tooltip-title comparison and protected even when their base itemID is on a sell rule, since you can't anticipate which copy will roll the affix. Also extends to the Process Bags Disenchant list. Optional **exact-rank duplicate gate** (off by default): when on, EC reads the player's currently-owned (affix, rank) pairs from PE's perk service and lets drops of an exact-rank match fall through to your sell / DE rules. Different ranks of the same affix stay protected so you can still collect all four. Inert when the Project Ebonhold addon isn't loaded.
-- **Chance-on-hit protection** - items with extractable proc spells (Project Ebonhold's tooltip-line system) are skipped by the auto-rule sweep, but pass through if you explicitly list them (you've usually extracted the spell already and want to vendor the base). Optional **exact-proc duplicate gate** (off by default): when on, EC reads the player's already-extracted procs from PE's Extraction Service and lets drops carrying a proc you already own fall through to your sell rules. Procs you haven't extracted yet stay protected.
-- **Tooltip annotations** on bag items show what the rule chain decided: `Will Sell` (with reason), `Protected`, `Auto-Protected (Worn)`, `Auto-Protected (Upgrade)`, `Will Delete`, `Won't Sell - Currently Equipped`, `Protected - Random affix`, `Protected - Chance on hit`, etc.
+- **Chance-on-hit protection** - items with extractable proc spells (Project Ebonhold's tooltip-line system) are skipped by the auto-rule sweep. Also covers older `Equip: Chance to <verb>...` PPM procs.
+- **Allow Sell override** (account-wide, manual). For any protected item, Alt+Right-Click and pick `Allow Sell` to release the protection for that proc or affix on every character. Chance-on-hit marks record the itemID; random-affix marks record the affix description so all future drops rolling the same affix pass (not just the same base item). Sell List entries added for affix items show an `(affix-gated)` tag in the list panel to make the per-drop filtering visible.
+- **Tooltip annotations** on bag items show what the rule chain decided: `Will Sell` (with reason), `Protected`, `Auto-Protected (Worn)`, `Auto-Protected (Upgrade)`, `Will Delete`, `Won't Sell - Currently Equipped`, `Protected - Random affix`, `Protected - Chance on hit`, `Allowed - Account Sell`, `Allowed - Character Sell`, `Allowed - Delete`, `Allowed - Choose List`, etc.
 
 ### Looting
 
@@ -128,6 +129,19 @@ Working on the addon? There's developer documentation under [docs/](docs/):
 A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check EbonClearance.lua` and `luacheck EbonClearance.lua` before opening a PR.
 
 ## Changelog
+
+### v2.27.0
+
+- **Allow Sell now covers random-affix items.** The v2.26.0 chance-on-hit Allow Sell workflow extends to v2.23.0 random-affix protected items. Hovering an affixed Rare/Epic always shows the protection state (`Protected - Random affix`); Alt+Right-Click on a protected item shows only `Allow Sell` and `Cancel` until you acknowledge it. Same gate, same call-to-action.
+- **Affix marks are per-affix, not per-itemID.** Marking Orb of Mistmantle (Inner Light II) writes the affix description (`Increases your total Spirit by 6%`) to a new account-wide list. Future drops rolling the same affix on any base item are released; drops of the same base item rolling a different affix stay protected.
+- **Chance-on-hit marks are still per-itemID.** Vanilla procs are bound to the item identity, so marking Bloodpike records itemID 13057; same logic as v2.26.x.
+- **Detector now catches `Equip: Chance to <verb>...` procs.** Older Quillshooter-style PPM procs are now protected (and overridable) the same way as `Chance on hit:` items.
+- **`(affix-gated)` tag in the Sell List panel.** Affix-sourced Sell List entries show a grey `(affix-gated)` suffix so the panel is honest: the per-itemID entry doesn't blanket-sell every drop, the affix protection still filters per-drop. Pre-v2.27 entries get the tag retroactively the next time you hover the item.
+- **Tooltip destination labels win over the v2.23.0 auto-dupe info.** When an item is on a list AND auto-allowed by `affixAllowExactDupes`, the tooltip shows the destination (`Allowed - Account Sell`, etc.) instead of the `rank N already known` informational label. The informational label still shows for auto-allowed items that aren't on any list.
+- **`Sell Now` removed from the Alt+Right-Click menu.** Explicit sells go through the Sell List rows; the one-shot vendor command was redundant.
+- **`Add to` prefix dropped from list row labels.** `Sell List (Character)`, `Keep List (Do Not Sell)`, etc. The orange `Remove from X` rows still provide the contrast.
+- **Perf cleanup from a code review of v2.22.0-v2.26.1.** `processTooltipHasLine` writes a negative-cache sentinel so non-millable / non-prospectable items don't rescan every BAG_UPDATE rearm. `buildProcessSummary` pre-computes item names before sorting so the comparator is O(1) per compare. Dead `local short` in `rearmProcessButton` removed (would have failed luacheck zero-warning threshold). Dead `EC_compCache.findNextProcessable` (zero call sites) removed.
+- **Schema:** three new fields, all on `EbonClearanceAccountDB`. `allowedItems` (itemID-keyed), `allowedAffixes` (affix-description-keyed), `affixedListedItems` (side meta for the `(affix-gated)` tag). One-shot migration carries v2.26.x `allowedProcs` into the new `allowedItems` field. Additive; no existing field changes.
 
 ### v2.26.0
 

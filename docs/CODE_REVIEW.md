@@ -3,7 +3,22 @@
 A curated backlog of known follow-ups not yet actioned. Each item is
 scoped to be a single-session change unless flagged otherwise.
 
-> **Last refresh:** post-v2.18.0 on 2026-05-13.
+> **Last refresh:** post-v2.27.0 on 2026-05-16.
+>
+> v2.27.0 ran a perf + cleanup review of the v2.22.0-v2.26.1 batch
+> (Process Bags, BAG_UPDATE coalescing, affix dupe gate, Lockpick
+> mode, Allow Sell workflow). Five items landed in the v2.27.0
+> commit: negative-cache sentinel in `processTooltipHasLine`, sort
+> comparator pre-computes names in `buildProcessSummary`, dead
+> `local short` in `rearmProcessButton`, dead
+> `EC_compCache.findNextProcessable`, and a luacheck zero-warning
+> cleanup. Three lower-priority items were noted in-review but not
+> actioned (diagnostic-only `findLearnedAffixForItem`, double walk
+> in `refreshExtractionIfDirty`, hard-coded `PROF_LOOT_SPELLS`
+> "Pick Lock" name). The pre-v2.18.0 active backlog (items 1, 2, 3
+> below) is unchanged.
+>
+> **Pre-v2.18.0 history (kept for context):**
 > Statuses below verified against the current `EbonClearance.lua`.
 > v2.13.0-v2.13.4 shipped a feature burst (auto-open combat-defer,
 > quest-item safety net, Equipment Manager protection, ElvUI bag

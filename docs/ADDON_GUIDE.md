@@ -1015,9 +1015,54 @@ this; the diff is recorded in commit history.
   match against the set. Proc affixes (`Your X may...`) with embedded
   mid-sentence periods rely on the full-line match.
 
-Diagnostic commands `/ec affixdump` and `/ec affixfind <text>` are
-undocumented but useful for inspecting the known set when chasing
-match failures.
+Diagnostic commands `/ec affixdump`, `/ec affixfind <text>`, and
+`/ec procdump` are undocumented but useful for inspecting the known
+set when chasing match failures.
+
+### Allow Sell override (v2.26.0 / v2.27.0)
+
+The auto-dupe gate (`affixAllowExactDupes`) is a global toggle that
+auto-releases items whose affix description appears in the known set.
+For cases where the auto-detect can't bridge (chance-on-hit procs
+have no client-side identity bridge to PE's catalog; vanilla items
+have no random suffix) the user can manually mark an item via
+Alt+Right-Click -> `Allow Sell`. Three account-wide tables back this:
+
+1. **`ADB.allowedItems[itemID]`** - chance-on-hit items. The proc is
+   bound to the item identity for vanilla items, so per-itemID is the
+   right grain. v2.26.0 originally called this `allowedProcs`; the
+   `EnsureAccountDB` migration carries the data forward.
+2. **`ADB.allowedAffixes[normalised_description]`** - random-affix
+   items. The affix description IS the identity (per-instance roll),
+   so per-itemID would be too coarse. Marking Orb of Mistmantle
+   (Inner Light II) writes the `Increases your total Spirit by 6%`
+   description; any future drop with that affix on any base item
+   passes.
+3. **`ADB.affixedListedItems[itemID]`** - side meta. Flagged when an
+   affixed-item-instance is added to a Sell/Keep/Delete list via the
+   Alt+Right-Click menu. Lets the list panels render an
+   `(affix-gated)` tag on those rows so the per-itemID list entry
+   doesn't read as "blanket sell every drop" (the affix protection
+   still filters per-drop).
+
+The menu hides Sell/Keep/Delete list rows while an item is protected
+(`procProtected = hasProtection AND not itemAllowed`), forcing the
+user to consciously pick `Allow Sell` before adding to a sell rule.
+Once allowed, the full menu opens up and the `sellNow` row becomes
+`Remove from Allow List` (orange, toggle).
+
+Tooltip annotation priority (`Will Sell -` labels get replaced by):
+
+- `Allowed - Delete` / `Allowed - Account Sell` / `Allowed - Character Sell` when on the corresponding list AND allowed
+- `Allowed - Choose List` when manual-marked but not on any list (call to action)
+- `Allowed - <name> rank N already known` when auto-dupe-allowed AND not on any list
+- `Protected - Random affix` / `Protected - Chance on hit` when unmarked
+- Keep List membership wins everything (the Protected / Auto-Protected label stands)
+
+Diagnostic: `/ec procdump` walks bags for the first chance-on-hit
+item, prints the `HasRandomProperty(link)` gate result and the
+result of `findLearnedAffixForItem(link)` (a port of PE's own
+algorithm from `extraction.lua`).
 
 ### Index of magic numbers
 
