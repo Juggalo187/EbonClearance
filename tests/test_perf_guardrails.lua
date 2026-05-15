@@ -16,14 +16,23 @@
 --      frame so bursts coalesce.
 --   3. Caching `bagSlotAffixData` per itemString.
 --
+-- v2.25.0 added Lockpick mode (rogue Pick Lock via Process Bags) +
+-- collapsible Process Bags sections. v2.25.1 fixed an auto-open
+-- regression where the debounce frame's OnUpdate closure couldn't
+-- resolve `EC_HandleAutoOpenContainers` because it was declared as
+-- `local function` AFTER the closure (Lua's lexical scoping captures
+-- locals at closure-creation time, not at call time). Tests below
+-- cover both the original perf invariants and the wiring invariants
+-- that drove v2.25.1.
+--
 -- These tests are static-pattern checks against the source. They do
 -- NOT measure runtime - the WoW API is not mockable - but they catch
--- the structural mistakes that caused the v2.22-v2.23 regression so
--- the same pattern can't sneak back in without setting off CI.
+-- the structural mistakes that caused these regressions so the same
+-- patterns can't sneak back in without setting off CI.
 --
--- Add new tests below as new perf invariants emerge. Keep them
--- pattern-matching only - this file must run under stock lua5.1 with
--- no external dependencies so it works in CI without a luarocks step.
+-- Add new tests below as new invariants emerge. Keep them pattern-
+-- matching only - this file must run under stock lua5.1 with no
+-- external dependencies so it works in CI without a luarocks step.
 
 local SOURCE_PATH = "EbonClearance.lua"
 
@@ -197,6 +206,121 @@ do
     local declared = src:find("EC_compCache%.affixDataCache%s*=%s*{}") ~= nil
     check("EC_compCache.affixDataCache is declared as an empty table",
           declared)
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 6 (v2.25.1 regression): EC_HandleAutoOpenContainers must be
+-- forward-declared at file scope BEFORE the bagUpdateFrame OnUpdate
+-- closure captures the name. Otherwise Lua's lexical scoping resolves
+-- the reference to the (nil) global and auto-open silently never
+-- fires from the debounce path.
+--
+-- Detection: the function definition uses bare `function EC_Handle...`
+-- (NOT `local function`), meaning the local was forward-declared
+-- separately. The forward declaration itself appears earlier as a
+-- standalone `local EC_HandleAutoOpenContainers` line.
+-- ---------------------------------------------------------------------------
+do
+    -- Definition style: bare `function X` (no `local`) is the
+    -- correct shape when X was forward-declared at file scope.
+    local hasBareDefinition = src:find("\nfunction EC_HandleAutoOpenContainers%(%)") ~= nil
+    local hasLocalDefinition = src:find("\nlocal function EC_HandleAutoOpenContainers%(%)") ~= nil
+    -- Forward declaration: a `local EC_HandleAutoOpenContainers` line
+    -- NOT immediately followed by `function`.
+    local hasForwardDecl = src:find("\nlocal EC_HandleAutoOpenContainers[%s\n]") ~= nil
+        or src:find("\nlocal EC_HandleAutoOpenContainers$") ~= nil
+    check("EC_HandleAutoOpenContainers is forward-declared (not `local function`)",
+          hasBareDefinition and not hasLocalDefinition and hasForwardDecl,
+          "expected `local EC_HandleAutoOpenContainers` forward decl + bare `function EC_HandleAutoOpenContainers()` definition; without the forward decl the v2.24.0 debounce frame closure resolves the name to the nil global and auto-open never fires")
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 7 (v2.25.1): bagUpdateFrame OnUpdate must reference
+-- EC_HandleAutoOpenContainers so the auto-open driver fires from the
+-- debounce path. If a refactor accidentally drops the call, unlocked
+-- containers stop being processed.
+-- ---------------------------------------------------------------------------
+do
+    -- Extract the OnUpdate closure body. The closure starts at the
+    -- SetScript("OnUpdate", function(...) and ends at the matching
+    -- `end)`. Crude bracket match good enough for the static check.
+    local startIdx = src:find('bagUpdateFrame:SetScript%("OnUpdate"', 1)
+    local body
+    if startIdx then
+        local endIdx = src:find("end%)", startIdx)
+        body = endIdx and src:sub(startIdx, endIdx) or src:sub(startIdx, startIdx + 4000)
+    end
+    local refs = body and body:find("EC_HandleAutoOpenContainers%(%)") ~= nil
+    check("bagUpdateFrame OnUpdate calls EC_HandleAutoOpenContainers",
+          refs == true,
+          "the debounce frame must call EC_HandleAutoOpenContainers() inside its OnUpdate body so the auto-open driver fires after each burst settles")
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 8 (v2.25.0): Pick Lock spell-cast trigger is wired into
+-- UNIT_SPELLCAST_SUCCEEDED. BAG_UPDATE doesn't fire for a lockbox's
+-- locked->openable transition, so the UNIT_SPELLCAST_SUCCEEDED match
+-- against PICK_LOCK_NAME is the only reliable trigger to refresh the
+-- Process Bags panel and run the auto-open driver post-cast.
+-- ---------------------------------------------------------------------------
+do
+    local startIdx = src:find('event == "UNIT_SPELLCAST_SUCCEEDED"', 1, true)
+    local body
+    if startIdx then
+        local endIdx = src:find('elseif event ==', startIdx + 1, true)
+        body = endIdx and src:sub(startIdx, endIdx - 1) or src:sub(startIdx, startIdx + 3000)
+    end
+    local hasPickLockHook = body and body:find("PICK_LOCK_NAME") ~= nil
+    local triggersDebounce = body and body:find("bagUpdateFrame:Show%(%)") ~= nil
+    check("UNIT_SPELLCAST_SUCCEEDED handles PICK_LOCK_NAME completion",
+          hasPickLockHook == true and triggersDebounce == true,
+          "expected the UNIT_SPELLCAST_SUCCEEDED branch to compare spellName against EC_compCache.PICK_LOCK_NAME and trigger the bagUpdateFrame debounce")
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 9 (v2.25.0): Lockpick spell constants + helpers exist.
+-- ---------------------------------------------------------------------------
+do
+    local hasSpellConst = src:find("EC_compCache%.SPELL_PICK_LOCK%s*=%s*1804") ~= nil
+    local hasNameConst = src:find("EC_compCache%.PICK_LOCK_NAME") ~= nil
+    local hasHelper = src:find("function EC_compCache%.canPickLock%(") ~= nil
+    check("EC_compCache.SPELL_PICK_LOCK = 1804 constant is declared",
+          hasSpellConst)
+    check("EC_compCache.PICK_LOCK_NAME is cached at file scope",
+          hasNameConst)
+    check("EC_compCache.canPickLock helper is defined",
+          hasHelper)
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 10 (v2.25.0): Lockpick + collapsible-section schema is
+-- defaulted in EnsureDB. Without these defaulters the per-session
+-- code path reads `nil` and the toggles silently do nothing.
+-- ---------------------------------------------------------------------------
+do
+    local hasLockpickEnabled = src:find("DB%.lockpickEnabled%s*=%s*true") ~= nil
+    local hasNotifyDefault = src:find("DB%.lockpickNotifyOnCombatExit%s*=%s*false") ~= nil
+    local hasCollapsedDefault = src:find("DB%.processCollapsedModes%s*=%s*{}") ~= nil
+    check("EnsureDB defaults DB.lockpickEnabled to true",
+          hasLockpickEnabled)
+    check("EnsureDB defaults DB.lockpickNotifyOnCombatExit to false",
+          hasNotifyDefault)
+    check("EnsureDB defaults DB.processCollapsedModes to an empty table",
+          hasCollapsedDefault)
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 11 (v2.25.0): Lockpick mode is wired into buildProcessSummary.
+-- ---------------------------------------------------------------------------
+do
+    local hasLockpickBranch = src:find('mode%s*=%s*"Lockpick"') ~= nil
+    local hasModeOrder = src:find("Lockpick%s*=%s*4") ~= nil
+    check("buildProcessSummary emits a Lockpick mode entry",
+          hasLockpickBranch,
+          "expected `mode = \"Lockpick\"` assignment in the canPickLock branch")
+    check("modeOrder ranks Lockpick = 4",
+          hasModeOrder,
+          "the sort order must include Lockpick or its rows won't sort consistently with DE/Mill/Prospect")
 end
 
 -- ---------------------------------------------------------------------------
