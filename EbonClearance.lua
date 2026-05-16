@@ -47,7 +47,7 @@ _G["__EbonClearance_author"] = ADDON_AUTHOR
 -- version lie on a release build. The CI test in
 -- tests/test_layout_reactivity.lua asserts this constant matches the
 -- .toc Version field so any future drift fails CI before shipping.
-local ADDON_VERSION = "v2.27.0"
+local ADDON_VERSION = "v2.28.0"
 local function EC_GetVersion()
     if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
         return ADDON_VERSION
