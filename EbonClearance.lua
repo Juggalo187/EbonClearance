@@ -3927,27 +3927,6 @@ function EC_compCache.checkBagsForUpgrades()
     end
 end
 
-local function EC_SellNowAt(bag, slot)
-    if not (MerchantFrame and MerchantFrame:IsShown()) then
-        PrintNice("|cffff4444Open a merchant first to sell.|r")
-        return
-    end
-    if not bag or not slot then
-        return
-    end
-    local itemID = GetContainerItemID(bag, slot)
-    if not itemID then
-        return
-    end
-    if IsEquippedItem(itemID) then
-        PrintNice("|cffff4444Cannot sell equipped items.|r")
-        return
-    end
-    UseContainerItem(bag, slot)
-    local itemName = GetItemInfo(itemID) or ("ItemID:" .. itemID)
-    PrintNicef("Sold |cffb6ffb6%s|r.", itemName)
-end
-
 -- Row metadata for the popup. Each "list" row toggles between "Add to ..."
 -- (white) and "Remove from ..." (orange) based on the item's live list
 -- membership at show time. Special rows ("sellNow", "cancel") get plain text
@@ -6459,24 +6438,46 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
                 keys[#keys + 1] = k
             end
         end
+        -- v2.28.0: name-sort comparator previously called GetItemInfo
+        -- per pair-compare = ~20k lookups for a 1000-item sort. Build
+        -- a one-pass {id -> lowercase name} map first; comparator
+        -- becomes an O(1) table read.
         if sortMode == "id_desc" then
             table.sort(keys, function(a, b)
                 return a > b
             end)
-        elseif sortMode == "name_asc" then
-            table.sort(keys, function(a, b)
-                local na = GetItemInfo(a) or ""
-                local nb = GetItemInfo(b) or ""
-                return na:lower() < nb:lower()
-            end)
-        elseif sortMode == "name_desc" then
-            table.sort(keys, function(a, b)
-                local na = GetItemInfo(a) or ""
-                local nb = GetItemInfo(b) or ""
-                return na:lower() > nb:lower()
-            end)
+        elseif sortMode == "name_asc" or sortMode == "name_desc" then
+            local nameByID = {}
+            for i = 1, #keys do
+                nameByID[keys[i]] = (GetItemInfo(keys[i]) or ""):lower()
+            end
+            if sortMode == "name_asc" then
+                table.sort(keys, function(a, b)
+                    return nameByID[a] < nameByID[b]
+                end)
+            else
+                table.sort(keys, function(a, b)
+                    return nameByID[a] > nameByID[b]
+                end)
+            end
         else
             table.sort(keys) -- id_asc (default)
+        end
+
+        -- v2.28.0: hoist the affix-set reference once per Refresh
+        -- instead of dereferencing ADB.affixedListedItems three times
+        -- per visible row.
+        local affixSet = (ADB and ADB.affixedListedItems) or nil
+
+        -- Tooltip-prime helper. SetHyperlink for an uncached item
+        -- queues an async server request; the response populates the
+        -- item cache and the existing pendingRetry chain re-paints
+        -- once names are available. SetOwner is called once outside
+        -- the loop body since the same owner serves every prime.
+        local primeFrame = GameTooltip
+        local canPrime = primeFrame and primeFrame.SetHyperlink
+        if canPrime then
+            primeFrame:SetOwner(UIParent, "ANCHOR_NONE")
         end
 
         local shown = 0
@@ -6487,11 +6488,8 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
             local name = GetItemInfo(id)
             if not name then
                 hasUncached = true
-                -- Request item data from server via tooltip query
-                if GameTooltip and GameTooltip.SetHyperlink then
-                    GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-                    GameTooltip:SetHyperlink("item:" .. id .. ":0:0:0:0:0:0:0")
-                    GameTooltip:Hide()
+                if canPrime then
+                    primeFrame:SetHyperlink("item:" .. id .. ":0:0:0:0:0:0:0")
                 end
                 name = "ItemID: " .. id
             end
@@ -6506,14 +6504,9 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
                 row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, rowY)
                 -- v2.27.0: append "(affix-gated)" tag when the entry
                 -- was added because the item carries a random affix.
-                -- Tells the user that the affix protection still
-                -- filters per-drop (only drops with allowed affixes
-                -- actually sell), so the list entry isn't a blanket
-                -- "sell every drop of this itemID" rule.
-                local affixTag = ""
-                if ADB and ADB.affixedListedItems and ADB.affixedListedItems[id] then
-                    affixTag = " |cffaaaaaa(affix-gated)|r"
-                end
+                local affixTag = (affixSet and affixSet[id])
+                    and " |cffaaaaaa(affix-gated)|r"
+                    or ""
                 row.text:SetText(string.format("|cffb6ffb6%d|r  %s%s", id, name, affixTag))
                 row.rm:SetScript("OnClick", function()
                     local t = EC_GetListTable(setTableName)
@@ -6526,6 +6519,13 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
                 row.rm:Show()
                 rowY = rowY - 22
             end
+        end
+
+        -- One Hide() after the prime loop instead of one per uncached
+        -- item. SetOwner(ANCHOR_NONE) keeps the tooltip offscreen
+        -- while we prime, then we hide it once at the end.
+        if canPrime then
+            primeFrame:Hide()
         end
 
         rowFactory.setActiveRows(shown)
@@ -6643,8 +6643,26 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
         matchInput:ClearFocus()
     end)
 
+    -- v2.28.0: debounce search refreshes. Each keystroke previously
+    -- fired a full O(N) Refresh which on a 1000-item list walked the
+    -- table, called GetItemInfo per entry, and rebuilt the visible
+    -- rows. Typing "bloodpike" = 9 of those passes. Coalesce via a
+    -- per-CreateListUI OnUpdate frame; first keystroke arms a 250 ms
+    -- countdown, subsequent keystrokes reset it, idle window fires
+    -- one Refresh.
+    local searchDebounce = CreateFrame("Frame")
+    searchDebounce:Hide()
+    searchDebounce.elapsed = 0
+    searchDebounce:SetScript("OnUpdate", function(self, dt)
+        self.elapsed = self.elapsed + dt
+        if self.elapsed >= 0.25 then
+            self:Hide()
+            Refresh()
+        end
+    end)
     search:SetScript("OnTextChanged", function()
-        Refresh()
+        searchDebounce.elapsed = 0
+        searchDebounce:Show()
     end)
 
     sortIDBtn:SetScript("OnClick", function()

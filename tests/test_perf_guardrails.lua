@@ -656,6 +656,104 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 20 (v2.28.0): CreateListUI name-sort pre-computes a name map.
+-- ---------------------------------------------------------------------------
+-- Background: the previous name-sort comparator called GetItemInfo
+-- twice per pair-compare, producing ~20k cache hits + 20k :lower()
+-- allocations to sort a 1000-item list. Pre-computing a {id -> name}
+-- map once before sort drops it to ~1k lookups + an O(1) comparator.
+-- Same fix landed in buildProcessSummary in v2.27.0 (Test 6 covers
+-- the comparator side there).
+do
+    local fnStart = src:find("local function CreateListUI%(")
+    if not fnStart then
+        check("CreateListUI name-sort pre-computes a nameByID map",
+              false, "CreateListUI not found")
+    else
+        -- Refresh() lives inside CreateListUI. Capture the bigger
+        -- enclosing range and look for the pre-compute pattern.
+        local body = src:sub(fnStart, fnStart + 12000)
+        local hasMap = body:find("local nameByID = {}") ~= nil
+        local mapDrivenSort = body:find("nameByID%[a%]") ~= nil
+            and body:find("nameByID%[b%]") ~= nil
+        check("CreateListUI builds a nameByID lookup before name-sort",
+              hasMap,
+              "without this pre-compute, the comparator runs ~2N log N GetItemInfo calls")
+        check("CreateListUI name-sort comparator reads nameByID, not GetItemInfo",
+              mapDrivenSort,
+              "comparator must use the pre-computed map for O(1) compares")
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 21 (v2.28.0): list search input debounced.
+-- ---------------------------------------------------------------------------
+-- Background: typing in the search box previously fired a full
+-- Refresh() per keystroke. Coalesce via an OnUpdate-driven debounce
+-- so multi-character searches only re-render once after the user
+-- stops typing.
+do
+    local fnStart = src:find("local function CreateListUI%(")
+    if not fnStart then
+        check("CreateListUI search input is debounced",
+              false, "CreateListUI not found")
+    else
+        local body = src:sub(fnStart, fnStart + 12000)
+        -- The search OnTextChanged handler must NOT call Refresh()
+        -- directly. It should poke a debounce frame instead.
+        local handler = body:match('search:SetScript%("OnTextChanged",%s*function%(%)(.-)end%)')
+        local directRefresh = handler and handler:find("Refresh%(%)") ~= nil
+        local hasDebounce = body:find("searchDebounce") ~= nil
+        check("search OnTextChanged does NOT call Refresh() directly",
+              not directRefresh,
+              "calling Refresh() per keystroke causes the >1000-item slowdown the user reported")
+        check("CreateListUI defines a searchDebounce frame",
+              hasDebounce,
+              "expected an OnUpdate-driven debounce frame guarding the search Refresh")
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 22 (v2.28.0): tooltip-prime SetOwner hoisted outside the
+-- per-row loop.
+-- ---------------------------------------------------------------------------
+-- Background: the previous loop called GameTooltip:SetOwner per
+-- uncached row alongside SetHyperlink. SetOwner is a UI-frame state
+-- change; calling it once per uncached item is wasteful when one
+-- owner serves the whole pass. Lift it (and the matching Hide) out
+-- of the per-row body.
+do
+    local fnStart = src:find("local function CreateListUI%(")
+    if not fnStart then
+        check("CreateListUI hoists tooltip-prime SetOwner out of the loop",
+              false, "CreateListUI not found")
+    else
+        local body = src:sub(fnStart, fnStart + 12000)
+        -- Look for the prime-frame setup pattern outside the
+        -- per-row loop.
+        local hasPrimeHoist = body:find("local primeFrame = GameTooltip") ~= nil
+            and body:find("local canPrime") ~= nil
+        check("CreateListUI hoists GameTooltip prime setup outside the row loop",
+              hasPrimeHoist,
+              "SetOwner per uncached row was wasteful; one owner serves the whole pass")
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 23 (v2.28.0): dead EC_SellNowAt removed.
+-- ---------------------------------------------------------------------------
+-- v2.27.0 removed the Sell Now context-menu row. EC_SellNowAt was the
+-- handler behind that row; zero call sites remained. Regression-lock
+-- the removal so a future "let's re-add Sell Now" attempt has to
+-- update this test too.
+do
+    local stillDefined = src:find("local function EC_SellNowAt%(") ~= nil
+    check("EC_SellNowAt is no longer defined",
+          not stillDefined,
+          "the function was orphaned after v2.27.0 dropped the Sell Now menu row; re-adding it should come with a re-introduced call site")
+end
+
+-- ---------------------------------------------------------------------------
 -- Result.
 -- ---------------------------------------------------------------------------
 print()
