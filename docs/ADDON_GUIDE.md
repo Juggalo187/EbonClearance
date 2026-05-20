@@ -1284,7 +1284,7 @@ Stage 2 invariants (enforced by `tests/test_perf_guardrails.lua` Test 28):
 - `NS.compCache = EC_compCache` appears exactly once (still in Core,
   immediately after the table literal).
 
-### Stage 3: extract EbonClearance_Companion.lua (commit `<pending>`)
+### Stage 3: extract EbonClearance_Companion.lua (commit `987b5b5`)
 
 Stage 3 moves the contiguous chat-filter / speech-bubble killer cluster
 out of EbonClearance.lua (previously lines ~164-446):
