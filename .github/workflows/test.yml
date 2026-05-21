@@ -21,7 +21,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y lua5.1
 
       - name: Lua syntax check
-        run: luac5.1 -p EbonClearance.lua
+        # v2.30.0+: post file-split, every shipped source file is checked.
+        # Add new EbonClearance_*.lua files to this list as future
+        # split stages land.
+        run: |
+          luac5.1 -p EbonClearance.lua
+          luac5.1 -p EbonClearance_Core.lua
+          luac5.1 -p EbonClearance_Companion.lua
+          luac5.1 -p EbonClearance_Protection.lua
+          luac5.1 -p EbonClearance_Vendor.lua
+          luac5.1 -p EbonClearance_Process.lua
+          luac5.1 -p EbonClearance_BagDisplay.lua
 
       - name: Layout-reactivity regression tests
         run: lua5.1 tests/test_layout_reactivity.lua

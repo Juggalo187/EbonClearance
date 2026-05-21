@@ -37,7 +37,15 @@ jobs:
       - name: Package addon
         run: |
           mkdir -p EbonClearance
-          cp EbonClearance.lua EbonClearance.toc Bindings.xml LICENSE EbonClearance/
+          # v2.30.0+: the addon ships as a multi-file package after the
+          # file-split refactor (see docs/CODE_REVIEW.md item 4). Every
+          # EbonClearance_*.lua file listed in EbonClearance.toc must be
+          # included or the addon fails to load. Add new split files to
+          # this glob as future stages land.
+          cp EbonClearance.lua EbonClearance_Core.lua EbonClearance_Companion.lua \
+             EbonClearance_Protection.lua EbonClearance_Vendor.lua \
+             EbonClearance_Process.lua EbonClearance_BagDisplay.lua \
+             EbonClearance.toc Bindings.xml LICENSE EbonClearance/
           zip -r EbonClearance.zip EbonClearance/
 
       - name: Commit version update back to repo
