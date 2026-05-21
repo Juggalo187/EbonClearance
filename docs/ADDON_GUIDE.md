@@ -1500,7 +1500,7 @@ Stage 6 invariants (enforced by `tests/test_perf_guardrails.lua` Test 33):
 - `.toc` loads BagDisplay AFTER EbonClearance.lua.
 - No bare `EC_RefreshSellBorders()` call sites anywhere.
 
-### Stage 7: extract EbonClearance_Process.lua (commit `<pending>`)
+### Stage 7: extract EbonClearance_Process.lua (commit `a24be7d`)
 
 Stage 7 moves the Process Bags ENGINE out of EbonClearance.lua. The
 Process Bags PANEL (UI side) stays in EbonClearance.lua for Stage 8
