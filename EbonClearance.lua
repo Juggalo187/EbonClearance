@@ -170,7 +170,6 @@ local running = false
 -- the event hub + ADDON_LOADED branch + DB toggles further down this
 -- file call by name.
 
-
 -- Forward-declared so EC_AddItemToList (defined below) can call it before the
 -- helper body is reached further down the file. Returns the name of a list
 -- that already holds the item with a different intent (keep / sell / delete),
@@ -734,9 +733,15 @@ local function EnsureDB()
         -- isn't a number in [0, 1].
         local c = DB.sellBorderColor
         local function clamp01(v, fallback)
-            if type(v) ~= "number" or v ~= v then return fallback end
-            if v < 0 then return 0 end
-            if v > 1 then return 1 end
+            if type(v) ~= "number" or v ~= v then
+                return fallback
+            end
+            if v < 0 then
+                return 0
+            end
+            if v > 1 then
+                return 1
+            end
             return v
         end
         c.r = clamp01(c.r, 1.0)
@@ -1666,7 +1671,7 @@ local EC_HandleAutoOpenContainers
 -- locals cap.
 EC_compCache.bagUpdatePending = false
 EC_compCache.bagUpdateAccum = 0
-EC_compCache.BAG_UPDATE_DEBOUNCE_S = 0.12  -- 120 ms idle window
+EC_compCache.BAG_UPDATE_DEBOUNCE_S = 0.12 -- 120 ms idle window
 EC_compCache.bagUpdateFrame = CreateFrame("Frame")
 EC_compCache.bagUpdateFrame:Hide()
 EC_compCache.bagUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
@@ -1835,7 +1840,6 @@ end
 -- see docs/CODE_REVIEW.md item 4). Every helper is attached to
 -- EC_compCache, so call sites elsewhere in this file already resolve
 -- through the shared upvalue and need no changes.
-
 
 -- v2.21.0: pre-flight bag-space check used by the Fast Loot queue
 -- before each LootSlot call. Returns true if the item can fit (free
@@ -2105,7 +2109,8 @@ function EC_compCache.buildProcessSummary()
                 -- uses, applied here too so the user can't
                 -- accidentally DE / mill a weapon whose proc they
                 -- might still want to extract.
-                if not skip
+                if
+                    not skip
                     and DB.protectChanceOnHitItems
                     and EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
                     and not (ADB.allowedItems and ADB.allowedItems[itemID])
@@ -2122,13 +2127,11 @@ function EC_compCache.buildProcessSummary()
                         -- affix item is DE-eligible from Process Bags.
                         local affixGuarded = false
                         if quality and quality >= 3 and DB.protectAffixedRareItems then
-                            local affix = EC_compCache.bagSlotAffixData
-                                and EC_compCache.bagSlotAffixData(bag, slot)
+                            local affix = EC_compCache.bagSlotAffixData and EC_compCache.bagSlotAffixData(bag, slot)
                             if affix then
                                 local affixKey = affix.description
                                     and EC_compCache.normaliseAffixDesc(affix.description)
-                                local manualAllow = affixKey
-                                    and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
+                                local manualAllow = affixKey and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
                                 local autoDupe = DB.affixAllowExactDupes
                                     and EC_compCache.playerHasAffixDescription(affix.description)
                                 affixGuarded = not (manualAllow or autoDupe)
@@ -2454,8 +2457,7 @@ function EC_compCache.handleItemDrop(setName, label)
         ClearCursor()
         return
     end
-    local id = (type(cursorID) == "number") and cursorID
-        or (cursorLink and tonumber(cursorLink:match("item:(%d+)")))
+    local id = (type(cursorID) == "number") and cursorID or (cursorLink and tonumber(cursorLink:match("item:(%d+)")))
     ClearCursor()
     if not id then
         return
@@ -2553,8 +2555,8 @@ function EC_compCache.buildElvUIBagButtons()
     -- Sell button (whitelist) - leftmost. Gold coin icon. Drag adds to
     -- whitelist; right-click opens Whitelist panel; left-click at a
     -- merchant triggers EbonClearance_ForceSell.
-    local sellBtn = makeButton("EbonClearance_ElvUISellBtn", bagFrame,
-        "Interface\\Icons\\INV_Misc_Coin_01", 0.71, 1.0, 0.71)
+    local sellBtn =
+        makeButton("EbonClearance_ElvUISellBtn", bagFrame, "Interface\\Icons\\INV_Misc_Coin_01", 0.71, 1.0, 0.71)
     sellBtn:SetPoint("TOPRIGHT", bagFrame, "TOPRIGHT", -98, -4)
     sellBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
@@ -2587,8 +2589,8 @@ function EC_compCache.buildElvUIBagButtons()
     -- Keep button (blacklist) - middle. Shield icon (semantically clearer
     -- than AutoDelete's chocolate box for "protected"). Drag adds to
     -- Blacklist (Keep); right-click opens the Blacklist panel.
-    local keepBtn = makeButton("EbonClearance_ElvUIKeepBtn", bagFrame,
-        "Interface\\Icons\\INV_Shield_06", 1.0, 0.78, 0.30)
+    local keepBtn =
+        makeButton("EbonClearance_ElvUIKeepBtn", bagFrame, "Interface\\Icons\\INV_Shield_06", 1.0, 0.78, 0.30)
     keepBtn:SetPoint("LEFT", sellBtn, "RIGHT", 4, 0)
     keepBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
@@ -2616,8 +2618,14 @@ function EC_compCache.buildElvUIBagButtons()
     -- Delete button - rightmost. Red X icon (Blizzard's loot-pass texture,
     -- no icon-inset crop needed). Drag adds to delete list; right-click
     -- opens the Delete List panel.
-    local delBtn = makeButton("EbonClearance_ElvUIDeleteBtn", bagFrame,
-        "Interface\\Buttons\\UI-GroupLoot-Pass-Up", 1.0, 0.30, 0.30)
+    local delBtn = makeButton(
+        "EbonClearance_ElvUIDeleteBtn",
+        bagFrame,
+        "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
+        1.0,
+        0.30,
+        0.30
+    )
     delBtn:SetPoint("LEFT", keepBtn, "RIGHT", 4, 0)
     delBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT")
@@ -2791,7 +2799,9 @@ function EC_compCache.syncEquipmentSets(silent)
     local n = GetNumEquipmentSets()
     if not n or n == 0 then
         if not silent then
-            PrintNice("|cffaaaaaaNo equipment sets saved. Use the Blizzard Equipment Manager to create one, then re-tick this option.|r")
+            PrintNice(
+                "|cffaaaaaaNo equipment sets saved. Use the Blizzard Equipment Manager to create one, then re-tick this option.|r"
+            )
         end
         return 0
     end
@@ -2818,12 +2828,19 @@ function EC_compCache.syncEquipmentSets(silent)
     end
     if not silent then
         if added > 0 then
-            PrintNicef("|cffb6ffb6Auto-protected %d item%s from %d equipment set%s.|r",
-                added, added == 1 and "" or "s",
-                sets, sets == 1 and "" or "s")
+            PrintNicef(
+                "|cffb6ffb6Auto-protected %d item%s from %d equipment set%s.|r",
+                added,
+                added == 1 and "" or "s",
+                sets,
+                sets == 1 and "" or "s"
+            )
         else
-            PrintNicef("|cffaaaaaaScanned %d equipment set%s; all items already on the keep list.|r",
-                sets, sets == 1 and "" or "s")
+            PrintNicef(
+                "|cffaaaaaaScanned %d equipment set%s; all items already on the keep list.|r",
+                sets,
+                sets == 1 and "" or "s"
+            )
         end
     end
     return added
@@ -3172,9 +3189,10 @@ local function EC_ShowItemContextMenu(button)
     --      needed. This is the "if exact-rank dupes is enabled then
     --      Allow Sell isn't required" rule from the user spec.
     local procAllowed = hasProc and ADB.allowedItems and ADB.allowedItems[itemID] == true
-    local affixManualAllowed = hasAffix and affixKey
-        and ADB.allowedAffixes and ADB.allowedAffixes[affixKey] == true
-    local affixAutoAllowed = hasAffix and affixData and affixData.description
+    local affixManualAllowed = hasAffix and affixKey and ADB.allowedAffixes and ADB.allowedAffixes[affixKey] == true
+    local affixAutoAllowed = hasAffix
+        and affixData
+        and affixData.description
         and DB.affixAllowExactDupes
         and EC_compCache.playerHasAffixDescription
         and EC_compCache.playerHasAffixDescription(affixData.description)
@@ -4109,24 +4127,16 @@ local function EC_IsSellable(bag, slot, junkOnly)
     -- DB.affixAllowExactDupes ON lets the item fall through to the
     -- existing sell / delete rules. Different ranks of the same
     -- affix stay protected so the player can still collect all four.
-    if
-        (whitelistPass or qualityPass)
-        and DB.protectAffixedRareItems
-        and quality
-        and quality >= 3
-    then
+    if (whitelistPass or qualityPass) and DB.protectAffixedRareItems and quality and quality >= 3 then
         local affix = EC_compCache.bagSlotAffixData(bag, slot)
         if affix then
             -- v2.27.0: affix-keyed Allow Sell. Marking via Alt+Right-
             -- Click stores the affix description (not the itemID) so
             -- every future drop rolling that affix passes through the
             -- gate, regardless of base item.
-            local affixKey = affix.description
-                and EC_compCache.normaliseAffixDesc(affix.description)
-            local manualAllow = affixKey
-                and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
-            local autoDupe = DB.affixAllowExactDupes
-                and EC_compCache.playerHasAffixDescription(affix.description)
+            local affixKey = affix.description and EC_compCache.normaliseAffixDesc(affix.description)
+            local manualAllow = affixKey and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
+            local autoDupe = DB.affixAllowExactDupes and EC_compCache.playerHasAffixDescription(affix.description)
             if not (manualAllow or autoDupe) then
                 return false
             end
@@ -4141,11 +4151,7 @@ local function EC_IsSellable(bag, slot, junkOnly)
     -- already extracted the proc spell and want to dump the now-
     -- worthless base. Explicit user intent overrides the safety net;
     -- only the auto-rule sweep (qualityPass) is gated.
-    if
-        qualityPass
-        and DB.protectChanceOnHitItems
-        and EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
-    then
+    if qualityPass and DB.protectChanceOnHitItems and EC_compCache.itemHasChanceOnHit(bag, slot, itemID) then
         -- v2.26.0: chance-on-hit allow list. Items the user has
         -- marked via Alt+Right-Click -> "Allow Sell" fall through to
         -- the normal sell / DE rules. Unmarked items stay protected.
@@ -4651,7 +4657,8 @@ end
 -- can't disagree with the live decision unless one falls out of sync; if you
 -- touch EC_IsSellable, update this helper alongside.
 
-EC_compCache.qualityNames = { [0] = "Junk", [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic", [5] = "Legendary" }
+EC_compCache.qualityNames =
+    { [0] = "Junk", [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic", [5] = "Legendary" }
 
 function EC_compCache.describeSellability(bag, slot)
     local steps = {}
@@ -4661,7 +4668,11 @@ function EC_compCache.describeSellability(bag, slot)
 
     local itemID = GetContainerItemID(bag, slot)
     if not itemID then
-        return { steps = { { name = "slot", passed = false, detail = "empty" } }, wouldSell = false, summary = "Empty slot" }
+        return {
+            steps = { { name = "slot", passed = false, detail = "empty" } },
+            wouldSell = false,
+            summary = "Empty slot",
+        }
     end
 
     local _, itemCount, locked = GetContainerItemInfo(bag, slot)
@@ -4672,8 +4683,18 @@ function EC_compCache.describeSellability(bag, slot)
 
     local name, link, quality, ilvl, _, _, _, _, equipLoc, _, sellPrice = GetItemInfo(itemID)
     local qName = EC_compCache.qualityNames[quality or -1] or tostring(quality)
-    step("item", true, string.format("%s |cffaaaaaa[id=%d, quality=%s, ilvl=%s, sellPrice=%s]|r",
-        link or name or "?", itemID, qName, tostring(ilvl or 0), tostring(sellPrice or 0)))
+    step(
+        "item",
+        true,
+        string.format(
+            "%s |cffaaaaaa[id=%d, quality=%s, ilvl=%s, sellPrice=%s]|r",
+            link or name or "?",
+            itemID,
+            qName,
+            tostring(ilvl or 0),
+            tostring(sellPrice or 0)
+        )
+    )
 
     if locked then
         step("locked", false, "slot is locked (mid-pickup) — sell would skip this tick")
@@ -4706,8 +4727,10 @@ function EC_compCache.describeSellability(bag, slot)
         local rule = DB.qualityRules[quality]
         if rule and rule.enabled then
             if rule.useEquippedILvl then
-                if EC_compCache.isDowngradeVsEquipped
-                    and EC_compCache.isDowngradeVsEquipped(itemID, ilvl, equipLoc) then
+                if
+                    EC_compCache.isDowngradeVsEquipped
+                    and EC_compCache.isDowngradeVsEquipped(itemID, ilvl, equipLoc)
+                then
                     qualityPass = true
                     qualityDetail = string.format("%s, ilvl=%s below equipped slot", qName, tostring(ilvl))
                 else
@@ -4723,7 +4746,8 @@ function EC_compCache.describeSellability(bag, slot)
                     qualityPass = true
                     qualityDetail = string.format("%s, ilvl=%d <= cap=%d", qName, ilvl, cap)
                 elseif not hasVisibleILvl then
-                    qualityDetail = string.format("%s, no visible ilvl (reagent/consumable/etc — protected from cap)", qName)
+                    qualityDetail =
+                        string.format("%s, no visible ilvl (reagent/consumable/etc — protected from cap)", qName)
                 else
                     qualityDetail = string.format("%s, ilvl=%d > cap=%d", qName, ilvl, cap)
                 end
@@ -4734,7 +4758,8 @@ function EC_compCache.describeSellability(bag, slot)
                     local bindType = EC_compCache.getBindType and EC_compCache.getBindType(bag, slot) or "any"
                     if bindFilter ~= bindType then
                         qualityPass = false
-                        qualityDetail = qualityDetail .. string.format(" — bindFilter=%s but item is %s", bindFilter, bindType)
+                        qualityDetail = qualityDetail
+                            .. string.format(" — bindFilter=%s but item is %s", bindFilter, bindType)
                     else
                         qualityDetail = qualityDetail .. string.format(", bindFilter=%s match", bindFilter)
                     end
@@ -4768,9 +4793,7 @@ function EC_compCache.describeSellability(bag, slot)
     end
 
     local affixProtected = false
-    if (whitelistPass or qualityPass)
-        and DB and DB.protectAffixedRareItems
-        and quality and quality >= 3 then
+    if (whitelistPass or qualityPass) and DB and DB.protectAffixedRareItems and quality and quality >= 3 then
         local affix = EC_compCache.bagSlotAffixData and EC_compCache.bagSlotAffixData(bag, slot)
         if affix then
             local affixKey = affix.description
@@ -4796,9 +4819,13 @@ function EC_compCache.describeSellability(bag, slot)
     end
 
     local procProtected = false
-    if qualityPass and DB and DB.protectChanceOnHitItems
+    if
+        qualityPass
+        and DB
+        and DB.protectChanceOnHitItems
         and EC_compCache.itemHasChanceOnHit
-        and EC_compCache.itemHasChanceOnHit(bag, slot, itemID) then
+        and EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
+    then
         if ADB and ADB.allowedItems and ADB.allowedItems[itemID] then
             step("chanceOnHitProtection", true, "chance-on-hit proc, but item allow-listed")
         else
@@ -5095,10 +5122,8 @@ local function EC_AnnotateTooltip(tooltip)
                             ilvl
                         )
                     elseif cap == 0 then
-                        statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffb6ffb6Will Sell - %s (no iLvl cap)|r",
-                            rarityName
-                        )
+                        statusLine =
+                            string.format("|cff66ccff[EC]|r |cffb6ffb6Will Sell - %s (no iLvl cap)|r", rarityName)
                     else
                         statusLine = string.format(
                             "|cff66ccff[EC]|r |cffb6ffb6Will Sell - %s iLvl %d (cap %d)|r",
@@ -5120,10 +5145,8 @@ local function EC_AnnotateTooltip(tooltip)
                     -- Both cases mean "kept because this could be useful";
                     -- "Potential Upgrade" is the user-friendly framing.
                     if not hasVisibleILvl then
-                        statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffffb84dProtected - %s has no iLvl|r",
-                            rarityName
-                        )
+                        statusLine =
+                            string.format("|cff66ccff[EC]|r |cffffb84dProtected - %s has no iLvl|r", rarityName)
                     else
                         statusLine = string.format(
                             "|cff66ccff[EC]|r |cffffb84dProtected - %s iLvl %d (Potential Upgrade)|r",
@@ -5189,12 +5212,9 @@ local function EC_AnnotateTooltip(tooltip)
                     ADB.affixedListedItems = ADB.affixedListedItems or {}
                     ADB.affixedListedItems[id] = true
                 end
-                local affixKey = affix.description
-                    and EC_compCache.normaliseAffixDesc(affix.description)
-                local manualAllow = affixKey
-                    and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
-                local autoDupe = DB.affixAllowExactDupes
-                    and EC_compCache.playerHasAffixDescription(affix.description)
+                local affixKey = affix.description and EC_compCache.normaliseAffixDesc(affix.description)
+                local manualAllow = affixKey and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
+                local autoDupe = DB.affixAllowExactDupes and EC_compCache.playerHasAffixDescription(affix.description)
                 if manualAllow or autoDupe then
                     -- v2.27.0: list-destination label wins over the
                     -- auto-dupe info text. The destination tells the
@@ -6035,9 +6055,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
                 row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, rowY)
                 -- v2.27.0: append "(affix-gated)" tag when the entry
                 -- was added because the item carries a random affix.
-                local affixTag = (affixSet and affixSet[id])
-                    and " |cffaaaaaa(affix-gated)|r"
-                    or ""
+                local affixTag = (affixSet and affixSet[id]) and " |cffaaaaaa(affix-gated)|r" or ""
                 row.text:SetText(string.format("|cffb6ffb6%d|r  %s%s", id, name, affixTag))
                 row.rm:SetScript("OnClick", function()
                     local t = EC_GetListTable(setTableName)
@@ -6955,408 +6973,415 @@ MerchantPanel:SetScript("OnShow", function(self)
             end
         end
     end, function(self, content)
-    MakeHeader(content, "Merchant Settings", -16)
-    -- Panel-specific intro only. Generic "grey junk auto-sells" cross-cut
-    -- removed; it's covered on the Main panel.
-    MakeLabel(content, "Tune which items auto-sell and at which merchants.", 16, -44)
+        MakeHeader(content, "Merchant Settings", -16)
+        -- Panel-specific intro only. Generic "grey junk auto-sells" cross-cut
+        -- removed; it's covered on the Main panel.
+        MakeLabel(content, "Tune which items auto-sell and at which merchants.", 16, -44)
 
-    -- Merchant mode dropdown
-    local modeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    modeLabel:SetPoint("TOPLEFT", 16, -76)
-    modeLabel:SetText("Sell at:")
+        -- Merchant mode dropdown
+        local modeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        modeLabel:SetPoint("TOPLEFT", 16, -76)
+        modeLabel:SetText("Sell at:")
 
-    local modeDD = CreateFrame("Frame", "EbonClearanceMerchantModeDD", content, "UIDropDownMenuTemplate")
-    modeDD:SetPoint("LEFT", modeLabel, "RIGHT", -8, -2)
+        local modeDD = CreateFrame("Frame", "EbonClearanceMerchantModeDD", content, "UIDropDownMenuTemplate")
+        modeDD:SetPoint("LEFT", modeLabel, "RIGHT", -8, -2)
 
-    local function GetModeText(mode)
-        for _, entry in ipairs(EC_MERCHANT_MODES) do
-            if entry.value == mode then
-                return entry.text
-            end
-        end
-        return EC_MERCHANT_MODES[1].text
-    end
-
-    local function MerchantModeInit(_frame, level)
-        for _, entry in ipairs(EC_MERCHANT_MODES) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = entry.text
-            info.value = entry.value
-            info.checked = (DB.merchantMode == entry.value)
-            info.func = function()
-                DB.merchantMode = entry.value
-                UIDropDownMenu_SetText(modeDD, entry.text)
-                PlaySound("igMainMenuOptionCheckBoxOn")
-            end
-            UIDropDownMenu_AddButton(info, level)
-        end
-    end
-
-    UIDropDownMenu_SetWidth(modeDD, 180)
-    UIDropDownMenu_SetText(modeDD, GetModeText(DB.merchantMode))
-    UIDropDownMenu_Initialize(modeDD, MerchantModeInit)
-
-    self.RefreshMerchantModeDropDown = function()
-        UIDropDownMenu_SetText(modeDD, GetModeText(DB.merchantMode))
-    end
-
-    local repairCB =
-        CreateFrame("CheckButton", "EbonClearanceRepairGearCB", content, "InterfaceOptionsCheckButtonTemplate")
-    -- Shifted up 14 px (was -110) to follow the removed grey-junk line above
-    -- the dropdown; preserves the original visual gap between dropdown and
-    -- this checkbox.
-    repairCB:SetPoint("TOPLEFT", 16, -96)
-    repairCB:SetChecked(DB.repairGear)
-    local rt = _G[repairCB:GetName() .. "Text"]
-    if rt then
-        rt:SetText("Repair gear while vendoring")
-        rt:SetWidth(420)
-        rt:SetJustifyH("LEFT")
-    end
-    repairCB:SetScript("OnClick", function()
-        DB.repairGear = repairCB:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    self.repairCB = repairCB
-
-    -- Guild-bank funded repair. Indented under the master repair toggle so
-    -- the visual hierarchy reads "repair, and prefer guild bank if I can".
-    -- The runtime path falls back to personal gold whenever the bank can't
-    -- supply the full amount, so toggling this on is safe even on alts who
-    -- aren't in a guild.
-    local guildRepairCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceRepairGuildBankCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    guildRepairCB:SetPoint("TOPLEFT", repairCB, "BOTTOMLEFT", 22, -2)
-    guildRepairCB:SetChecked(DB.repairUseGuildBank)
-    local grt = _G[guildRepairCB:GetName() .. "Text"]
-    if grt then
-        grt:SetText("Use guild bank funds when available")
-        EC_compCache.setPanelWidth(grt, 80)
-        grt:SetJustifyH("LEFT")
-    end
-    guildRepairCB:SetScript("OnClick", function()
-        DB.repairUseGuildBank = guildRepairCB:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    self.guildRepairCB = guildRepairCB
-
-    local keepBagsCB =
-        CreateFrame("CheckButton", "EbonClearanceKeepBagsOpenCB", content, "InterfaceOptionsCheckButtonTemplate")
-    keepBagsCB:SetPoint("TOPLEFT", guildRepairCB, "BOTTOMLEFT", -22, -6)
-    keepBagsCB:SetChecked(DB.keepBagsOpen)
-    local kbt = _G[keepBagsCB:GetName() .. "Text"]
-    if kbt then
-        kbt:SetText("Keep bags open when merchant window closes")
-        EC_compCache.setPanelWidth(kbt, 60)
-        kbt:SetJustifyH("LEFT")
-    end
-    keepBagsCB:SetScript("OnClick", function()
-        DB.keepBagsOpen = keepBagsCB:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    self.keepBagsCB = keepBagsCB
-
-    local speedSlider = AddSlider(
-        content,
-        "EbonClearanceVendoringSpeedSlider",
-        keepBagsCB,
-        "Vendoring Speed",
-        0.05,
-        0.500,
-        0.01,
-        function()
-            return DB.vendorInterval or 0.1
-        end,
-        function(v)
-            DB.vendorInterval = v
-        end,
-        -16
-    )
-    self.speedSlider = speedSlider
-    speedSlider:SetWidth(200)
-
-    local fastModeCB = AddCheckbox(
-        content,
-        "EbonClearanceFastModeCB",
-        speedSlider,
-        "Fast Mode (0.05 s interval, 160-item cap)",
-        function()
-            return DB.fastMode
-        end,
-        function(v)
-            DB.fastMode = v
-        end,
-        -16
-    )
-    self.fastModeCB = fastModeCB
-
-    local fastModeNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    fastModeNote:SetPoint("TOPLEFT", fastModeCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(fastModeNote, 60)
-    fastModeNote:SetJustifyH("LEFT")
-    if fastModeNote.SetWordWrap then
-        fastModeNote:SetWordWrap(true)
-    end
-    fastModeNote:SetText(
-        "|cff888888Higher throughput. Increases disconnect risk on unstable connections - disable if you DC mid-vendor.|r"
-    )
-
-    -- Quality threshold (v2.4.0+): three per-rarity rows, each independently
-    -- togglable with its own optional max iLvl. Replaces the old single-dropdown
-    -- "sell up to quality X" model. Default all off; opt-in per rarity.
-    local thresholdHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    thresholdHeader:SetPoint("TOPLEFT", fastModeNote, "BOTTOMLEFT", -26, -24)
-    thresholdHeader:SetText("Quality Threshold")
-
-    local thresholdDesc = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    thresholdDesc:SetPoint("TOPLEFT", thresholdHeader, "BOTTOMLEFT", 0, -4)
-    EC_compCache.setPanelWidth(thresholdDesc, 16)
-    thresholdDesc:SetJustifyH("LEFT")
-    if thresholdDesc.SetWordWrap then
-        thresholdDesc:SetWordWrap(true)
-    end
-    thresholdDesc:SetText(
-        "Auto-sell rules per rarity. Each rarity has its own toggle, an optional cap, and a bind-type filter. Tick |cffffff00Use equipped iLvl|r for a dynamic cap that follows your equipped iLvl in the same slot (recommended; default ON for whites/greens on fresh installs). Untick for a fixed |cffffff00max iLvl|r - 0 = sell every item of that rarity. |cffaaaaaaSell List always sells; Keep List always protects.|r"
-    )
-
-    -- v2.10.0: bind-type filter options shared across all four rarity rows.
-    -- "any" = today's behaviour (rule applies regardless of bind type);
-    -- "boe" / "bop" restrict to items the tooltip says bind on equip /
-    -- on pickup. Items with no bind line at all read as "any" from
-    -- EC_compCache.getBindType so reagents/consumables/quest items are
-    -- protected when bindFilter is "boe" or "bop".
-    local EC_BIND_FILTER_OPTIONS = {
-        { text = "Any bind type", value = "any" },
-        { text = "BoE only", value = "boe" },
-        { text = "BoP only", value = "bop" },
-    }
-    local function EC_BindFilterText(value)
-        for _, entry in ipairs(EC_BIND_FILTER_OPTIONS) do
-            if entry.value == value then
-                return entry.text
-            end
-        end
-        return EC_BIND_FILTER_OPTIONS[1].text
-    end
-
-    -- Build a row per rarity. Each row: checkbox on the left, "max iLvl:"
-    -- label + numeric input on the right (0-300). Below the checkbox, a
-    -- "Bind: <Any/BoE/BoP>" dropdown that gates the rule on bind type.
-    -- Returns the bind dropdown so the next row's anchor descends past
-    -- the second line cleanly.
-    local function MakeQualityRow(anchor, qualityIdx, labelText, yOff)
-        local cb = AddCheckbox(content, "EbonClearanceQualityRow" .. qualityIdx .. "CB", anchor, labelText, function()
-            return DB.qualityRules[qualityIdx].enabled
-        end, function(v)
-            DB.qualityRules[qualityIdx].enabled = v
-        end, yOff)
-
-        local input =
-            CreateFrame("EditBox", "EbonClearanceQualityRow" .. qualityIdx .. "Input", content, "InputBoxTemplate")
-        input:SetSize(50, 20)
-        -- Anchored to content's right edge with a small margin. Content's
-        -- right edge already sits 26 px inside the panel (scrollbar gutter),
-        -- so -6 here matches the original panel-anchored -32 offset visually.
-        input:SetPoint("RIGHT", content, "RIGHT", -6, 0)
-        input:SetPoint("TOP", cb, "TOP", 0, -2)
-        input:SetAutoFocus(false)
-        input:SetNumeric(true)
-        input:SetMaxLetters(3)
-        input:SetText(tostring(DB.qualityRules[qualityIdx].maxILvl or 0))
-        StyleInputBox(input)
-
-        local lbl = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        lbl:SetPoint("RIGHT", input, "LEFT", -6, 0)
-        lbl:SetText("max iLvl:")
-
-        -- v2.12.0: per-rarity "Use equipped iLvl" tickbox. When checked,
-        -- the maxILvl input is ignored at runtime and the cap is the
-        -- player's currently-equipped iLvl in the same slot (per-item
-        -- via EC_compCache.isDowngradeVsEquipped). The input is visibly
-        -- disabled while this is checked so the user understands the
-        -- maxILvl number isn't being applied.
-        local useEqCB = CreateFrame(
-            "CheckButton",
-            "EbonClearanceQualityRow" .. qualityIdx .. "UseEqCB",
-            content,
-            "InterfaceOptionsCheckButtonTemplate"
-        )
-        useEqCB:SetPoint("RIGHT", lbl, "LEFT", -8, 0)
-        useEqCB:SetChecked(DB.qualityRules[qualityIdx].useEquippedILvl == true)
-        -- The InterfaceOptionsCheckButtonTemplate auto-creates a label
-        -- to the RIGHT of the box; that label would extend rightward
-        -- into the "max iLvl:" field on this layout. Blank the
-        -- auto-generated label and place a separate FontString to the
-        -- LEFT of the box instead so the row reads
-        -- "<rarity>  Use equipped iLvl [✓]  max iLvl: [   ]".
-        local autoLabel = _G[useEqCB:GetName() .. "Text"]
-        if autoLabel then
-            autoLabel:SetText("")
-        end
-        local useEqText = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        useEqText:SetPoint("RIGHT", useEqCB, "LEFT", -2, 0)
-        useEqText:SetText("Use equipped iLvl")
-
-        -- Re-anchor the rarity-row checkbox's auto-label so its right edge
-        -- is bounded by the "Use equipped iLvl" text's left edge. The
-        -- shared AddCheckbox helper applies a fixed 420 px label width
-        -- which fits the wider Main / Protection Settings panels but
-        -- overruns the right-anchored max-iLvl input on this row at
-        -- narrow panel widths. Anchoring instead of fixed-width lets the
-        -- rarity name truncate cleanly rather than visually colliding
-        -- with the iLvl controls.
-        local rowLabel = _G[cb:GetName() .. "Text"]
-        if rowLabel then
-            rowLabel:ClearAllPoints()
-            rowLabel:SetPoint("LEFT", cb, "RIGHT", 4, 1)
-            rowLabel:SetPoint("RIGHT", useEqText, "LEFT", -8, 0)
-            rowLabel:SetJustifyH("LEFT")
-            if rowLabel.SetWordWrap then
-                rowLabel:SetWordWrap(false)
-            end
-            if rowLabel.SetNonSpaceWrap then
-                rowLabel:SetNonSpaceWrap(false)
-            end
-        end
-
-        useEqCB.tooltipText = "Use equipped iLvl"
-        useEqCB.tooltipRequirement =
-            "When checked, the cap for this rarity is your currently-equipped iLvl in the same slot. "
-            .. "Items below auto-sell. Multi-slot items (rings, trinkets, weapons) compare against the "
-            .. "worst equipped slot. Empty slots are skipped."
-
-        local function applyInputEnabled()
-            local on = DB.qualityRules[qualityIdx].useEquippedILvl == true
-            if on then
-                -- 3.3.5a EditBox doesn't expose Enable/Disable - use
-                -- SetEditable + EnableMouse to actually block input,
-                -- and grey both the field text and the "max iLvl:" label
-                -- so the disabled state is obvious.
-                if input.SetEditable then
-                    input:SetEditable(false)
-                end
-                input:EnableMouse(false)
-                if input.HasFocus and input:HasFocus() then
-                    input:ClearFocus()
-                end
-                input:SetTextColor(0.5, 0.5, 0.5)
-                if lbl.SetTextColor then
-                    lbl:SetTextColor(0.5, 0.5, 0.5)
-                end
-            else
-                if input.SetEditable then
-                    input:SetEditable(true)
-                end
-                input:EnableMouse(true)
-                input:SetTextColor(1, 1, 1)
-                if lbl.SetTextColor then
-                    lbl:SetTextColor(1, 0.82, 0)
+        local function GetModeText(mode)
+            for _, entry in ipairs(EC_MERCHANT_MODES) do
+                if entry.value == mode then
+                    return entry.text
                 end
             end
+            return EC_MERCHANT_MODES[1].text
         end
-        applyInputEnabled()
 
-        useEqCB:SetScript("OnClick", function(self_)
-            DB.qualityRules[qualityIdx].useEquippedILvl = self_:GetChecked() and true or false
-            applyInputEnabled()
-            PlaySound("igMainMenuOptionCheckBoxOn")
-        end)
-        cb._applyInputEnabled = applyInputEnabled
-
-        local function commit()
-            local v = tonumber(input:GetText() or "0") or 0
-            if v < 0 then
-                v = 0
-            end
-            if v > 300 then
-                v = 300
-            end
-            DB.qualityRules[qualityIdx].maxILvl = v
-            input:SetText(tostring(v))
-        end
-        input:SetScript("OnEnterPressed", function()
-            input:ClearFocus()
-        end)
-        input:SetScript("OnEscapePressed", function()
-            input:SetText(tostring(DB.qualityRules[qualityIdx].maxILvl or 0))
-            input:ClearFocus()
-        end)
-        input:SetScript("OnEditFocusLost", commit)
-
-        -- Bind-type filter dropdown on a second line below the checkbox.
-        -- Indented to align with the checkbox label so the rule reads as
-        -- "[x] Blue (Rare) max iLvl: [200] / Bind: [Any bind type]".
-        local bindLbl = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        bindLbl:SetPoint("TOPLEFT", cb, "BOTTOMLEFT", 26, -4)
-        bindLbl:SetText("Bind:")
-
-        local bindDD = CreateFrame(
-            "Frame",
-            "EbonClearanceQualityRow" .. qualityIdx .. "BindDD",
-            content,
-            "UIDropDownMenuTemplate"
-        )
-        bindDD:SetPoint("LEFT", bindLbl, "RIGHT", -8, -2)
-
-        local function BindFilterInit(_frame, _level)
-            for _, entry in ipairs(EC_BIND_FILTER_OPTIONS) do
+        local function MerchantModeInit(_frame, level)
+            for _, entry in ipairs(EC_MERCHANT_MODES) do
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = entry.text
                 info.value = entry.value
-                info.checked = (DB.qualityRules[qualityIdx].bindFilter == entry.value)
+                info.checked = (DB.merchantMode == entry.value)
                 info.func = function()
-                    DB.qualityRules[qualityIdx].bindFilter = entry.value
-                    UIDropDownMenu_SetText(bindDD, entry.text)
+                    DB.merchantMode = entry.value
+                    UIDropDownMenu_SetText(modeDD, entry.text)
                     PlaySound("igMainMenuOptionCheckBoxOn")
                 end
-                UIDropDownMenu_AddButton(info, _level)
+                UIDropDownMenu_AddButton(info, level)
             end
         end
-        UIDropDownMenu_SetWidth(bindDD, 120)
-        UIDropDownMenu_SetText(bindDD, EC_BindFilterText(DB.qualityRules[qualityIdx].bindFilter))
-        UIDropDownMenu_Initialize(bindDD, BindFilterInit)
 
-        return cb, input, bindDD, useEqCB
-    end
+        UIDropDownMenu_SetWidth(modeDD, 180)
+        UIDropDownMenu_SetText(modeDD, GetModeText(DB.merchantMode))
+        UIDropDownMenu_Initialize(modeDD, MerchantModeInit)
 
-    -- All four rarity rows anchor their checkbox to the threshold description,
-    -- not to the previous row's dropdown. The dropdown's left edge is offset
-    -- by the UIDropDownMenuTemplate's internal padding (~16 px), and chaining
-    -- row N to row N-1's dropdown made each successive row staircase right.
-    -- A single shared anchor with explicit -y offsets keeps every checkbox,
-    -- bind label, and dropdown on the same X column.
-    --
-    -- Per-row vertical budget: ~28 px (checkbox + label) + ~6 px gap + ~30 px
-    -- dropdown frame + ~10 px gap to next row = ~74 px. -78 leaves a small
-    -- breathing margin between rows without overlapping the dropdown's
-    -- bottom shadow.
-    local row1CB, row1Input, row1DD, row1UseEq = MakeQualityRow(thresholdDesc, 1, EC_WHITELIST_QUALITIES[1].text, -10)
-    local row2CB, row2Input, row2DD, row2UseEq = MakeQualityRow(thresholdDesc, 2, EC_WHITELIST_QUALITIES[2].text, -88)
-    local row3CB, row3Input, row3DD, row3UseEq = MakeQualityRow(thresholdDesc, 3, EC_WHITELIST_QUALITIES[3].text, -166)
-    local row4CB, row4Input, row4DD, row4UseEq = MakeQualityRow(thresholdDesc, 4, EC_WHITELIST_QUALITIES[4].text, -244)
+        self.RefreshMerchantModeDropDown = function()
+            UIDropDownMenu_SetText(modeDD, GetModeText(DB.merchantMode))
+        end
 
-    self.qualityRow1CB, self.qualityRow1Input, self.qualityRow1DD, self.qualityRow1UseEq =
-        row1CB, row1Input, row1DD, row1UseEq
-    self.qualityRow2CB, self.qualityRow2Input, self.qualityRow2DD, self.qualityRow2UseEq =
-        row2CB, row2Input, row2DD, row2UseEq
-    self.qualityRow3CB, self.qualityRow3Input, self.qualityRow3DD, self.qualityRow3UseEq =
-        row3CB, row3Input, row3DD, row3UseEq
-    self.qualityRow4CB, self.qualityRow4Input, self.qualityRow4DD, self.qualityRow4UseEq =
-        row4CB, row4Input, row4DD, row4UseEq
+        local repairCB =
+            CreateFrame("CheckButton", "EbonClearanceRepairGearCB", content, "InterfaceOptionsCheckButtonTemplate")
+        -- Shifted up 14 px (was -110) to follow the removed grey-junk line above
+        -- the dropdown; preserves the original visual gap between dropdown and
+        -- this checkbox.
+        repairCB:SetPoint("TOPLEFT", 16, -96)
+        repairCB:SetChecked(DB.repairGear)
+        local rt = _G[repairCB:GetName() .. "Text"]
+        if rt then
+            rt:SetText("Repair gear while vendoring")
+            rt:SetWidth(420)
+            rt:SetJustifyH("LEFT")
+        end
+        repairCB:SetScript("OnClick", function()
+            DB.repairGear = repairCB:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.repairCB = repairCB
 
-    -- Stash the BindFilterText helper on the panel so the inited refresh
-    -- block can update each dropdown's display text without re-defining
-    -- the option set.
-    self._BindFilterText = EC_BindFilterText
+        -- Guild-bank funded repair. Indented under the master repair toggle so
+        -- the visual hierarchy reads "repair, and prefer guild bank if I can".
+        -- The runtime path falls back to personal gold whenever the bank can't
+        -- supply the full amount, so toggling this on is safe even on alts who
+        -- aren't in a guild.
+        local guildRepairCB =
+            CreateFrame("CheckButton", "EbonClearanceRepairGuildBankCB", content, "InterfaceOptionsCheckButtonTemplate")
+        guildRepairCB:SetPoint("TOPLEFT", repairCB, "BOTTOMLEFT", 22, -2)
+        guildRepairCB:SetChecked(DB.repairUseGuildBank)
+        local grt = _G[guildRepairCB:GetName() .. "Text"]
+        if grt then
+            grt:SetText("Use guild bank funds when available")
+            EC_compCache.setPanelWidth(grt, 80)
+            grt:SetJustifyH("LEFT")
+        end
+        guildRepairCB:SetScript("OnClick", function()
+            DB.repairUseGuildBank = guildRepairCB:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.guildRepairCB = guildRepairCB
 
-    -- Size the scroll content to fit the bottom-most widget so the scrollbar
-    -- range matches actual content. Purple Epic's bind dropdown is now the
-    -- lowest widget on the panel.
-    EC_FitScrollContent(content, row4DD)
+        local keepBagsCB =
+            CreateFrame("CheckButton", "EbonClearanceKeepBagsOpenCB", content, "InterfaceOptionsCheckButtonTemplate")
+        keepBagsCB:SetPoint("TOPLEFT", guildRepairCB, "BOTTOMLEFT", -22, -6)
+        keepBagsCB:SetChecked(DB.keepBagsOpen)
+        local kbt = _G[keepBagsCB:GetName() .. "Text"]
+        if kbt then
+            kbt:SetText("Keep bags open when merchant window closes")
+            EC_compCache.setPanelWidth(kbt, 60)
+            kbt:SetJustifyH("LEFT")
+        end
+        keepBagsCB:SetScript("OnClick", function()
+            DB.keepBagsOpen = keepBagsCB:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.keepBagsCB = keepBagsCB
+
+        local speedSlider = AddSlider(
+            content,
+            "EbonClearanceVendoringSpeedSlider",
+            keepBagsCB,
+            "Vendoring Speed",
+            0.05,
+            0.500,
+            0.01,
+            function()
+                return DB.vendorInterval or 0.1
+            end,
+            function(v)
+                DB.vendorInterval = v
+            end,
+            -16
+        )
+        self.speedSlider = speedSlider
+        speedSlider:SetWidth(200)
+
+        local fastModeCB = AddCheckbox(
+            content,
+            "EbonClearanceFastModeCB",
+            speedSlider,
+            "Fast Mode (0.05 s interval, 160-item cap)",
+            function()
+                return DB.fastMode
+            end,
+            function(v)
+                DB.fastMode = v
+            end,
+            -16
+        )
+        self.fastModeCB = fastModeCB
+
+        local fastModeNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        fastModeNote:SetPoint("TOPLEFT", fastModeCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(fastModeNote, 60)
+        fastModeNote:SetJustifyH("LEFT")
+        if fastModeNote.SetWordWrap then
+            fastModeNote:SetWordWrap(true)
+        end
+        fastModeNote:SetText(
+            "|cff888888Higher throughput. Increases disconnect risk on unstable connections - disable if you DC mid-vendor.|r"
+        )
+
+        -- Quality threshold (v2.4.0+): three per-rarity rows, each independently
+        -- togglable with its own optional max iLvl. Replaces the old single-dropdown
+        -- "sell up to quality X" model. Default all off; opt-in per rarity.
+        local thresholdHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        thresholdHeader:SetPoint("TOPLEFT", fastModeNote, "BOTTOMLEFT", -26, -24)
+        thresholdHeader:SetText("Quality Threshold")
+
+        local thresholdDesc = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        thresholdDesc:SetPoint("TOPLEFT", thresholdHeader, "BOTTOMLEFT", 0, -4)
+        EC_compCache.setPanelWidth(thresholdDesc, 16)
+        thresholdDesc:SetJustifyH("LEFT")
+        if thresholdDesc.SetWordWrap then
+            thresholdDesc:SetWordWrap(true)
+        end
+        thresholdDesc:SetText(
+            "Auto-sell rules per rarity. Each rarity has its own toggle, an optional cap, and a bind-type filter. Tick |cffffff00Use equipped iLvl|r for a dynamic cap that follows your equipped iLvl in the same slot (recommended; default ON for whites/greens on fresh installs). Untick for a fixed |cffffff00max iLvl|r - 0 = sell every item of that rarity. |cffaaaaaaSell List always sells; Keep List always protects.|r"
+        )
+
+        -- v2.10.0: bind-type filter options shared across all four rarity rows.
+        -- "any" = today's behaviour (rule applies regardless of bind type);
+        -- "boe" / "bop" restrict to items the tooltip says bind on equip /
+        -- on pickup. Items with no bind line at all read as "any" from
+        -- EC_compCache.getBindType so reagents/consumables/quest items are
+        -- protected when bindFilter is "boe" or "bop".
+        local EC_BIND_FILTER_OPTIONS = {
+            { text = "Any bind type", value = "any" },
+            { text = "BoE only", value = "boe" },
+            { text = "BoP only", value = "bop" },
+        }
+        local function EC_BindFilterText(value)
+            for _, entry in ipairs(EC_BIND_FILTER_OPTIONS) do
+                if entry.value == value then
+                    return entry.text
+                end
+            end
+            return EC_BIND_FILTER_OPTIONS[1].text
+        end
+
+        -- Build a row per rarity. Each row: checkbox on the left, "max iLvl:"
+        -- label + numeric input on the right (0-300). Below the checkbox, a
+        -- "Bind: <Any/BoE/BoP>" dropdown that gates the rule on bind type.
+        -- Returns the bind dropdown so the next row's anchor descends past
+        -- the second line cleanly.
+        local function MakeQualityRow(anchor, qualityIdx, labelText, yOff)
+            local cb = AddCheckbox(
+                content,
+                "EbonClearanceQualityRow" .. qualityIdx .. "CB",
+                anchor,
+                labelText,
+                function()
+                    return DB.qualityRules[qualityIdx].enabled
+                end,
+                function(v)
+                    DB.qualityRules[qualityIdx].enabled = v
+                end,
+                yOff
+            )
+
+            local input =
+                CreateFrame("EditBox", "EbonClearanceQualityRow" .. qualityIdx .. "Input", content, "InputBoxTemplate")
+            input:SetSize(50, 20)
+            -- Anchored to content's right edge with a small margin. Content's
+            -- right edge already sits 26 px inside the panel (scrollbar gutter),
+            -- so -6 here matches the original panel-anchored -32 offset visually.
+            input:SetPoint("RIGHT", content, "RIGHT", -6, 0)
+            input:SetPoint("TOP", cb, "TOP", 0, -2)
+            input:SetAutoFocus(false)
+            input:SetNumeric(true)
+            input:SetMaxLetters(3)
+            input:SetText(tostring(DB.qualityRules[qualityIdx].maxILvl or 0))
+            StyleInputBox(input)
+
+            local lbl = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+            lbl:SetPoint("RIGHT", input, "LEFT", -6, 0)
+            lbl:SetText("max iLvl:")
+
+            -- v2.12.0: per-rarity "Use equipped iLvl" tickbox. When checked,
+            -- the maxILvl input is ignored at runtime and the cap is the
+            -- player's currently-equipped iLvl in the same slot (per-item
+            -- via EC_compCache.isDowngradeVsEquipped). The input is visibly
+            -- disabled while this is checked so the user understands the
+            -- maxILvl number isn't being applied.
+            local useEqCB = CreateFrame(
+                "CheckButton",
+                "EbonClearanceQualityRow" .. qualityIdx .. "UseEqCB",
+                content,
+                "InterfaceOptionsCheckButtonTemplate"
+            )
+            useEqCB:SetPoint("RIGHT", lbl, "LEFT", -8, 0)
+            useEqCB:SetChecked(DB.qualityRules[qualityIdx].useEquippedILvl == true)
+            -- The InterfaceOptionsCheckButtonTemplate auto-creates a label
+            -- to the RIGHT of the box; that label would extend rightward
+            -- into the "max iLvl:" field on this layout. Blank the
+            -- auto-generated label and place a separate FontString to the
+            -- LEFT of the box instead so the row reads
+            -- "<rarity>  Use equipped iLvl [✓]  max iLvl: [   ]".
+            local autoLabel = _G[useEqCB:GetName() .. "Text"]
+            if autoLabel then
+                autoLabel:SetText("")
+            end
+            local useEqText = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+            useEqText:SetPoint("RIGHT", useEqCB, "LEFT", -2, 0)
+            useEqText:SetText("Use equipped iLvl")
+
+            -- Re-anchor the rarity-row checkbox's auto-label so its right edge
+            -- is bounded by the "Use equipped iLvl" text's left edge. The
+            -- shared AddCheckbox helper applies a fixed 420 px label width
+            -- which fits the wider Main / Protection Settings panels but
+            -- overruns the right-anchored max-iLvl input on this row at
+            -- narrow panel widths. Anchoring instead of fixed-width lets the
+            -- rarity name truncate cleanly rather than visually colliding
+            -- with the iLvl controls.
+            local rowLabel = _G[cb:GetName() .. "Text"]
+            if rowLabel then
+                rowLabel:ClearAllPoints()
+                rowLabel:SetPoint("LEFT", cb, "RIGHT", 4, 1)
+                rowLabel:SetPoint("RIGHT", useEqText, "LEFT", -8, 0)
+                rowLabel:SetJustifyH("LEFT")
+                if rowLabel.SetWordWrap then
+                    rowLabel:SetWordWrap(false)
+                end
+                if rowLabel.SetNonSpaceWrap then
+                    rowLabel:SetNonSpaceWrap(false)
+                end
+            end
+
+            useEqCB.tooltipText = "Use equipped iLvl"
+            useEqCB.tooltipRequirement = "When checked, the cap for this rarity is your currently-equipped iLvl in the same slot. "
+                .. "Items below auto-sell. Multi-slot items (rings, trinkets, weapons) compare against the "
+                .. "worst equipped slot. Empty slots are skipped."
+
+            local function applyInputEnabled()
+                local on = DB.qualityRules[qualityIdx].useEquippedILvl == true
+                if on then
+                    -- 3.3.5a EditBox doesn't expose Enable/Disable - use
+                    -- SetEditable + EnableMouse to actually block input,
+                    -- and grey both the field text and the "max iLvl:" label
+                    -- so the disabled state is obvious.
+                    if input.SetEditable then
+                        input:SetEditable(false)
+                    end
+                    input:EnableMouse(false)
+                    if input.HasFocus and input:HasFocus() then
+                        input:ClearFocus()
+                    end
+                    input:SetTextColor(0.5, 0.5, 0.5)
+                    if lbl.SetTextColor then
+                        lbl:SetTextColor(0.5, 0.5, 0.5)
+                    end
+                else
+                    if input.SetEditable then
+                        input:SetEditable(true)
+                    end
+                    input:EnableMouse(true)
+                    input:SetTextColor(1, 1, 1)
+                    if lbl.SetTextColor then
+                        lbl:SetTextColor(1, 0.82, 0)
+                    end
+                end
+            end
+            applyInputEnabled()
+
+            useEqCB:SetScript("OnClick", function(self_)
+                DB.qualityRules[qualityIdx].useEquippedILvl = self_:GetChecked() and true or false
+                applyInputEnabled()
+                PlaySound("igMainMenuOptionCheckBoxOn")
+            end)
+            cb._applyInputEnabled = applyInputEnabled
+
+            local function commit()
+                local v = tonumber(input:GetText() or "0") or 0
+                if v < 0 then
+                    v = 0
+                end
+                if v > 300 then
+                    v = 300
+                end
+                DB.qualityRules[qualityIdx].maxILvl = v
+                input:SetText(tostring(v))
+            end
+            input:SetScript("OnEnterPressed", function()
+                input:ClearFocus()
+            end)
+            input:SetScript("OnEscapePressed", function()
+                input:SetText(tostring(DB.qualityRules[qualityIdx].maxILvl or 0))
+                input:ClearFocus()
+            end)
+            input:SetScript("OnEditFocusLost", commit)
+
+            -- Bind-type filter dropdown on a second line below the checkbox.
+            -- Indented to align with the checkbox label so the rule reads as
+            -- "[x] Blue (Rare) max iLvl: [200] / Bind: [Any bind type]".
+            local bindLbl = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+            bindLbl:SetPoint("TOPLEFT", cb, "BOTTOMLEFT", 26, -4)
+            bindLbl:SetText("Bind:")
+
+            local bindDD = CreateFrame(
+                "Frame",
+                "EbonClearanceQualityRow" .. qualityIdx .. "BindDD",
+                content,
+                "UIDropDownMenuTemplate"
+            )
+            bindDD:SetPoint("LEFT", bindLbl, "RIGHT", -8, -2)
+
+            local function BindFilterInit(_frame, _level)
+                for _, entry in ipairs(EC_BIND_FILTER_OPTIONS) do
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = entry.text
+                    info.value = entry.value
+                    info.checked = (DB.qualityRules[qualityIdx].bindFilter == entry.value)
+                    info.func = function()
+                        DB.qualityRules[qualityIdx].bindFilter = entry.value
+                        UIDropDownMenu_SetText(bindDD, entry.text)
+                        PlaySound("igMainMenuOptionCheckBoxOn")
+                    end
+                    UIDropDownMenu_AddButton(info, _level)
+                end
+            end
+            UIDropDownMenu_SetWidth(bindDD, 120)
+            UIDropDownMenu_SetText(bindDD, EC_BindFilterText(DB.qualityRules[qualityIdx].bindFilter))
+            UIDropDownMenu_Initialize(bindDD, BindFilterInit)
+
+            return cb, input, bindDD, useEqCB
+        end
+
+        -- All four rarity rows anchor their checkbox to the threshold description,
+        -- not to the previous row's dropdown. The dropdown's left edge is offset
+        -- by the UIDropDownMenuTemplate's internal padding (~16 px), and chaining
+        -- row N to row N-1's dropdown made each successive row staircase right.
+        -- A single shared anchor with explicit -y offsets keeps every checkbox,
+        -- bind label, and dropdown on the same X column.
+        --
+        -- Per-row vertical budget: ~28 px (checkbox + label) + ~6 px gap + ~30 px
+        -- dropdown frame + ~10 px gap to next row = ~74 px. -78 leaves a small
+        -- breathing margin between rows without overlapping the dropdown's
+        -- bottom shadow.
+        local row1CB, row1Input, row1DD, row1UseEq =
+            MakeQualityRow(thresholdDesc, 1, EC_WHITELIST_QUALITIES[1].text, -10)
+        local row2CB, row2Input, row2DD, row2UseEq =
+            MakeQualityRow(thresholdDesc, 2, EC_WHITELIST_QUALITIES[2].text, -88)
+        local row3CB, row3Input, row3DD, row3UseEq =
+            MakeQualityRow(thresholdDesc, 3, EC_WHITELIST_QUALITIES[3].text, -166)
+        local row4CB, row4Input, row4DD, row4UseEq =
+            MakeQualityRow(thresholdDesc, 4, EC_WHITELIST_QUALITIES[4].text, -244)
+
+        self.qualityRow1CB, self.qualityRow1Input, self.qualityRow1DD, self.qualityRow1UseEq =
+            row1CB, row1Input, row1DD, row1UseEq
+        self.qualityRow2CB, self.qualityRow2Input, self.qualityRow2DD, self.qualityRow2UseEq =
+            row2CB, row2Input, row2DD, row2UseEq
+        self.qualityRow3CB, self.qualityRow3Input, self.qualityRow3DD, self.qualityRow3UseEq =
+            row3CB, row3Input, row3DD, row3UseEq
+        self.qualityRow4CB, self.qualityRow4Input, self.qualityRow4DD, self.qualityRow4UseEq =
+            row4CB, row4Input, row4DD, row4UseEq
+
+        -- Stash the BindFilterText helper on the panel so the inited refresh
+        -- block can update each dropdown's display text without re-defining
+        -- the option set.
+        self._BindFilterText = EC_BindFilterText
+
+        -- Size the scroll content to fit the bottom-most widget so the scrollbar
+        -- range matches actual content. Purple Epic's bind dropdown is now the
+        -- lowest widget on the panel.
+        EC_FitScrollContent(content, row4DD)
     end, true)
 end)
 
@@ -7469,7 +7494,9 @@ WhitelistPanel:SetScript("OnShow", function(self)
         if descNote.SetWordWrap then
             descNote:SetWordWrap(true)
         end
-        descNote:SetText("|cffaaaaaaProfiles let you swap between different sell lists. For items you want sold on every alt, use |r|cffb6ffb6Account Sell List|r|cffaaaaaa instead.|r")
+        descNote:SetText(
+            "|cffaaaaaaProfiles let you swap between different sell lists. For items you want sold on every alt, use |r|cffb6ffb6Account Sell List|r|cffaaaaaa instead.|r"
+        )
 
         -- Cascade-anchor the scan row to the grey note's BOTTOMLEFT so it stays
         -- below regardless of how many lines the description / note wrap to.
@@ -7500,299 +7527,301 @@ ProfilesPanel:SetScript("OnShow", function(self)
             self:RefreshProfileList()
         end
     end, function(self)
-    MakeHeader(self, "Profiles", -16)
-    local descLabel = MakeLabel(
-        self,
-        "Profiles save and restore your |cffb6ffb6Sell List|r and |cffb6ffb6Keep List|r as a named pair. Switching profiles overwrites the live character lists with the saved snapshot. Handy for swapping between farming spots.",
-        16,
-        -44
-    )
-    -- Cascade-anchored to descLabel so the layout adapts to whatever number of
-    -- lines the description wraps to (fixed-y caused overlap on narrower panels).
-    local clarifyLabel = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    clarifyLabel:SetPoint("TOPLEFT", descLabel, "BOTTOMLEFT", 0, -8)
-    EC_compCache.setPanelWidth(clarifyLabel, 32)
-    clarifyLabel:SetJustifyH("LEFT")
-    clarifyLabel:SetJustifyV("TOP")
-    if clarifyLabel.SetWordWrap then
-        clarifyLabel:SetWordWrap(true)
-    end
-    clarifyLabel:SetText(
-        "|cffaaaaaaProfiles do NOT touch the |cffb6ffb6Account Sell List|r|cffaaaaaa (which is shared across every alt and never replaced). The |cffb6ffb6Default|r|cffaaaaaa profile is permanently empty - give your profile a real name before saving.|r"
-    )
-
-    -- Active profile indicator
-    local activeLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    activeLabel:SetPoint("TOPLEFT", clarifyLabel, "BOTTOMLEFT", 0, -16)
-    EC_compCache.setPanelWidth(activeLabel, 16)
-    activeLabel:SetJustifyH("LEFT")
-    self.activeLabel = activeLabel
-
-    -- Save row: input + Save button (relative to activeLabel so it follows
-    -- whatever the wrap above ends up at).
-    local saveLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    saveLabel:SetPoint("TOPLEFT", activeLabel, "BOTTOMLEFT", 0, -10)
-    saveLabel:SetText("Profile name:")
-
-    local saveInput = CreateFrame("EditBox", "EbonClearanceProfileSaveInput", self, "InputBoxTemplate")
-    saveInput:SetAutoFocus(false)
-    saveInput:SetSize(180, 20)
-    saveInput:SetPoint("LEFT", saveLabel, "RIGHT", 8, 0)
-    saveInput:SetMaxLetters(30)
-    saveInput:SetText(DB.activeProfileName or "Default")
-    StyleInputBox(saveInput)
-
-    local saveBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
-    saveBtn:SetSize(80, 22)
-    saveBtn:SetPoint("LEFT", saveInput, "RIGHT", 8, 0)
-    saveBtn:SetText("Save")
-
-    -- Status text (relative to the save row above it).
-    local statusFS = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    statusFS:SetPoint("TOPLEFT", saveLabel, "BOTTOMLEFT", 0, -10)
-    EC_compCache.setPanelWidth(statusFS, 16)
-    statusFS:SetJustifyH("LEFT")
-    statusFS:SetText("")
-    self.statusFS = statusFS
-
-    -- Profile list scroll area
-    local listLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    listLabel:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
-    listLabel:SetText("Saved Profiles")
-
-    local scroll = CreateFrame("ScrollFrame", "EbonClearanceProfileListScroll", self, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", listLabel, "BOTTOMLEFT", 0, -4)
-    scroll:SetSize(EC_PANEL_WIDTH - 42, 160)
-    -- v2.11.0: register width so the scroll tracks Interface Options
-    -- frame resizes. SetSize set the height to 160 here; registry's
-    -- SetWidth-only refresh leaves height alone.
-    EC_compCache.registerWidth(scroll, 42)
-
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(EC_PANEL_WIDTH - 42, 1)
-    EC_compCache.registerWidth(content, 42)
-    scroll:SetScrollChild(content)
-    -- Auto-hide the scroll bar (arrows + thumb) when content fits the visible
-    -- area. Wired once here; OnScrollRangeChanged fires on every Refresh that
-    -- changes content height, so visibility tracks the list automatically.
-    EC_HookScrollbarAutoHide(scroll)
-
-    local rowPool = {}
-    local activeRows = 0
-
-    local function GetRow(index)
-        if rowPool[index] then
-            return rowPool[index]
+        MakeHeader(self, "Profiles", -16)
+        local descLabel = MakeLabel(
+            self,
+            "Profiles save and restore your |cffb6ffb6Sell List|r and |cffb6ffb6Keep List|r as a named pair. Switching profiles overwrites the live character lists with the saved snapshot. Handy for swapping between farming spots.",
+            16,
+            -44
+        )
+        -- Cascade-anchored to descLabel so the layout adapts to whatever number of
+        -- lines the description wraps to (fixed-y caused overlap on narrower panels).
+        local clarifyLabel = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        clarifyLabel:SetPoint("TOPLEFT", descLabel, "BOTTOMLEFT", 0, -8)
+        EC_compCache.setPanelWidth(clarifyLabel, 32)
+        clarifyLabel:SetJustifyH("LEFT")
+        clarifyLabel:SetJustifyV("TOP")
+        if clarifyLabel.SetWordWrap then
+            clarifyLabel:SetWordWrap(true)
         end
-        local row = CreateFrame("Frame", nil, content)
-        row:SetHeight(22)
+        clarifyLabel:SetText(
+            "|cffaaaaaaProfiles do NOT touch the |cffb6ffb6Account Sell List|r|cffaaaaaa (which is shared across every alt and never replaced). The |cffb6ffb6Default|r|cffaaaaaa profile is permanently empty - give your profile a real name before saving.|r"
+        )
 
-        local delBtn = CreateFrame("Button", "EbonClearanceProfileDel_" .. index, content, "UIPanelButtonTemplate")
-        delBtn:SetSize(58, 18)
-        delBtn:SetPoint("RIGHT", row, "RIGHT", -2, 0)
-        delBtn:SetText("Delete")
+        -- Active profile indicator
+        local activeLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        activeLabel:SetPoint("TOPLEFT", clarifyLabel, "BOTTOMLEFT", 0, -16)
+        EC_compCache.setPanelWidth(activeLabel, 16)
+        activeLabel:SetJustifyH("LEFT")
+        self.activeLabel = activeLabel
 
-        local clearBtn = CreateFrame("Button", "EbonClearanceProfileClear_" .. index, content, "UIPanelButtonTemplate")
-        clearBtn:SetSize(52, 18)
-        clearBtn:SetPoint("RIGHT", delBtn, "LEFT", -4, 0)
-        clearBtn:SetText("Clear")
+        -- Save row: input + Save button (relative to activeLabel so it follows
+        -- whatever the wrap above ends up at).
+        local saveLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        saveLabel:SetPoint("TOPLEFT", activeLabel, "BOTTOMLEFT", 0, -10)
+        saveLabel:SetText("Profile name:")
 
-        local loadBtn = CreateFrame("Button", "EbonClearanceProfileLoad_" .. index, content, "UIPanelButtonTemplate")
-        loadBtn:SetSize(52, 18)
-        loadBtn:SetPoint("RIGHT", clearBtn, "LEFT", -4, 0)
-        loadBtn:SetText("Load")
+        local saveInput = CreateFrame("EditBox", "EbonClearanceProfileSaveInput", self, "InputBoxTemplate")
+        saveInput:SetAutoFocus(false)
+        saveInput:SetSize(180, 20)
+        saveInput:SetPoint("LEFT", saveLabel, "RIGHT", 8, 0)
+        saveInput:SetMaxLetters(30)
+        saveInput:SetText(DB.activeProfileName or "Default")
+        StyleInputBox(saveInput)
 
-        local text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        text:SetPoint("LEFT", row, "LEFT", 2, 0)
-        text:SetPoint("RIGHT", loadBtn, "LEFT", -4, 0)
-        text:SetJustifyH("LEFT")
+        local saveBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        saveBtn:SetSize(80, 22)
+        saveBtn:SetPoint("LEFT", saveInput, "RIGHT", 8, 0)
+        saveBtn:SetText("Save")
 
-        row.text = text
-        row.loadBtn = loadBtn
-        row.clearBtn = clearBtn
-        row.delBtn = delBtn
-        rowPool[index] = row
-        return row
-    end
+        -- Status text (relative to the save row above it).
+        local statusFS = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        statusFS:SetPoint("TOPLEFT", saveLabel, "BOTTOMLEFT", 0, -10)
+        EC_compCache.setPanelWidth(statusFS, 16)
+        statusFS:SetJustifyH("LEFT")
+        statusFS:SetText("")
+        self.statusFS = statusFS
 
-    local function HideAllRows()
-        for i = 1, activeRows do
-            if rowPool[i] then
-                rowPool[i]:Hide()
-                rowPool[i].loadBtn:Hide()
-                rowPool[i].clearBtn:Hide()
-                rowPool[i].delBtn:Hide()
+        -- Profile list scroll area
+        local listLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        listLabel:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
+        listLabel:SetText("Saved Profiles")
+
+        local scroll = CreateFrame("ScrollFrame", "EbonClearanceProfileListScroll", self, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", listLabel, "BOTTOMLEFT", 0, -4)
+        scroll:SetSize(EC_PANEL_WIDTH - 42, 160)
+        -- v2.11.0: register width so the scroll tracks Interface Options
+        -- frame resizes. SetSize set the height to 160 here; registry's
+        -- SetWidth-only refresh leaves height alone.
+        EC_compCache.registerWidth(scroll, 42)
+
+        local content = CreateFrame("Frame", nil, scroll)
+        content:SetSize(EC_PANEL_WIDTH - 42, 1)
+        EC_compCache.registerWidth(content, 42)
+        scroll:SetScrollChild(content)
+        -- Auto-hide the scroll bar (arrows + thumb) when content fits the visible
+        -- area. Wired once here; OnScrollRangeChanged fires on every Refresh that
+        -- changes content height, so visibility tracks the list automatically.
+        EC_HookScrollbarAutoHide(scroll)
+
+        local rowPool = {}
+        local activeRows = 0
+
+        local function GetRow(index)
+            if rowPool[index] then
+                return rowPool[index]
             end
+            local row = CreateFrame("Frame", nil, content)
+            row:SetHeight(22)
+
+            local delBtn = CreateFrame("Button", "EbonClearanceProfileDel_" .. index, content, "UIPanelButtonTemplate")
+            delBtn:SetSize(58, 18)
+            delBtn:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+            delBtn:SetText("Delete")
+
+            local clearBtn =
+                CreateFrame("Button", "EbonClearanceProfileClear_" .. index, content, "UIPanelButtonTemplate")
+            clearBtn:SetSize(52, 18)
+            clearBtn:SetPoint("RIGHT", delBtn, "LEFT", -4, 0)
+            clearBtn:SetText("Clear")
+
+            local loadBtn =
+                CreateFrame("Button", "EbonClearanceProfileLoad_" .. index, content, "UIPanelButtonTemplate")
+            loadBtn:SetSize(52, 18)
+            loadBtn:SetPoint("RIGHT", clearBtn, "LEFT", -4, 0)
+            loadBtn:SetText("Load")
+
+            local text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            text:SetPoint("LEFT", row, "LEFT", 2, 0)
+            text:SetPoint("RIGHT", loadBtn, "LEFT", -4, 0)
+            text:SetJustifyH("LEFT")
+
+            row.text = text
+            row.loadBtn = loadBtn
+            row.clearBtn = clearBtn
+            row.delBtn = delBtn
+            rowPool[index] = row
+            return row
         end
-        activeRows = 0
-    end
 
-    -- Rename row
-    local renameLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    renameLabel:SetPoint("TOPLEFT", scroll, "BOTTOMLEFT", 0, -12)
-    renameLabel:SetText("Rename active profile:")
-
-    local renameInput = CreateFrame("EditBox", "EbonClearanceProfileRenameInput", self, "InputBoxTemplate")
-    renameInput:SetAutoFocus(false)
-    renameInput:SetSize(150, 20)
-    renameInput:SetPoint("LEFT", renameLabel, "RIGHT", 8, 0)
-    renameInput:SetMaxLetters(30)
-    renameInput:SetText("")
-    StyleInputBox(renameInput)
-
-    local renameBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
-    renameBtn:SetSize(70, 22)
-    renameBtn:SetPoint("LEFT", renameInput, "RIGHT", 8, 0)
-    renameBtn:SetText("Rename")
-
-    -- Use field-assignment form rather than colon-method definition so the
-    -- function closes over the outer `self` (the panel) rather than receiving
-    -- a fresh `self` parameter that would shadow it. Body still references
-    -- self.activeLabel etc via that captured upvalue.
-    self.RefreshProfileList = function()
-        HideAllRows()
-
-        -- Update active indicator
-        local activeName = DB.activeProfileName or "Default"
-        activeLabel:SetText("Active profile: |cff00ff00" .. activeName .. "|r")
-        saveInput:SetText(activeName)
-        renameInput:SetText(activeName)
-
-        -- Collect and sort profile names
-        local names = {}
-        for name in pairs(DB.whitelistProfiles) do
-            if type(name) == "string" then
-                names[#names + 1] = name
+        local function HideAllRows()
+            for i = 1, activeRows do
+                if rowPool[i] then
+                    rowPool[i]:Hide()
+                    rowPool[i].loadBtn:Hide()
+                    rowPool[i].clearBtn:Hide()
+                    rowPool[i].delBtn:Hide()
+                end
             end
+            activeRows = 0
         end
-        table.sort(names, function(a, b)
-            return a:lower() < b:lower()
+
+        -- Rename row
+        local renameLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        renameLabel:SetPoint("TOPLEFT", scroll, "BOTTOMLEFT", 0, -12)
+        renameLabel:SetText("Rename active profile:")
+
+        local renameInput = CreateFrame("EditBox", "EbonClearanceProfileRenameInput", self, "InputBoxTemplate")
+        renameInput:SetAutoFocus(false)
+        renameInput:SetSize(150, 20)
+        renameInput:SetPoint("LEFT", renameLabel, "RIGHT", 8, 0)
+        renameInput:SetMaxLetters(30)
+        renameInput:SetText("")
+        StyleInputBox(renameInput)
+
+        local renameBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        renameBtn:SetSize(70, 22)
+        renameBtn:SetPoint("LEFT", renameInput, "RIGHT", 8, 0)
+        renameBtn:SetText("Rename")
+
+        -- Use field-assignment form rather than colon-method definition so the
+        -- function closes over the outer `self` (the panel) rather than receiving
+        -- a fresh `self` parameter that would shadow it. Body still references
+        -- self.activeLabel etc via that captured upvalue.
+        self.RefreshProfileList = function()
+            HideAllRows()
+
+            -- Update active indicator
+            local activeName = DB.activeProfileName or "Default"
+            activeLabel:SetText("Active profile: |cff00ff00" .. activeName .. "|r")
+            saveInput:SetText(activeName)
+            renameInput:SetText(activeName)
+
+            -- Collect and sort profile names
+            local names = {}
+            for name in pairs(DB.whitelistProfiles) do
+                if type(name) == "string" then
+                    names[#names + 1] = name
+                end
+            end
+            table.sort(names, function(a, b)
+                return a:lower() < b:lower()
+            end)
+
+            local shown = 0
+            local rowY = -4
+            for i = 1, #names do
+                local pName = names[i]
+                shown = shown + 1
+                local row = GetRow(shown)
+                row:ClearAllPoints()
+                -- v2.11.0: anchor TOPLEFT + TOPRIGHT so the row stretches.
+                row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, rowY)
+                row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, rowY)
+
+                local isActive = (pName == DB.activeProfileName)
+                local wlCount = EC_CountItems(DB.whitelistProfiles[pName])
+                local blCount = DB.blacklistProfiles[pName] and EC_CountItems(DB.blacklistProfiles[pName]) or 0
+                -- Use compact "wl/bl" labels: row text shares horizontal space
+                -- with up to three buttons (Load/Clear/Delete), so longer phrasing
+                -- gets truncated at narrow Interface Options widths.
+                local label = isActive
+                        and string.format("|cff00ff00%s|r  |cff888888(%d wl, %d bl, active)|r", pName, wlCount, blCount)
+                    or string.format("|cffffff00%s|r  |cff888888(%d wl, %d bl)|r", pName, wlCount, blCount)
+                row.text:SetText(label)
+
+                row.loadBtn:SetScript("OnClick", function()
+                    local ok, msg = EC_LoadProfile(pName)
+                    statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
+                    if ok then
+                        PrintNice(msg)
+                        PlaySound("igMainMenuOptionCheckBoxOn")
+                    end
+                    self:RefreshProfileList()
+                end)
+
+                row.delBtn:SetScript("OnClick", function()
+                    local dialog = StaticPopup_Show("EC_CONFIRM_DELETE_PROFILE", pName)
+                    if dialog then
+                        dialog.data = function()
+                            local ok, msg = EC_DeleteProfile(pName)
+                            statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
+                            if ok then
+                                PrintNice(msg)
+                                PlaySound("igMainMenuOptionCheckBoxOn")
+                            end
+                            self:RefreshProfileList()
+                        end
+                    end
+                end)
+
+                row.clearBtn:SetScript("OnClick", function()
+                    local dialog = StaticPopup_Show("EC_CONFIRM_CLEAR_PROFILE", pName)
+                    if dialog then
+                        dialog.data = function()
+                            if DB.whitelistProfiles[pName] then
+                                wipe(DB.whitelistProfiles[pName])
+                                if pName == DB.activeProfileName then
+                                    wipe(DB.whitelist)
+                                    local wp = _G["EbonClearanceOptionsWhitelist"]
+                                    if wp and wp.listUI then
+                                        wp.listUI:Refresh()
+                                    end
+                                end
+                                statusFS:SetText('|cff00ff00Cleared profile "|cffffff00' .. pName .. '|r|cff00ff00".|r')
+                                PrintNicef('Cleared profile "|cffffff00%s|r".', pName)
+                                PlaySound("igMainMenuOptionCheckBoxOn")
+                            end
+                            self:RefreshProfileList()
+                        end
+                    end
+                end)
+
+                local isDefault = (pName == "Default")
+                row:Show()
+                row.loadBtn:Show()
+                if isDefault then
+                    row.clearBtn:Hide()
+                    row.delBtn:Hide()
+                else
+                    row.clearBtn:Show()
+                    row.delBtn:Show()
+                end
+                rowY = rowY - 22
+            end
+
+            activeRows = shown
+            content:SetHeight(math.max(1, (shown * 22) + 8))
+            -- Scroll-bar visibility handled by the OnScrollRangeChanged hook.
+        end
+
+        saveBtn:SetScript("OnClick", function()
+            local name = saveInput:GetText()
+            local ok, msg = EC_SaveProfile(name)
+            statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
+            if ok then
+                PrintNice(msg)
+                PlaySound("igMainMenuOptionCheckBoxOn")
+                self:RefreshProfileList()
+            else
+                PlaySound("igMainMenuOptionCheckBoxOff")
+            end
         end)
 
-        local shown = 0
-        local rowY = -4
-        for i = 1, #names do
-            local pName = names[i]
-            shown = shown + 1
-            local row = GetRow(shown)
-            row:ClearAllPoints()
-            -- v2.11.0: anchor TOPLEFT + TOPRIGHT so the row stretches.
-            row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, rowY)
-            row:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, rowY)
+        saveInput:SetScript("OnEnterPressed", function()
+            saveBtn:Click()
+            saveInput:ClearFocus()
+        end)
 
-            local isActive = (pName == DB.activeProfileName)
-            local wlCount = EC_CountItems(DB.whitelistProfiles[pName])
-            local blCount = DB.blacklistProfiles[pName] and EC_CountItems(DB.blacklistProfiles[pName]) or 0
-            -- Use compact "wl/bl" labels: row text shares horizontal space
-            -- with up to three buttons (Load/Clear/Delete), so longer phrasing
-            -- gets truncated at narrow Interface Options widths.
-            local label = isActive
-                    and string.format("|cff00ff00%s|r  |cff888888(%d wl, %d bl, active)|r", pName, wlCount, blCount)
-                or string.format("|cffffff00%s|r  |cff888888(%d wl, %d bl)|r", pName, wlCount, blCount)
-            row.text:SetText(label)
-
-            row.loadBtn:SetScript("OnClick", function()
-                local ok, msg = EC_LoadProfile(pName)
-                statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
-                if ok then
-                    PrintNice(msg)
-                    PlaySound("igMainMenuOptionCheckBoxOn")
-                end
+        renameBtn:SetScript("OnClick", function()
+            local newName = renameInput:GetText()
+            local ok, msg = EC_RenameProfile(DB.activeProfileName, newName)
+            statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
+            if ok then
+                PrintNice(msg)
+                PlaySound("igMainMenuOptionCheckBoxOn")
                 self:RefreshProfileList()
-            end)
-
-            row.delBtn:SetScript("OnClick", function()
-                local dialog = StaticPopup_Show("EC_CONFIRM_DELETE_PROFILE", pName)
-                if dialog then
-                    dialog.data = function()
-                        local ok, msg = EC_DeleteProfile(pName)
-                        statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
-                        if ok then
-                            PrintNice(msg)
-                            PlaySound("igMainMenuOptionCheckBoxOn")
-                        end
-                        self:RefreshProfileList()
-                    end
-                end
-            end)
-
-            row.clearBtn:SetScript("OnClick", function()
-                local dialog = StaticPopup_Show("EC_CONFIRM_CLEAR_PROFILE", pName)
-                if dialog then
-                    dialog.data = function()
-                        if DB.whitelistProfiles[pName] then
-                            wipe(DB.whitelistProfiles[pName])
-                            if pName == DB.activeProfileName then
-                                wipe(DB.whitelist)
-                                local wp = _G["EbonClearanceOptionsWhitelist"]
-                                if wp and wp.listUI then
-                                    wp.listUI:Refresh()
-                                end
-                            end
-                            statusFS:SetText('|cff00ff00Cleared profile "|cffffff00' .. pName .. '|r|cff00ff00".|r')
-                            PrintNicef('Cleared profile "|cffffff00%s|r".', pName)
-                            PlaySound("igMainMenuOptionCheckBoxOn")
-                        end
-                        self:RefreshProfileList()
-                    end
-                end
-            end)
-
-            local isDefault = (pName == "Default")
-            row:Show()
-            row.loadBtn:Show()
-            if isDefault then
-                row.clearBtn:Hide()
-                row.delBtn:Hide()
             else
-                row.clearBtn:Show()
-                row.delBtn:Show()
+                PlaySound("igMainMenuOptionCheckBoxOff")
             end
-            rowY = rowY - 22
-        end
+        end)
 
-        activeRows = shown
-        content:SetHeight(math.max(1, (shown * 22) + 8))
-        -- Scroll-bar visibility handled by the OnScrollRangeChanged hook.
-    end
+        renameInput:SetScript("OnEnterPressed", function()
+            renameBtn:Click()
+            renameInput:ClearFocus()
+        end)
 
-    saveBtn:SetScript("OnClick", function()
-        local name = saveInput:GetText()
-        local ok, msg = EC_SaveProfile(name)
-        statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
-        if ok then
-            PrintNice(msg)
-            PlaySound("igMainMenuOptionCheckBoxOn")
-            self:RefreshProfileList()
-        else
-            PlaySound("igMainMenuOptionCheckBoxOff")
-        end
-    end)
-
-    saveInput:SetScript("OnEnterPressed", function()
-        saveBtn:Click()
-        saveInput:ClearFocus()
-    end)
-
-    renameBtn:SetScript("OnClick", function()
-        local newName = renameInput:GetText()
-        local ok, msg = EC_RenameProfile(DB.activeProfileName, newName)
-        statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
-        if ok then
-            PrintNice(msg)
-            PlaySound("igMainMenuOptionCheckBoxOn")
-            self:RefreshProfileList()
-        else
-            PlaySound("igMainMenuOptionCheckBoxOff")
-        end
-    end)
-
-    renameInput:SetScript("OnEnterPressed", function()
-        renameBtn:Click()
-        renameInput:ClearFocus()
-    end)
-
-    self:RefreshProfileList()
+        self:RefreshProfileList()
     end)
 end)
 
@@ -8080,350 +8109,361 @@ end
 
 ImportExportPanel:SetScript("OnShow", function(self)
     EC_compCache.initPanel(self, nil, function(self)
-    MakeHeader(self, "Import / Export", -16)
+        MakeHeader(self, "Import / Export", -16)
 
-    -- === EXPORT SECTION ===
-    -- Each section owns its own scope radio so it's obvious which list a
-    -- click reads from (Source list) versus writes to (Target list).
-    MakeLabel(
-        self,
-        "Export a whitelist to a string you can share. Pick which list to read from, then give the export a name.",
-        16,
-        -44
-    )
-
-    local exportScope = "character"
-
-    local exportScopeLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    exportScopeLabel:SetPoint("TOPLEFT", 16, -72)
-    exportScopeLabel:SetText("Source list:")
-
-    local exportCharCB = CreateFrame("CheckButton", "EbonClearanceExportSourceCharCB", self, "UIRadioButtonTemplate")
-    exportCharCB:SetPoint("LEFT", exportScopeLabel, "RIGHT", 8, 0)
-    exportCharCB:SetChecked(true)
-    local exportCharLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    exportCharLbl:SetPoint("LEFT", exportCharCB, "RIGHT", 2, 1)
-    exportCharLbl:SetText("Character")
-
-    local exportAcctCB = CreateFrame("CheckButton", "EbonClearanceExportSourceAcctCB", self, "UIRadioButtonTemplate")
-    exportAcctCB:SetPoint("LEFT", exportCharLbl, "RIGHT", 12, -1)
-    exportAcctCB:SetChecked(false)
-    local exportAcctLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    exportAcctLbl:SetPoint("LEFT", exportAcctCB, "RIGHT", 2, 1)
-    exportAcctLbl:SetText("Account")
-
-    exportCharCB:SetScript("OnClick", function()
-        exportScope = "character"
-        exportCharCB:SetChecked(true)
-        exportAcctCB:SetChecked(false)
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    exportAcctCB:SetScript("OnClick", function()
-        exportScope = "account"
-        exportAcctCB:SetChecked(true)
-        exportCharCB:SetChecked(false)
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-
-    local exportNameLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    exportNameLabel:SetPoint("TOPLEFT", 16, -100)
-    exportNameLabel:SetText("List name:")
-
-    local exportNameBox = CreateFrame("EditBox", "EbonClearanceExportNameBox", self, "InputBoxTemplate")
-    exportNameBox:SetAutoFocus(false)
-    exportNameBox:SetSize(200, 20)
-    exportNameBox:SetPoint("LEFT", exportNameLabel, "RIGHT", 8, 0)
-    exportNameBox:SetMaxLetters(40)
-    exportNameBox:SetText("My Sell List")
-    StyleInputBox(exportNameBox)
-
-    local exportBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
-    exportBtn:SetSize(80, 22)
-    exportBtn:SetPoint("LEFT", exportNameBox, "RIGHT", 8, 0)
-    exportBtn:SetText("Export")
-
-    -- Optional checkbox: when ticked, the Export button emits a full
-    -- settings pack instead of the current single-list payload. Toggling
-    -- it greys out the scope and name inputs since the pack covers every
-    -- list and carries no name field. Off by default; existing exports
-    -- remain unchanged.
-    --
-    -- Lives on its OWN row below the name input so the export controls
-    -- never overflow on a narrow panel; the previous side-by-side layout
-    -- pushed the checkbox off the right edge on smaller widths.
-    local fullPackCB = CreateFrame("CheckButton", "EbonClearanceExportFullPackCB", self, "UICheckButtonTemplate")
-    fullPackCB:SetPoint("TOPLEFT", exportNameLabel, "BOTTOMLEFT", 0, -8)
-    fullPackCB:SetSize(22, 22)
-    local fullPackLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    fullPackLbl:SetPoint("LEFT", fullPackCB, "RIGHT", 2, 1)
-    fullPackLbl:SetText("Full settings pack (rules + Sell / Keep / Delete + Account Sell)")
-    fullPackCB:SetChecked(false)
-
-    local function refreshExportInputsForPackMode(packMode)
-        -- EditBox on 3.3.5a doesn't expose Enable/Disable like Button does;
-        -- toggle mouse + keyboard interaction and drop focus instead. The
-        -- alpha shift makes the disabled state visually obvious.
-        if packMode then
-            exportNameBox:ClearFocus()
-            exportNameBox:EnableMouse(false)
-            exportNameBox:EnableKeyboard(false)
-            exportNameBox:SetTextColor(0.5, 0.5, 0.5)
-        else
-            exportNameBox:EnableMouse(true)
-            exportNameBox:EnableKeyboard(true)
-            exportNameBox:SetTextColor(1, 1, 1)
-        end
-        -- CheckButton derives from Button so Enable/Disable do exist here,
-        -- but for symmetry with the EditBox path we drive both via alpha
-        -- plus EnableMouse so the visual state stays consistent.
-        for _, cb in ipairs({ exportCharCB, exportAcctCB }) do
-            cb:EnableMouse(not packMode)
-            cb:SetAlpha(packMode and 0.5 or 1)
-        end
-        exportNameLabel:SetAlpha(packMode and 0.5 or 1)
-        exportScopeLabel:SetAlpha(packMode and 0.5 or 1)
-        exportCharLbl:SetAlpha(packMode and 0.5 or 1)
-        exportAcctLbl:SetAlpha(packMode and 0.5 or 1)
-    end
-
-    fullPackCB:SetScript("OnClick", function(self_)
-        refreshExportInputsForPackMode(self_:GetChecked())
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    fullPackCB:SetScript("OnEnter", function(self_)
-        GameTooltip:SetOwner(self_, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Full settings pack")
-        GameTooltip:AddLine(
-            "When ticked, Export produces one string covering quality rules, the Sell List, the Keep List, the Delete List, and the Account Sell List together. Off by default.",
-            1, 1, 1, true
+        -- === EXPORT SECTION ===
+        -- Each section owns its own scope radio so it's obvious which list a
+        -- click reads from (Source list) versus writes to (Target list).
+        MakeLabel(
+            self,
+            "Export a whitelist to a string you can share. Pick which list to read from, then give the export a name.",
+            16,
+            -44
         )
-        GameTooltip:Show()
-    end)
-    fullPackCB:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- Wrap the scroll frame in a thin backdrop frame so the input area is
-    -- visually distinct. The raw ScrollFrame template doesn't carry any
-    -- backdrop, so an empty box renders as a transparent void with no
-    -- visual cue for where to click. The wrapper supplies the chrome;
-    -- the scroll frame inside still owns scrolling behaviour.
-    local exportBoxBg = CreateFrame("Frame", nil, self)
-    exportBoxBg:SetPoint("TOPLEFT", fullPackCB, "BOTTOMLEFT", 0, -8)
-    exportBoxBg:SetSize(EC_PANEL_WIDTH - 36, 50)
-    exportBoxBg:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 16,
-        edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    exportBoxBg:SetBackdropColor(0, 0, 0, 0.6)
-    exportBoxBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
-    -- Track the wrapper's width on panel resize so the input area follows
-    -- the Interface Options frame resize handle.
-    EC_compCache.registerWidth(exportBoxBg, 36)
+        local exportScope = "character"
 
-    local exportScroll = CreateFrame("ScrollFrame", "EbonClearanceExportScroll", exportBoxBg, "UIPanelScrollFrameTemplate")
-    exportScroll:SetPoint("TOPLEFT", 6, -6)
-    exportScroll:SetPoint("BOTTOMRIGHT", -28, 6)
+        local exportScopeLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        exportScopeLabel:SetPoint("TOPLEFT", 16, -72)
+        exportScopeLabel:SetText("Source list:")
 
-    local exportBox = CreateFrame("EditBox", "EbonClearanceExportBox", exportScroll)
-    exportBox:SetAutoFocus(false)
-    exportBox:SetMultiLine(true)
-    exportBox:SetFontObject("GameFontHighlightSmall")
-    -- Size the EditBox explicitly. Without SetHeight, an empty multiline
-    -- EditBox has zero clickable area, so users can't focus it to paste.
-    exportBox:SetSize(560, 50)
-    exportBox:SetText("")
-    exportBox:SetScript("OnEscapePressed", function(s)
-        s:ClearFocus()
-    end)
-    exportScroll:SetScrollChild(exportBox)
-    -- Clicking anywhere in the backdrop area focuses the EditBox so the
-    -- user doesn't have to land precisely on the (often empty) text
-    -- glyphs to start typing or to highlight an existing export.
-    exportBoxBg:EnableMouse(true)
-    exportBoxBg:SetScript("OnMouseDown", function()
-        exportBox:SetFocus()
-    end)
+        local exportCharCB =
+            CreateFrame("CheckButton", "EbonClearanceExportSourceCharCB", self, "UIRadioButtonTemplate")
+        exportCharCB:SetPoint("LEFT", exportScopeLabel, "RIGHT", 8, 0)
+        exportCharCB:SetChecked(true)
+        local exportCharLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        exportCharLbl:SetPoint("LEFT", exportCharCB, "RIGHT", 2, 1)
+        exportCharLbl:SetText("Character")
 
-    exportBtn:SetScript("OnClick", function()
-        local str
-        if fullPackCB:GetChecked() and EC_compCache.exportFullPack then
-            str = EC_compCache.exportFullPack()
-            exportBox:SetText(str)
-            exportBox:HighlightText()
-            exportBox:SetFocus()
+        local exportAcctCB =
+            CreateFrame("CheckButton", "EbonClearanceExportSourceAcctCB", self, "UIRadioButtonTemplate")
+        exportAcctCB:SetPoint("LEFT", exportCharLbl, "RIGHT", 12, -1)
+        exportAcctCB:SetChecked(false)
+        local exportAcctLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        exportAcctLbl:SetPoint("LEFT", exportAcctCB, "RIGHT", 2, 1)
+        exportAcctLbl:SetText("Account")
+
+        exportCharCB:SetScript("OnClick", function()
+            exportScope = "character"
+            exportCharCB:SetChecked(true)
+            exportAcctCB:SetChecked(false)
             PlaySound("igMainMenuOptionCheckBoxOn")
-            PrintNice(
-                "Exported full settings pack (rules + Sell / Keep / Delete + Account Sell). Copy the text above."
-            )
-        else
-            str = EC_ExportWhitelist(exportNameBox:GetText(), exportScope)
-            exportBox:SetText(str)
-            exportBox:HighlightText()
-            exportBox:SetFocus()
+        end)
+        exportAcctCB:SetScript("OnClick", function()
+            exportScope = "account"
+            exportAcctCB:SetChecked(true)
+            exportCharCB:SetChecked(false)
             PlaySound("igMainMenuOptionCheckBoxOn")
-            local source = EC_GetWhitelistForScope(exportScope) or {}
-            local count = 0
-            for _, v in pairs(source) do
-                if v == true or v == 1 then
-                    count = count + 1
-                end
+        end)
+
+        local exportNameLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        exportNameLabel:SetPoint("TOPLEFT", 16, -100)
+        exportNameLabel:SetText("List name:")
+
+        local exportNameBox = CreateFrame("EditBox", "EbonClearanceExportNameBox", self, "InputBoxTemplate")
+        exportNameBox:SetAutoFocus(false)
+        exportNameBox:SetSize(200, 20)
+        exportNameBox:SetPoint("LEFT", exportNameLabel, "RIGHT", 8, 0)
+        exportNameBox:SetMaxLetters(40)
+        exportNameBox:SetText("My Sell List")
+        StyleInputBox(exportNameBox)
+
+        local exportBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        exportBtn:SetSize(80, 22)
+        exportBtn:SetPoint("LEFT", exportNameBox, "RIGHT", 8, 0)
+        exportBtn:SetText("Export")
+
+        -- Optional checkbox: when ticked, the Export button emits a full
+        -- settings pack instead of the current single-list payload. Toggling
+        -- it greys out the scope and name inputs since the pack covers every
+        -- list and carries no name field. Off by default; existing exports
+        -- remain unchanged.
+        --
+        -- Lives on its OWN row below the name input so the export controls
+        -- never overflow on a narrow panel; the previous side-by-side layout
+        -- pushed the checkbox off the right edge on smaller widths.
+        local fullPackCB = CreateFrame("CheckButton", "EbonClearanceExportFullPackCB", self, "UICheckButtonTemplate")
+        fullPackCB:SetPoint("TOPLEFT", exportNameLabel, "BOTTOMLEFT", 0, -8)
+        fullPackCB:SetSize(22, 22)
+        local fullPackLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        fullPackLbl:SetPoint("LEFT", fullPackCB, "RIGHT", 2, 1)
+        fullPackLbl:SetText("Full settings pack (rules + Sell / Keep / Delete + Account Sell)")
+        fullPackCB:SetChecked(false)
+
+        local function refreshExportInputsForPackMode(packMode)
+            -- EditBox on 3.3.5a doesn't expose Enable/Disable like Button does;
+            -- toggle mouse + keyboard interaction and drop focus instead. The
+            -- alpha shift makes the disabled state visually obvious.
+            if packMode then
+                exportNameBox:ClearFocus()
+                exportNameBox:EnableMouse(false)
+                exportNameBox:EnableKeyboard(false)
+                exportNameBox:SetTextColor(0.5, 0.5, 0.5)
+            else
+                exportNameBox:EnableMouse(true)
+                exportNameBox:EnableKeyboard(true)
+                exportNameBox:SetTextColor(1, 1, 1)
             end
-            local scopeName = (exportScope == "account") and "account" or "character"
-            PrintNicef("Exported |cffffff00%d|r %s whitelist items. Copy the text above.", count, scopeName)
+            -- CheckButton derives from Button so Enable/Disable do exist here,
+            -- but for symmetry with the EditBox path we drive both via alpha
+            -- plus EnableMouse so the visual state stays consistent.
+            for _, cb in ipairs({ exportCharCB, exportAcctCB }) do
+                cb:EnableMouse(not packMode)
+                cb:SetAlpha(packMode and 0.5 or 1)
+            end
+            exportNameLabel:SetAlpha(packMode and 0.5 or 1)
+            exportScopeLabel:SetAlpha(packMode and 0.5 or 1)
+            exportCharLbl:SetAlpha(packMode and 0.5 or 1)
+            exportAcctLbl:SetAlpha(packMode and 0.5 or 1)
         end
-    end)
 
-    -- === IMPORT SECTION ===
-    MakeLabel(self, "Paste a Sell List string and pick which list it imports into.", 16, -228)
-
-    local importScope = "character"
-
-    local importScopeLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    importScopeLabel:SetPoint("TOPLEFT", 16, -256)
-    importScopeLabel:SetText("Target list:")
-
-    local importCharCB = CreateFrame("CheckButton", "EbonClearanceImportTargetCharCB", self, "UIRadioButtonTemplate")
-    importCharCB:SetPoint("LEFT", importScopeLabel, "RIGHT", 8, 0)
-    importCharCB:SetChecked(true)
-    local importCharLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    importCharLbl:SetPoint("LEFT", importCharCB, "RIGHT", 2, 1)
-    importCharLbl:SetText("Character")
-
-    local importAcctCB = CreateFrame("CheckButton", "EbonClearanceImportTargetAcctCB", self, "UIRadioButtonTemplate")
-    importAcctCB:SetPoint("LEFT", importCharLbl, "RIGHT", 12, -1)
-    importAcctCB:SetChecked(false)
-    local importAcctLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    importAcctLbl:SetPoint("LEFT", importAcctCB, "RIGHT", 2, 1)
-    importAcctLbl:SetText("Account")
-
-    importCharCB:SetScript("OnClick", function()
-        importScope = "character"
-        importCharCB:SetChecked(true)
-        importAcctCB:SetChecked(false)
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    importAcctCB:SetScript("OnClick", function()
-        importScope = "account"
-        importAcctCB:SetChecked(true)
-        importCharCB:SetChecked(false)
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-
-    -- Wrap in a backdrop frame for the same reason as the export box:
-    -- the raw ScrollFrame is transparent until typed into, leaving the
-    -- user with no visual target for paste. Wrapper supplies chrome;
-    -- ScrollFrame inside owns scrolling.
-    local importBoxBg = CreateFrame("Frame", nil, self)
-    importBoxBg:SetPoint("TOPLEFT", 16, -284)
-    importBoxBg:SetSize(EC_PANEL_WIDTH - 36, 50)
-    importBoxBg:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 16,
-        edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    importBoxBg:SetBackdropColor(0, 0, 0, 0.6)
-    importBoxBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
-    EC_compCache.registerWidth(importBoxBg, 36)
-
-    local importScroll = CreateFrame("ScrollFrame", "EbonClearanceImportScroll", importBoxBg, "UIPanelScrollFrameTemplate")
-    importScroll:SetPoint("TOPLEFT", 6, -6)
-    importScroll:SetPoint("BOTTOMRIGHT", -28, 6)
-
-    local importBox = CreateFrame("EditBox", "EbonClearanceImportBox", importScroll)
-    importBox:SetAutoFocus(false)
-    importBox:SetMultiLine(true)
-    importBox:SetFontObject("GameFontHighlightSmall")
-    -- Explicit size required so an empty EditBox still has a clickable area
-    -- for paste. Without SetHeight, multiline EditBoxes collapse to zero.
-    importBox:SetSize(560, 50)
-    importBox:SetText("")
-    importBox:SetScript("OnEscapePressed", function(s)
-        s:ClearFocus()
-    end)
-    importScroll:SetScrollChild(importBox)
-    -- Clicking anywhere in the wrapper focuses the EditBox so users can
-    -- paste without having to land on the (empty) glyph row inside the
-    -- scroll frame.
-    importBoxBg:EnableMouse(true)
-    importBoxBg:SetScript("OnMouseDown", function()
-        importBox:SetFocus()
-    end)
-
-    local importMergeBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
-    importMergeBtn:SetSize(120, 22)
-    importMergeBtn:SetPoint("TOPLEFT", 16, -342)
-    importMergeBtn:SetText("Import (Merge)")
-
-    local importReplaceBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
-    importReplaceBtn:SetSize(120, 22)
-    importReplaceBtn:SetPoint("LEFT", importMergeBtn, "RIGHT", 8, 0)
-    importReplaceBtn:SetText("Import (Replace)")
-
-    local statusFS = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    statusFS:SetPoint("TOPLEFT", 16, -370)
-    EC_compCache.setPanelWidth(statusFS, 16)
-    statusFS:SetJustifyH("LEFT")
-    statusFS:SetText("")
-
-    local function runImport(mode)
-        local raw = importBox:GetText() or ""
-        -- Auto-detect: full settings packs start with the EC_PACK_V1 marker
-        -- on their first line. Anything else falls through to the existing
-        -- single-list import, which honours the Target scope radio above.
-        local firstLine = raw:match("^%s*([^\r\n]+)")
-        local isPack = firstLine and firstLine:sub(1, #EC_compCache.PACK_PREFIX) == EC_compCache.PACK_PREFIX
-        local ok, msg
-        if isPack and EC_compCache.importFullPack then
-            ok, msg = EC_compCache.importFullPack(raw, mode)
-        else
-            ok, msg = EC_ImportWhitelist(raw, mode, importScope)
-        end
-        statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
-        if ok then
+        fullPackCB:SetScript("OnClick", function(self_)
+            refreshExportInputsForPackMode(self_:GetChecked())
             PlaySound("igMainMenuOptionCheckBoxOn")
-            PrintNice(msg)
-            if isPack then
+        end)
+        fullPackCB:SetScript("OnEnter", function(self_)
+            GameTooltip:SetOwner(self_, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("Full settings pack")
+            GameTooltip:AddLine(
+                "When ticked, Export produces one string covering quality rules, the Sell List, the Keep List, the Delete List, and the Account Sell List together. Off by default.",
+                1,
+                1,
+                1,
+                true
+            )
+            GameTooltip:Show()
+        end)
+        fullPackCB:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+
+        -- Wrap the scroll frame in a thin backdrop frame so the input area is
+        -- visually distinct. The raw ScrollFrame template doesn't carry any
+        -- backdrop, so an empty box renders as a transparent void with no
+        -- visual cue for where to click. The wrapper supplies the chrome;
+        -- the scroll frame inside still owns scrolling behaviour.
+        local exportBoxBg = CreateFrame("Frame", nil, self)
+        exportBoxBg:SetPoint("TOPLEFT", fullPackCB, "BOTTOMLEFT", 0, -8)
+        exportBoxBg:SetSize(EC_PANEL_WIDTH - 36, 50)
+        exportBoxBg:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        exportBoxBg:SetBackdropColor(0, 0, 0, 0.6)
+        exportBoxBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
+        -- Track the wrapper's width on panel resize so the input area follows
+        -- the Interface Options frame resize handle.
+        EC_compCache.registerWidth(exportBoxBg, 36)
+
+        local exportScroll =
+            CreateFrame("ScrollFrame", "EbonClearanceExportScroll", exportBoxBg, "UIPanelScrollFrameTemplate")
+        exportScroll:SetPoint("TOPLEFT", 6, -6)
+        exportScroll:SetPoint("BOTTOMRIGHT", -28, 6)
+
+        local exportBox = CreateFrame("EditBox", "EbonClearanceExportBox", exportScroll)
+        exportBox:SetAutoFocus(false)
+        exportBox:SetMultiLine(true)
+        exportBox:SetFontObject("GameFontHighlightSmall")
+        -- Size the EditBox explicitly. Without SetHeight, an empty multiline
+        -- EditBox has zero clickable area, so users can't focus it to paste.
+        exportBox:SetSize(560, 50)
+        exportBox:SetText("")
+        exportBox:SetScript("OnEscapePressed", function(s)
+            s:ClearFocus()
+        end)
+        exportScroll:SetScrollChild(exportBox)
+        -- Clicking anywhere in the backdrop area focuses the EditBox so the
+        -- user doesn't have to land precisely on the (often empty) text
+        -- glyphs to start typing or to highlight an existing export.
+        exportBoxBg:EnableMouse(true)
+        exportBoxBg:SetScript("OnMouseDown", function()
+            exportBox:SetFocus()
+        end)
+
+        exportBtn:SetScript("OnClick", function()
+            local str
+            if fullPackCB:GetChecked() and EC_compCache.exportFullPack then
+                str = EC_compCache.exportFullPack()
+                exportBox:SetText(str)
+                exportBox:HighlightText()
+                exportBox:SetFocus()
+                PlaySound("igMainMenuOptionCheckBoxOn")
+                PrintNice(
+                    "Exported full settings pack (rules + Sell / Keep / Delete + Account Sell). Copy the text above."
+                )
+            else
+                str = EC_ExportWhitelist(exportNameBox:GetText(), exportScope)
+                exportBox:SetText(str)
+                exportBox:HighlightText()
+                exportBox:SetFocus()
+                PlaySound("igMainMenuOptionCheckBoxOn")
+                local source = EC_GetWhitelistForScope(exportScope) or {}
+                local count = 0
+                for _, v in pairs(source) do
+                    if v == true or v == 1 then
+                        count = count + 1
+                    end
+                end
+                local scopeName = (exportScope == "account") and "account" or "character"
+                PrintNicef("Exported |cffffff00%d|r %s whitelist items. Copy the text above.", count, scopeName)
+            end
+        end)
+
+        -- === IMPORT SECTION ===
+        MakeLabel(self, "Paste a Sell List string and pick which list it imports into.", 16, -228)
+
+        local importScope = "character"
+
+        local importScopeLabel = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        importScopeLabel:SetPoint("TOPLEFT", 16, -256)
+        importScopeLabel:SetText("Target list:")
+
+        local importCharCB =
+            CreateFrame("CheckButton", "EbonClearanceImportTargetCharCB", self, "UIRadioButtonTemplate")
+        importCharCB:SetPoint("LEFT", importScopeLabel, "RIGHT", 8, 0)
+        importCharCB:SetChecked(true)
+        local importCharLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        importCharLbl:SetPoint("LEFT", importCharCB, "RIGHT", 2, 1)
+        importCharLbl:SetText("Character")
+
+        local importAcctCB =
+            CreateFrame("CheckButton", "EbonClearanceImportTargetAcctCB", self, "UIRadioButtonTemplate")
+        importAcctCB:SetPoint("LEFT", importCharLbl, "RIGHT", 12, -1)
+        importAcctCB:SetChecked(false)
+        local importAcctLbl = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        importAcctLbl:SetPoint("LEFT", importAcctCB, "RIGHT", 2, 1)
+        importAcctLbl:SetText("Account")
+
+        importCharCB:SetScript("OnClick", function()
+            importScope = "character"
+            importCharCB:SetChecked(true)
+            importAcctCB:SetChecked(false)
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        importAcctCB:SetScript("OnClick", function()
+            importScope = "account"
+            importAcctCB:SetChecked(true)
+            importCharCB:SetChecked(false)
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+
+        -- Wrap in a backdrop frame for the same reason as the export box:
+        -- the raw ScrollFrame is transparent until typed into, leaving the
+        -- user with no visual target for paste. Wrapper supplies chrome;
+        -- ScrollFrame inside owns scrolling.
+        local importBoxBg = CreateFrame("Frame", nil, self)
+        importBoxBg:SetPoint("TOPLEFT", 16, -284)
+        importBoxBg:SetSize(EC_PANEL_WIDTH - 36, 50)
+        importBoxBg:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        importBoxBg:SetBackdropColor(0, 0, 0, 0.6)
+        importBoxBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
+        EC_compCache.registerWidth(importBoxBg, 36)
+
+        local importScroll =
+            CreateFrame("ScrollFrame", "EbonClearanceImportScroll", importBoxBg, "UIPanelScrollFrameTemplate")
+        importScroll:SetPoint("TOPLEFT", 6, -6)
+        importScroll:SetPoint("BOTTOMRIGHT", -28, 6)
+
+        local importBox = CreateFrame("EditBox", "EbonClearanceImportBox", importScroll)
+        importBox:SetAutoFocus(false)
+        importBox:SetMultiLine(true)
+        importBox:SetFontObject("GameFontHighlightSmall")
+        -- Explicit size required so an empty EditBox still has a clickable area
+        -- for paste. Without SetHeight, multiline EditBoxes collapse to zero.
+        importBox:SetSize(560, 50)
+        importBox:SetText("")
+        importBox:SetScript("OnEscapePressed", function(s)
+            s:ClearFocus()
+        end)
+        importScroll:SetScrollChild(importBox)
+        -- Clicking anywhere in the wrapper focuses the EditBox so users can
+        -- paste without having to land on the (empty) glyph row inside the
+        -- scroll frame.
+        importBoxBg:EnableMouse(true)
+        importBoxBg:SetScript("OnMouseDown", function()
+            importBox:SetFocus()
+        end)
+
+        local importMergeBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        importMergeBtn:SetSize(120, 22)
+        importMergeBtn:SetPoint("TOPLEFT", 16, -342)
+        importMergeBtn:SetText("Import (Merge)")
+
+        local importReplaceBtn = CreateFrame("Button", nil, self, "UIPanelButtonTemplate")
+        importReplaceBtn:SetSize(120, 22)
+        importReplaceBtn:SetPoint("LEFT", importMergeBtn, "RIGHT", 8, 0)
+        importReplaceBtn:SetText("Import (Replace)")
+
+        local statusFS = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        statusFS:SetPoint("TOPLEFT", 16, -370)
+        EC_compCache.setPanelWidth(statusFS, 16)
+        statusFS:SetJustifyH("LEFT")
+        statusFS:SetText("")
+
+        local function runImport(mode)
+            local raw = importBox:GetText() or ""
+            -- Auto-detect: full settings packs start with the EC_PACK_V1 marker
+            -- on their first line. Anything else falls through to the existing
+            -- single-list import, which honours the Target scope radio above.
+            local firstLine = raw:match("^%s*([^\r\n]+)")
+            local isPack = firstLine and firstLine:sub(1, #EC_compCache.PACK_PREFIX) == EC_compCache.PACK_PREFIX
+            local ok, msg
+            if isPack and EC_compCache.importFullPack then
+                ok, msg = EC_compCache.importFullPack(raw, mode)
+            else
+                ok, msg = EC_ImportWhitelist(raw, mode, importScope)
+            end
+            statusFS:SetText(ok and ("|cff00ff00" .. msg .. "|r") or ("|cffff4444" .. msg .. "|r"))
+            if ok then
+                PlaySound("igMainMenuOptionCheckBoxOn")
+                PrintNice(msg)
+                if isPack then
                 -- The pack importer already refreshed every relevant panel,
                 -- so nothing extra to do here.
-            else
-                local panelName = (importScope == "account") and "EbonClearanceOptionsAccountWhitelist"
-                    or "EbonClearanceOptionsWhitelist"
-                local wp = _G[panelName]
-                if wp and wp.listUI then
-                    wp.listUI:Refresh()
+                else
+                    local panelName = (importScope == "account") and "EbonClearanceOptionsAccountWhitelist"
+                        or "EbonClearanceOptionsWhitelist"
+                    local wp = _G[panelName]
+                    if wp and wp.listUI then
+                        wp.listUI:Refresh()
+                    end
                 end
+            else
+                PlaySound("igMainMenuOptionCheckBoxOff")
             end
-        else
-            PlaySound("igMainMenuOptionCheckBoxOff")
         end
-    end
-    importMergeBtn:SetScript("OnClick", function()
-        runImport("merge")
-    end)
-    importReplaceBtn:SetScript("OnClick", function()
-        runImport("replace")
-    end)
+        importMergeBtn:SetScript("OnClick", function()
+            runImport("merge")
+        end)
+        importReplaceBtn:SetScript("OnClick", function()
+            runImport("replace")
+        end)
 
-    -- Grey explanation is anchored to the status line so it naturally flows
-    -- below, even when the status wraps to two lines (e.g. long error).
-    local importNote = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    importNote:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
-    EC_compCache.setPanelWidth(importNote, 16)
-    importNote:SetJustifyH("LEFT")
-    importNote:SetJustifyV("TOP")
-    if importNote.SetWordWrap then
-        importNote:SetWordWrap(true)
-    end
-    importNote:SetText(
-        "|cffaaaaaa'Merge' adds imported items to the target list. "
-            .. "'Replace' clears the target list first, then adds the imported items.|r"
-    )
+        -- Grey explanation is anchored to the status line so it naturally flows
+        -- below, even when the status wraps to two lines (e.g. long error).
+        local importNote = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        importNote:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
+        EC_compCache.setPanelWidth(importNote, 16)
+        importNote:SetJustifyH("LEFT")
+        importNote:SetJustifyV("TOP")
+        if importNote.SetWordWrap then
+            importNote:SetWordWrap(true)
+        end
+        importNote:SetText(
+            "|cffaaaaaa'Merge' adds imported items to the target list. "
+                .. "'Replace' clears the target list first, then adds the imported items.|r"
+        )
     end)
 end)
 
@@ -8438,7 +8478,12 @@ DeletePanel:SetScript("OnShow", function(self)
         end
     end, function(self)
         MakeHeader(self, "Deletion Settings", -16)
-        local delDesc = MakeLabel(self, "Items on this list are destroyed automatically on the next bag scan. This cannot be undone.", 16, -44)
+        local delDesc = MakeLabel(
+            self,
+            "Items on this list are destroyed automatically on the next bag scan. This cannot be undone.",
+            16,
+            -44
+        )
         local delHint = self:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         delHint:SetPoint("TOPLEFT", delDesc, "BOTTOMLEFT", 0, -4)
         EC_compCache.setPanelWidth(delHint, 16)
@@ -8514,244 +8559,244 @@ ScavengerPanel:SetScript("OnShow", function(self)
             self.fastLootCB:SetChecked(DB.fastLoot)
         end
     end, function(self, content)
-    MakeHeader(content, "Scavenger Settings", -16)
-    MakeLabel(
-        content,
-        "Controls summoning and muting of |cffff7f7fGreedy Scavenger|r. The auto-loot cycle will continuously loot and sell while your bags fill up.",
-        16,
-        -44
-    )
+        MakeHeader(content, "Scavenger Settings", -16)
+        MakeLabel(
+            content,
+            "Controls summoning and muting of |cffff7f7fGreedy Scavenger|r. The auto-loot cycle will continuously loot and sell while your bags fill up.",
+            16,
+            -44
+        )
 
-    local sumCB =
-        CreateFrame("CheckButton", "EbonClearanceSummonGreedyCB", content, "InterfaceOptionsCheckButtonTemplate")
-    sumCB:SetPoint("TOPLEFT", 16, -96)
-    sumCB:SetChecked(DB.summonGreedy)
-    local st = _G[sumCB:GetName() .. "Text"]
-    if st then
-        st:SetText("Summon |cffff7f7fGreedy Scavenger|r after vendoring")
-        st:SetWidth(420)
-        st:SetJustifyH("LEFT")
-    end
-    sumCB:SetScript("OnClick", function()
-        DB.summonGreedy = sumCB:GetChecked() and true or false
-        if not DB.summonGreedy and DB.autoLootCycle then
-            DB.autoLootCycle = false
-            if self.cycleCB then
-                self.cycleCB:SetChecked(false)
-            end
+        local sumCB =
+            CreateFrame("CheckButton", "EbonClearanceSummonGreedyCB", content, "InterfaceOptionsCheckButtonTemplate")
+        sumCB:SetPoint("TOPLEFT", 16, -96)
+        sumCB:SetChecked(DB.summonGreedy)
+        local st = _G[sumCB:GetName() .. "Text"]
+        if st then
+            st:SetText("Summon |cffff7f7fGreedy Scavenger|r after vendoring")
+            st:SetWidth(420)
+            st:SetJustifyH("LEFT")
         end
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    self.sumCB = sumCB
-
-    local combatOnlyCB = AddCheckbox(
-        content,
-        "EbonClearanceSummonOnlyOutOfCombatCB",
-        sumCB,
-        "Only summon |cffff7f7fGreedy Scavenger|r when out of combat",
-        function()
-            return DB.summonOnlyOutOfCombat
-        end,
-        function(v)
-            DB.summonOnlyOutOfCombat = v
-        end,
-        -8
-    )
-    self.combatOnlyCB = combatOnlyCB
-
-    local chatCB = AddCheckbox(
-        content,
-        "EbonClearanceHideGreedyChatCB",
-        combatOnlyCB,
-        "Hide |cffff7f7fGreedy Scavenger|r's chat messages",
-        function()
-            return DB.hideGreedyChat
-        end,
-        function(v)
-            DB.hideGreedyChat = v
-            NS.ApplyGreedyChatFilter()
-        end,
-        -8
-    )
-    self.chatCB = chatCB
-
-    local bubCB = AddCheckbox(
-        content,
-        "EbonClearanceHideGreedyBubblesCB",
-        chatCB,
-        "Hide |cffff7f7fGreedy Scavenger|r's chat bubbles",
-        function()
-            return DB.hideGreedyBubbles
-        end,
-        function(v)
-            DB.hideGreedyBubbles = v
-        end,
-        -8
-    )
-    self.bubCB = bubCB
-
-    local delaySlider = AddSlider(
-        content,
-        "EbonClearanceSummonDelaySlider",
-        bubCB,
-        "Summon delay",
-        0.0,
-        3.0,
-        0.1,
-        function()
-            return DB.summonDelay or 1.6
-        end,
-        function(v)
-            DB.summonDelay = v
-        end,
-        -16,
-        "%.1fs"
-    )
-    self.delaySlider = delaySlider
-    delaySlider:SetWidth(200)
-
-    local cycleCB = AddCheckbox(
-        content,
-        "EbonClearanceAutoLootCycleCB",
-        delaySlider,
-        "Enable auto-loot cycle (loot, sell, repeat)",
-        function()
-            return DB.autoLootCycle
-        end,
-        function(v)
-            DB.autoLootCycle = v
-            if v then
-                DB.summonGreedy = true
-                if self.sumCB then
-                    self.sumCB:SetChecked(true)
+        sumCB:SetScript("OnClick", function()
+            DB.summonGreedy = sumCB:GetChecked() and true or false
+            if not DB.summonGreedy and DB.autoLootCycle then
+                DB.autoLootCycle = false
+                if self.cycleCB then
+                    self.cycleCB:SetChecked(false)
                 end
             end
-        end,
-        -16
-    )
-    self.cycleCB = cycleCB
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.sumCB = sumCB
 
-    local cycleNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    cycleNote:SetPoint("TOPLEFT", cycleCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(cycleNote, 60)
-    cycleNote:SetJustifyH("LEFT")
-    cycleNote:SetText(
-        "|cff888888At threshold: Greedy is dismissed and the Goblin Merchant is summoned. Right-click it to sell; Greedy re-summons automatically.|r"
-    )
+        local combatOnlyCB = AddCheckbox(
+            content,
+            "EbonClearanceSummonOnlyOutOfCombatCB",
+            sumCB,
+            "Only summon |cffff7f7fGreedy Scavenger|r when out of combat",
+            function()
+                return DB.summonOnlyOutOfCombat
+            end,
+            function(v)
+                DB.summonOnlyOutOfCombat = v
+            end,
+            -8
+        )
+        self.combatOnlyCB = combatOnlyCB
 
-    local threshSlider = AddSlider(
-        content,
-        "EbonClearanceBagThresholdSlider",
-        cycleNote,
-        "Bag slots remaining before selling",
-        0,
-        10,
-        1,
-        function()
-            return DB.bagFullThreshold or 2
-        end,
-        function(v)
-            DB.bagFullThreshold = v
-        end,
-        -16,
-        "%d"
-    )
-    self.threshSlider = threshSlider
-    threshSlider:SetWidth(200)
+        local chatCB = AddCheckbox(
+            content,
+            "EbonClearanceHideGreedyChatCB",
+            combatOnlyCB,
+            "Hide |cffff7f7fGreedy Scavenger|r's chat messages",
+            function()
+                return DB.hideGreedyChat
+            end,
+            function(v)
+                DB.hideGreedyChat = v
+                NS.ApplyGreedyChatFilter()
+            end,
+            -8
+        )
+        self.chatCB = chatCB
 
-    local autoOpenCB = AddCheckbox(
-        content,
-        "EbonClearanceAutoOpenCB",
-        threshSlider,
-        "Auto-open lootable containers from your bags",
-        function()
-            return DB.autoOpenContainers
-        end,
-        function(v)
-            DB.autoOpenContainers = v
-        end,
-        -16
-    )
-    self.autoOpenCB = autoOpenCB
+        local bubCB = AddCheckbox(
+            content,
+            "EbonClearanceHideGreedyBubblesCB",
+            chatCB,
+            "Hide |cffff7f7fGreedy Scavenger|r's chat bubbles",
+            function()
+                return DB.hideGreedyBubbles
+            end,
+            function(v)
+                DB.hideGreedyBubbles = v
+            end,
+            -8
+        )
+        self.bubCB = bubCB
 
-    local autoOpenNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    autoOpenNote:SetPoint("TOPLEFT", autoOpenCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(autoOpenNote, 60)
-    autoOpenNote:SetJustifyH("LEFT")
-    if autoOpenNote.SetWordWrap then
-        autoOpenNote:SetWordWrap(true)
-    end
-    autoOpenNote:SetText("|cff888888Lockboxes that need a key or lockpick are skipped. Combat-paused.|r")
+        local delaySlider = AddSlider(
+            content,
+            "EbonClearanceSummonDelaySlider",
+            bubCB,
+            "Summon delay",
+            0.0,
+            3.0,
+            0.1,
+            function()
+                return DB.summonDelay or 1.6
+            end,
+            function(v)
+                DB.summonDelay = v
+            end,
+            -16,
+            "%.1fs"
+        )
+        self.delaySlider = delaySlider
+        delaySlider:SetWidth(200)
 
-    -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
-    -- effectively enabled (autoLootDefault XOR'd with the
-    -- AUTOLOOTTOGGLE modifier), EC drains every slot in the loot
-    -- window the moment LOOT_READY fires - the loot frame flashes
-    -- briefly or skips entirely, and BoP-bind popups are auto-
-    -- confirmed for items that would otherwise interrupt the drain.
-    -- Pairs well with the auto-loot cycle for fast farming.
-    local fastLootCB = AddCheckbox(
-        content,
-        "EbonClearanceFastLootCB",
-        autoOpenNote,
-        "Fast Loot (instant corpse looting)",
-        function()
-            return DB.fastLoot
-        end,
-        function(v)
-            DB.fastLoot = v
-        end,
-        -10
-    )
-    -- AddCheckbox anchors at (0, yOff) from its anchor's BOTTOMLEFT, and
-    -- our anchor (autoOpenNote) is itself indented +26 to align with the
-    -- auto-open checkbox label. Back-shift the x by -26 to put fastLootCB
-    -- on the panel's left margin, level with autoOpenCB above. Same trick
-    -- the Protection Settings panel uses to keep its toggle stack
-    -- left-aligned beneath each toggle's wrapped explanatory note.
-    fastLootCB:ClearAllPoints()
-    fastLootCB:SetPoint("TOPLEFT", autoOpenNote, "BOTTOMLEFT", -26, -10)
-    self.fastLootCB = fastLootCB
+        local cycleCB = AddCheckbox(
+            content,
+            "EbonClearanceAutoLootCycleCB",
+            delaySlider,
+            "Enable auto-loot cycle (loot, sell, repeat)",
+            function()
+                return DB.autoLootCycle
+            end,
+            function(v)
+                DB.autoLootCycle = v
+                if v then
+                    DB.summonGreedy = true
+                    if self.sumCB then
+                        self.sumCB:SetChecked(true)
+                    end
+                end
+            end,
+            -16
+        )
+        self.cycleCB = cycleCB
 
-    local fastLootNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    fastLootNote:SetPoint("TOPLEFT", fastLootCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(fastLootNote, 60)
-    fastLootNote:SetJustifyH("LEFT")
-    if fastLootNote.SetWordWrap then
-        fastLootNote:SetWordWrap(true)
-    end
-    fastLootNote:SetText(
-        "|cff888888Speeds up manual looting (corpses, fishing, gift bags, dungeon/raid loot, mailbox). Honours Blizzard's |cffffff00Auto Loot|r|cff888888 setting. |cffff7f7fGreedy Scavenger|r|cff888888 looting is already instant and isn't affected.|r"
-    )
+        local cycleNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        cycleNote:SetPoint("TOPLEFT", cycleCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(cycleNote, 60)
+        cycleNote:SetJustifyH("LEFT")
+        cycleNote:SetText(
+            "|cff888888At threshold: Greedy is dismissed and the Goblin Merchant is summoned. Right-click it to sell; Greedy re-summons automatically.|r"
+        )
 
-    -- v2.10.0: the v2.9.0 editable companion-name input boxes were removed
-    -- from this panel after in-game testing showed the click-to-focus path
-    -- was unreliable on PE-ElvUI; users could see the inputs but typing did
-    -- not update DB.scavengerName / DB.merchantName consistently. The
-    -- underlying mechanism (DB fields, EC_compCache.refreshNames, the
-    -- EnsureDB defaults, and the spellID 600126 cold-cache fallback in
-    -- FindGoblinMerchantIndex) all stay - they are still the source of
-    -- truth for companion lookup and a future re-enable can drop the UI
-    -- back in without touching the runtime path. For now if a user needs
-    -- to override either name they can edit DB.scavengerName /
-    -- DB.merchantName directly via /run on a single character.
+        local threshSlider = AddSlider(
+            content,
+            "EbonClearanceBagThresholdSlider",
+            cycleNote,
+            "Bag slots remaining before selling",
+            0,
+            10,
+            1,
+            function()
+                return DB.bagFullThreshold or 2
+            end,
+            function(v)
+                DB.bagFullThreshold = v
+            end,
+            -16,
+            "%d"
+        )
+        self.threshSlider = threshSlider
+        threshSlider:SetWidth(200)
 
-    -- Discoverability hint for the right-click context menu. Lives on this
-    -- panel because both v2.3.0 bag-action features cluster here.
-    local rightClickHint = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    rightClickHint:SetPoint("TOPLEFT", fastLootNote, "BOTTOMLEFT", 0, -16)
-    EC_compCache.setPanelWidth(rightClickHint, 60)
-    rightClickHint:SetJustifyH("LEFT")
-    if rightClickHint.SetWordWrap then
-        rightClickHint:SetWordWrap(true)
-    end
-    rightClickHint:SetText(
-        "|cffffb84dTip:|r |cff888888Alt+Right-Click any item in your bags for a quick-action menu (Sell, Keep, Delete, Sell Now).|r"
-    )
+        local autoOpenCB = AddCheckbox(
+            content,
+            "EbonClearanceAutoOpenCB",
+            threshSlider,
+            "Auto-open lootable containers from your bags",
+            function()
+                return DB.autoOpenContainers
+            end,
+            function(v)
+                DB.autoOpenContainers = v
+            end,
+            -16
+        )
+        self.autoOpenCB = autoOpenCB
 
-    -- Size the scroll content to fit the bottom-most widget so the scrollbar
-    -- range matches actual content (no excess empty space at the bottom).
-    EC_FitScrollContent(content, rightClickHint)
+        local autoOpenNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        autoOpenNote:SetPoint("TOPLEFT", autoOpenCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(autoOpenNote, 60)
+        autoOpenNote:SetJustifyH("LEFT")
+        if autoOpenNote.SetWordWrap then
+            autoOpenNote:SetWordWrap(true)
+        end
+        autoOpenNote:SetText("|cff888888Lockboxes that need a key or lockpick are skipped. Combat-paused.|r")
+
+        -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
+        -- effectively enabled (autoLootDefault XOR'd with the
+        -- AUTOLOOTTOGGLE modifier), EC drains every slot in the loot
+        -- window the moment LOOT_READY fires - the loot frame flashes
+        -- briefly or skips entirely, and BoP-bind popups are auto-
+        -- confirmed for items that would otherwise interrupt the drain.
+        -- Pairs well with the auto-loot cycle for fast farming.
+        local fastLootCB = AddCheckbox(
+            content,
+            "EbonClearanceFastLootCB",
+            autoOpenNote,
+            "Fast Loot (instant corpse looting)",
+            function()
+                return DB.fastLoot
+            end,
+            function(v)
+                DB.fastLoot = v
+            end,
+            -10
+        )
+        -- AddCheckbox anchors at (0, yOff) from its anchor's BOTTOMLEFT, and
+        -- our anchor (autoOpenNote) is itself indented +26 to align with the
+        -- auto-open checkbox label. Back-shift the x by -26 to put fastLootCB
+        -- on the panel's left margin, level with autoOpenCB above. Same trick
+        -- the Protection Settings panel uses to keep its toggle stack
+        -- left-aligned beneath each toggle's wrapped explanatory note.
+        fastLootCB:ClearAllPoints()
+        fastLootCB:SetPoint("TOPLEFT", autoOpenNote, "BOTTOMLEFT", -26, -10)
+        self.fastLootCB = fastLootCB
+
+        local fastLootNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        fastLootNote:SetPoint("TOPLEFT", fastLootCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(fastLootNote, 60)
+        fastLootNote:SetJustifyH("LEFT")
+        if fastLootNote.SetWordWrap then
+            fastLootNote:SetWordWrap(true)
+        end
+        fastLootNote:SetText(
+            "|cff888888Speeds up manual looting (corpses, fishing, gift bags, dungeon/raid loot, mailbox). Honours Blizzard's |cffffff00Auto Loot|r|cff888888 setting. |cffff7f7fGreedy Scavenger|r|cff888888 looting is already instant and isn't affected.|r"
+        )
+
+        -- v2.10.0: the v2.9.0 editable companion-name input boxes were removed
+        -- from this panel after in-game testing showed the click-to-focus path
+        -- was unreliable on PE-ElvUI; users could see the inputs but typing did
+        -- not update DB.scavengerName / DB.merchantName consistently. The
+        -- underlying mechanism (DB fields, EC_compCache.refreshNames, the
+        -- EnsureDB defaults, and the spellID 600126 cold-cache fallback in
+        -- FindGoblinMerchantIndex) all stay - they are still the source of
+        -- truth for companion lookup and a future re-enable can drop the UI
+        -- back in without touching the runtime path. For now if a user needs
+        -- to override either name they can edit DB.scavengerName /
+        -- DB.merchantName directly via /run on a single character.
+
+        -- Discoverability hint for the right-click context menu. Lives on this
+        -- panel because both v2.3.0 bag-action features cluster here.
+        local rightClickHint = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        rightClickHint:SetPoint("TOPLEFT", fastLootNote, "BOTTOMLEFT", 0, -16)
+        EC_compCache.setPanelWidth(rightClickHint, 60)
+        rightClickHint:SetJustifyH("LEFT")
+        if rightClickHint.SetWordWrap then
+            rightClickHint:SetWordWrap(true)
+        end
+        rightClickHint:SetText(
+            "|cffffb84dTip:|r |cff888888Alt+Right-Click any item in your bags for a quick-action menu (Sell, Keep, Delete, Sell Now).|r"
+        )
+
+        -- Size the scroll content to fit the bottom-most widget so the scrollbar
+        -- range matches actual content (no excess empty space at the bottom).
+        EC_FitScrollContent(content, rightClickHint)
     end, true)
 end)
 
@@ -8910,9 +8955,7 @@ local function CreateNameListUI(parent, titleText, setTableName, x, y)
         -- joiner (\226\128\139 = U+200B). Without this, an entry that
         -- looks identical to the player's character name in the UI can
         -- still mismatch the EC_IsCharacterAllowed lookup.
-        local v = (input:GetText() or "")
-            :gsub("^[%s\194\160\226\128\139]+", "")
-            :gsub("[%s\194\160\226\128\139]+$", "")
+        local v = (input:GetText() or ""):gsub("^[%s\194\160\226\128\139]+", ""):gsub("[%s\194\160\226\128\139]+$", "")
         if v == "" then
             PlaySound("igMainMenuOptionCheckBoxOff")
             return
@@ -8995,12 +9038,8 @@ CharPanel:SetScript("OnShow", function(self)
         bagDesc:ClearAllPoints()
         bagDesc:SetPoint("TOPLEFT", bagHeader, "BOTTOMLEFT", 0, -6)
 
-        local sbCB = CreateFrame(
-            "CheckButton",
-            "EbonClearanceSellBorderCB",
-            self,
-            "InterfaceOptionsCheckButtonTemplate"
-        )
+        local sbCB =
+            CreateFrame("CheckButton", "EbonClearanceSellBorderCB", self, "InterfaceOptionsCheckButtonTemplate")
         sbCB:SetPoint("TOPLEFT", bagDesc, "BOTTOMLEFT", 0, -8)
         sbCB:SetChecked(DB.sellBorderEnabled)
 
@@ -9159,7 +9198,9 @@ BlacklistPanel:SetScript("OnShow", function(self)
         if blNote.SetWordWrap then
             blNote:SetWordWrap(true)
         end
-        blNote:SetText("|cffaaaaaaFor automatic protection rules (equipped gear, looted upgrades, equipment sets, affixes, chance-on-hit), see the |r|cffffb84dProtection Settings|r|cffaaaaaa panel.|r")
+        blNote:SetText(
+            "|cffaaaaaaFor automatic protection rules (equipped gear, looted upgrades, equipment sets, affixes, chance-on-hit), see the |r|cffffb84dProtection Settings|r|cffaaaaaa panel.|r"
+        )
 
         -- Anchored to blNote so the hint stays below even when the
         -- description wraps to multiple lines.
@@ -9235,315 +9276,309 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         end
 
         MakeHeader(content, "Protection Settings", -16)
-    local desc = MakeLabel(
-        content,
-        "Automatic protection rules. Items matched by any rule below are added to your Keep List automatically and excluded from auto-sell.",
-        16,
-        -44
-    )
+        local desc = MakeLabel(
+            content,
+            "Automatic protection rules. Items matched by any rule below are added to your Keep List automatically and excluded from auto-sell.",
+            16,
+            -44
+        )
 
-    -- v2.10.0: auto-protect equipped gear. Toggling on runs a one-shot sync
-    -- of every currently equipped slot into the Keep List, then a reactive
-    -- PLAYER_EQUIPMENT_CHANGED handler keeps the list in step with future
-    -- gear swaps. The blacklist veto in EC_IsSellable prevents auto-rules
-    -- from touching anything on this list, so a replaced upgrade sliding
-    -- into bags is automatically protected. Tooltip annotation surfaces
-    -- "(auto-protected: equipped)" so users who decide they want an
-    -- auto-added item sold can see why it's being kept.
-    local autoEquipCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceAutoProtectEquippedCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    autoEquipCB:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -10)
-    autoEquipCB:SetChecked(DB.autoAddEquipped)
-    local aeText = _G[autoEquipCB:GetName() .. "Text"]
-    if aeText then
-        aeText:SetText("Auto-protect equipped gear")
-        EC_compCache.setPanelWidth(aeText, 60)
-        aeText:SetJustifyH("LEFT")
-    end
-    autoEquipCB:SetScript("OnClick", function(cb)
-        local on = cb:GetChecked() and true or false
-        local wasOff = (DB.autoAddEquipped ~= true)
-        DB.autoAddEquipped = on
-        PlaySound("igMainMenuOptionCheckBoxOn")
-        if on and wasOff then
-            EC_compCache.syncEquipped()
-            refreshKeepListUI()
+        -- v2.10.0: auto-protect equipped gear. Toggling on runs a one-shot sync
+        -- of every currently equipped slot into the Keep List, then a reactive
+        -- PLAYER_EQUIPMENT_CHANGED handler keeps the list in step with future
+        -- gear swaps. The blacklist veto in EC_IsSellable prevents auto-rules
+        -- from touching anything on this list, so a replaced upgrade sliding
+        -- into bags is automatically protected. Tooltip annotation surfaces
+        -- "(auto-protected: equipped)" so users who decide they want an
+        -- auto-added item sold can see why it's being kept.
+        local autoEquipCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceAutoProtectEquippedCB",
+            content,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        autoEquipCB:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -10)
+        autoEquipCB:SetChecked(DB.autoAddEquipped)
+        local aeText = _G[autoEquipCB:GetName() .. "Text"]
+        if aeText then
+            aeText:SetText("Auto-protect equipped gear")
+            EC_compCache.setPanelWidth(aeText, 60)
+            aeText:SetJustifyH("LEFT")
         end
-    end)
-    self.autoEquipCB = autoEquipCB
-
-    local autoEquipNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    autoEquipNote:SetPoint("TOPLEFT", autoEquipCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(autoEquipNote, 60)
-    autoEquipNote:SetJustifyH("LEFT")
-    if autoEquipNote.SetWordWrap then
-        autoEquipNote:SetWordWrap(true)
-    end
-    autoEquipNote:SetText(
-        "|cff888888Adds your equipped gear to the Keep List, and anything you equip later. Alt+Right-Click an item to remove it.|r"
-    )
-
-    -- v2.11.0 auto-protect upgrades. The companion to v2.10.0's auto-
-    -- protect-equipped: this one watches BAG_UPDATE for items whose iLvl
-    -- exceeds the equipped item in any of their candidate slots (rings,
-    -- trinkets, weapons compare against the lower of the two equipped
-    -- slots so any genuine upgrade triggers). Looted upgrades sitting in
-    -- bags are stamped on the Keep list before any iLvl-cap rule on
-    -- Merchant Settings can sweep them up. Default off; opt-in.
-    local autoUpgradeCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceAutoProtectUpgradesCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    autoUpgradeCB:SetPoint("TOPLEFT", autoEquipNote, "BOTTOMLEFT", -26, -10)
-    autoUpgradeCB:SetChecked(DB.autoProtectUpgrades)
-    local auText = _G[autoUpgradeCB:GetName() .. "Text"]
-    if auText then
-        auText:SetText("Auto-protect upgraded gear in bags")
-        EC_compCache.setPanelWidth(auText, 60)
-        auText:SetJustifyH("LEFT")
-    end
-    autoUpgradeCB:SetScript("OnClick", function(cb)
-        DB.autoProtectUpgrades = cb:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-        if DB.autoProtectUpgrades then
-            -- Re-check on toggle so existing bag contents are evaluated
-            -- immediately rather than waiting for the next BAG_UPDATE.
-            EC_compCache.checkBagsForUpgrades()
-            refreshKeepListUI()
-        end
-    end)
-    self.autoUpgradeCB = autoUpgradeCB
-
-    local autoUpgradeNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    autoUpgradeNote:SetPoint("TOPLEFT", autoUpgradeCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(autoUpgradeNote, 60)
-    autoUpgradeNote:SetJustifyH("LEFT")
-    if autoUpgradeNote.SetWordWrap then
-        autoUpgradeNote:SetWordWrap(true)
-    end
-    autoUpgradeNote:SetText(
-        "|cff888888Auto-Keeps bag items with a higher iLvl than your current gear in the same slot.|r"
-    )
-
-    -- v2.13.0 Equipment Manager protection. Catches the dual-spec /
-    -- off-set gap: items assigned to your alternate Blizzard equipment
-    -- set sit in bags between swaps and aren't protected by
-    -- autoAddEquipped (which only catches currently-equipped slots).
-    -- One-shot sync at toggle, then EQUIPMENT_SETS_CHANGED reactive.
-    local autoSetCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceAutoProtectSetsCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    autoSetCB:SetPoint("TOPLEFT", autoUpgradeNote, "BOTTOMLEFT", -26, -10)
-    autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
-    local asText = _G[autoSetCB:GetName() .. "Text"]
-    if asText then
-        asText:SetText("Auto-protect items in Blizzard equipment sets")
-        EC_compCache.setPanelWidth(asText, 60)
-        asText:SetJustifyH("LEFT")
-    end
-    autoSetCB:SetScript("OnClick", function(cb)
-        local on = cb:GetChecked() and true or false
-        local wasOff = (DB.autoProtectEquipmentSets ~= true)
-        DB.autoProtectEquipmentSets = on
-        PlaySound("igMainMenuOptionCheckBoxOn")
-        if on and wasOff then
-            EC_compCache.syncEquipmentSets(false)
-            refreshKeepListUI()
-        end
-    end)
-    self.autoSetCB = autoSetCB
-
-    local autoSetNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    autoSetNote:SetPoint("TOPLEFT", autoSetCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(autoSetNote, 60)
-    autoSetNote:SetJustifyH("LEFT")
-    if autoSetNote.SetWordWrap then
-        autoSetNote:SetWordWrap(true)
-    end
-    autoSetNote:SetText(
-        "|cff888888Auto-Keeps every item in your saved equipment-manager sets. Removing a set doesn't drop its items from the Keep List - Alt+Right-Click to remove them.|r"
-    )
-
-    -- v2.19.0 PE roguelite affix protection. The base itemID of an
-    -- affixed item (e.g. "Thorbia's Gauntlets of Fortified by Pain IV")
-    -- is identical to the base, plain version. A user with the base
-    -- itemID on their Sell List or Delete List would inadvertently
-    -- dump the random-affix version, which is meaningfully different
-    -- gear. This toggle is a per-decision gate (no one-shot sync;
-    -- protection runs at sell/delete time only). No Keep List
-    -- entries are stamped - if the user wants the protected items
-    -- on the Keep List explicitly, they Alt+Right-Click to add.
-    local autoAffixCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceProtectAffixedRareCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    autoAffixCB:SetPoint("TOPLEFT", autoSetNote, "BOTTOMLEFT", -26, -10)
-    autoAffixCB:SetChecked(DB.protectAffixedRareItems)
-    local aaText = _G[autoAffixCB:GetName() .. "Text"]
-    if aaText then
-        aaText:SetText("Protect rare/epic items with random affixes")
-        EC_compCache.setPanelWidth(aaText, 60)
-        aaText:SetJustifyH("LEFT")
-    end
-    autoAffixCB:SetScript("OnClick", function(cb)
-        DB.protectAffixedRareItems = cb:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    self.autoAffixCB = autoAffixCB
-
-    local autoAffixNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    autoAffixNote:SetPoint("TOPLEFT", autoAffixCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(autoAffixNote, 60)
-    autoAffixNote:SetJustifyH("LEFT")
-    if autoAffixNote.SetWordWrap then
-        autoAffixNote:SetWordWrap(true)
-    end
-    autoAffixNote:SetText(
-        "|cff888888Blue/Purple items with a random affix (e.g. |cffffb84d'of Fortified by Pain IV'|r|cff888888) are never sold or deleted, even when their itemID is listed.|r"
-    )
-
-    -- v2.23.0 child toggle: exact-rank duplicate gate on the affix
-    -- protection. Reads PE's PerkService.GetGrantedPerks /
-    -- GetLockedPerks (`_G.ProjectEbonhold`) to know which
-    -- (affixName, rank) pairs the player owns. When ON AND a bag
-    -- item's affix matches exact rank, the protection releases the
-    -- item to the normal sell / DE rules. Inert without PE.
-    local dupeAffixCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceAffixAllowExactDupesCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    -- Indent further right than the parent toggle: anchor under the
-    -- parent's note (which already has +26 indent) with no horizontal
-    -- offset, so the child sits a column to the right.
-    dupeAffixCB:SetPoint("TOPLEFT", autoAffixNote, "BOTTOMLEFT", 0, -8)
-    dupeAffixCB:SetChecked(DB.affixAllowExactDupes)
-    local daText = _G[dupeAffixCB:GetName() .. "Text"]
-    if daText then
-        daText:SetText("Allow exact-rank duplicates to be sold / disenchanted")
-        EC_compCache.setPanelWidth(daText, 86)
-        daText:SetJustifyH("LEFT")
-    end
-    dupeAffixCB:SetScript("OnClick", function(cb)
-        DB.affixAllowExactDupes = cb:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
-    self.dupeAffixCB = dupeAffixCB
-
-    local dupeAffixNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    dupeAffixNote:SetPoint("TOPLEFT", dupeAffixCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(dupeAffixNote, 86)
-    dupeAffixNote:SetJustifyH("LEFT")
-    if dupeAffixNote.SetWordWrap then
-        dupeAffixNote:SetWordWrap(true)
-    end
-    self.dupeAffixNote = dupeAffixNote
-
-    -- Greys-out the child CB when the parent toggle is off OR when PE
-    -- isn't detected, and swaps the explanatory note for a "PE not
-    -- detected" status line in that case. Called on init, on the
-    -- parent CB's OnClick, and on every refresh-callback fire.
-    local function UpdateDupeAffixEnabled()
-        local peOn = EC_compCache.peDetected and EC_compCache.peDetected()
-        local parentOn = DB.protectAffixedRareItems == true
-        if peOn and parentOn then
-            dupeAffixCB:Enable()
-            if daText then
-                daText:SetTextColor(1, 1, 1)
+        autoEquipCB:SetScript("OnClick", function(cb)
+            local on = cb:GetChecked() and true or false
+            local wasOff = (DB.autoAddEquipped ~= true)
+            DB.autoAddEquipped = on
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            if on and wasOff then
+                EC_compCache.syncEquipped()
+                refreshKeepListUI()
             end
-            dupeAffixNote:SetText(
-                "|cff888888Drops you already have at the same rank fall through to your sell rules. Different ranks of the same affix stay protected so you can still collect them all.|r"
-            )
-        else
-            dupeAffixCB:Disable()
-            if daText then
-                daText:SetTextColor(0.5, 0.5, 0.5)
+        end)
+        self.autoEquipCB = autoEquipCB
+
+        local autoEquipNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        autoEquipNote:SetPoint("TOPLEFT", autoEquipCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(autoEquipNote, 60)
+        autoEquipNote:SetJustifyH("LEFT")
+        if autoEquipNote.SetWordWrap then
+            autoEquipNote:SetWordWrap(true)
+        end
+        autoEquipNote:SetText(
+            "|cff888888Adds your equipped gear to the Keep List, and anything you equip later. Alt+Right-Click an item to remove it.|r"
+        )
+
+        -- v2.11.0 auto-protect upgrades. The companion to v2.10.0's auto-
+        -- protect-equipped: this one watches BAG_UPDATE for items whose iLvl
+        -- exceeds the equipped item in any of their candidate slots (rings,
+        -- trinkets, weapons compare against the lower of the two equipped
+        -- slots so any genuine upgrade triggers). Looted upgrades sitting in
+        -- bags are stamped on the Keep list before any iLvl-cap rule on
+        -- Merchant Settings can sweep them up. Default off; opt-in.
+        local autoUpgradeCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceAutoProtectUpgradesCB",
+            content,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        autoUpgradeCB:SetPoint("TOPLEFT", autoEquipNote, "BOTTOMLEFT", -26, -10)
+        autoUpgradeCB:SetChecked(DB.autoProtectUpgrades)
+        local auText = _G[autoUpgradeCB:GetName() .. "Text"]
+        if auText then
+            auText:SetText("Auto-protect upgraded gear in bags")
+            EC_compCache.setPanelWidth(auText, 60)
+            auText:SetJustifyH("LEFT")
+        end
+        autoUpgradeCB:SetScript("OnClick", function(cb)
+            DB.autoProtectUpgrades = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            if DB.autoProtectUpgrades then
+                -- Re-check on toggle so existing bag contents are evaluated
+                -- immediately rather than waiting for the next BAG_UPDATE.
+                EC_compCache.checkBagsForUpgrades()
+                refreshKeepListUI()
             end
-            if not peOn then
+        end)
+        self.autoUpgradeCB = autoUpgradeCB
+
+        local autoUpgradeNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        autoUpgradeNote:SetPoint("TOPLEFT", autoUpgradeCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(autoUpgradeNote, 60)
+        autoUpgradeNote:SetJustifyH("LEFT")
+        if autoUpgradeNote.SetWordWrap then
+            autoUpgradeNote:SetWordWrap(true)
+        end
+        autoUpgradeNote:SetText(
+            "|cff888888Auto-Keeps bag items with a higher iLvl than your current gear in the same slot.|r"
+        )
+
+        -- v2.13.0 Equipment Manager protection. Catches the dual-spec /
+        -- off-set gap: items assigned to your alternate Blizzard equipment
+        -- set sit in bags between swaps and aren't protected by
+        -- autoAddEquipped (which only catches currently-equipped slots).
+        -- One-shot sync at toggle, then EQUIPMENT_SETS_CHANGED reactive.
+        local autoSetCB =
+            CreateFrame("CheckButton", "EbonClearanceAutoProtectSetsCB", content, "InterfaceOptionsCheckButtonTemplate")
+        autoSetCB:SetPoint("TOPLEFT", autoUpgradeNote, "BOTTOMLEFT", -26, -10)
+        autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
+        local asText = _G[autoSetCB:GetName() .. "Text"]
+        if asText then
+            asText:SetText("Auto-protect items in Blizzard equipment sets")
+            EC_compCache.setPanelWidth(asText, 60)
+            asText:SetJustifyH("LEFT")
+        end
+        autoSetCB:SetScript("OnClick", function(cb)
+            local on = cb:GetChecked() and true or false
+            local wasOff = (DB.autoProtectEquipmentSets ~= true)
+            DB.autoProtectEquipmentSets = on
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            if on and wasOff then
+                EC_compCache.syncEquipmentSets(false)
+                refreshKeepListUI()
+            end
+        end)
+        self.autoSetCB = autoSetCB
+
+        local autoSetNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        autoSetNote:SetPoint("TOPLEFT", autoSetCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(autoSetNote, 60)
+        autoSetNote:SetJustifyH("LEFT")
+        if autoSetNote.SetWordWrap then
+            autoSetNote:SetWordWrap(true)
+        end
+        autoSetNote:SetText(
+            "|cff888888Auto-Keeps every item in your saved equipment-manager sets. Removing a set doesn't drop its items from the Keep List - Alt+Right-Click to remove them.|r"
+        )
+
+        -- v2.19.0 PE roguelite affix protection. The base itemID of an
+        -- affixed item (e.g. "Thorbia's Gauntlets of Fortified by Pain IV")
+        -- is identical to the base, plain version. A user with the base
+        -- itemID on their Sell List or Delete List would inadvertently
+        -- dump the random-affix version, which is meaningfully different
+        -- gear. This toggle is a per-decision gate (no one-shot sync;
+        -- protection runs at sell/delete time only). No Keep List
+        -- entries are stamped - if the user wants the protected items
+        -- on the Keep List explicitly, they Alt+Right-Click to add.
+        local autoAffixCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceProtectAffixedRareCB",
+            content,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        autoAffixCB:SetPoint("TOPLEFT", autoSetNote, "BOTTOMLEFT", -26, -10)
+        autoAffixCB:SetChecked(DB.protectAffixedRareItems)
+        local aaText = _G[autoAffixCB:GetName() .. "Text"]
+        if aaText then
+            aaText:SetText("Protect rare/epic items with random affixes")
+            EC_compCache.setPanelWidth(aaText, 60)
+            aaText:SetJustifyH("LEFT")
+        end
+        autoAffixCB:SetScript("OnClick", function(cb)
+            DB.protectAffixedRareItems = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.autoAffixCB = autoAffixCB
+
+        local autoAffixNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        autoAffixNote:SetPoint("TOPLEFT", autoAffixCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(autoAffixNote, 60)
+        autoAffixNote:SetJustifyH("LEFT")
+        if autoAffixNote.SetWordWrap then
+            autoAffixNote:SetWordWrap(true)
+        end
+        autoAffixNote:SetText(
+            "|cff888888Blue/Purple items with a random affix (e.g. |cffffb84d'of Fortified by Pain IV'|r|cff888888) are never sold or deleted, even when their itemID is listed.|r"
+        )
+
+        -- v2.23.0 child toggle: exact-rank duplicate gate on the affix
+        -- protection. Reads PE's PerkService.GetGrantedPerks /
+        -- GetLockedPerks (`_G.ProjectEbonhold`) to know which
+        -- (affixName, rank) pairs the player owns. When ON AND a bag
+        -- item's affix matches exact rank, the protection releases the
+        -- item to the normal sell / DE rules. Inert without PE.
+        local dupeAffixCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceAffixAllowExactDupesCB",
+            content,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        -- Indent further right than the parent toggle: anchor under the
+        -- parent's note (which already has +26 indent) with no horizontal
+        -- offset, so the child sits a column to the right.
+        dupeAffixCB:SetPoint("TOPLEFT", autoAffixNote, "BOTTOMLEFT", 0, -8)
+        dupeAffixCB:SetChecked(DB.affixAllowExactDupes)
+        local daText = _G[dupeAffixCB:GetName() .. "Text"]
+        if daText then
+            daText:SetText("Allow exact-rank duplicates to be sold / disenchanted")
+            EC_compCache.setPanelWidth(daText, 86)
+            daText:SetJustifyH("LEFT")
+        end
+        dupeAffixCB:SetScript("OnClick", function(cb)
+            DB.affixAllowExactDupes = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
+        self.dupeAffixCB = dupeAffixCB
+
+        local dupeAffixNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        dupeAffixNote:SetPoint("TOPLEFT", dupeAffixCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(dupeAffixNote, 86)
+        dupeAffixNote:SetJustifyH("LEFT")
+        if dupeAffixNote.SetWordWrap then
+            dupeAffixNote:SetWordWrap(true)
+        end
+        self.dupeAffixNote = dupeAffixNote
+
+        -- Greys-out the child CB when the parent toggle is off OR when PE
+        -- isn't detected, and swaps the explanatory note for a "PE not
+        -- detected" status line in that case. Called on init, on the
+        -- parent CB's OnClick, and on every refresh-callback fire.
+        local function UpdateDupeAffixEnabled()
+            local peOn = EC_compCache.peDetected and EC_compCache.peDetected()
+            local parentOn = DB.protectAffixedRareItems == true
+            if peOn and parentOn then
+                dupeAffixCB:Enable()
+                if daText then
+                    daText:SetTextColor(1, 1, 1)
+                end
                 dupeAffixNote:SetText(
-                    "|cff888888Project Ebonhold addon not detected. This feature needs PE's perk service to know which affixes you have.|r"
+                    "|cff888888Drops you already have at the same rank fall through to your sell rules. Different ranks of the same affix stay protected so you can still collect them all.|r"
                 )
             else
-                dupeAffixNote:SetText(
-                    "|cff888888Enable the affix protection above to use this option.|r"
-                )
+                dupeAffixCB:Disable()
+                if daText then
+                    daText:SetTextColor(0.5, 0.5, 0.5)
+                end
+                if not peOn then
+                    dupeAffixNote:SetText(
+                        "|cff888888Project Ebonhold addon not detected. This feature needs PE's perk service to know which affixes you have.|r"
+                    )
+                else
+                    dupeAffixNote:SetText("|cff888888Enable the affix protection above to use this option.|r")
+                end
             end
         end
-    end
-    self.UpdateDupeAffixEnabled = UpdateDupeAffixEnabled
-    UpdateDupeAffixEnabled()
-
-    -- Wire parent CB's OnClick to keep the child's enabled state in
-    -- sync. (Replaces the simpler OnClick the parent had above.)
-    autoAffixCB:SetScript("OnClick", function(cb)
-        DB.protectAffixedRareItems = cb:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
+        self.UpdateDupeAffixEnabled = UpdateDupeAffixEnabled
         UpdateDupeAffixEnabled()
-    end)
 
-    -- v2.20.0 Chance-on-hit protection. Sibling toggle to the affix
-    -- check above: Project Ebonhold lets players extract a weapon's
-    -- "Chance on hit:" proc spell and apply it to another item, so an
-    -- item with that proc text is meaningfully different from the
-    -- base itemID. Same gate-at-decision-time design as the affix
-    -- toggle. No quality filter because chance-on-hit is a stable
-    -- per-itemID property and extraction works regardless of rarity.
-    local procCB = CreateFrame(
-        "CheckButton",
-        "EbonClearanceProtectChanceOnHitCB",
-        content,
-        "InterfaceOptionsCheckButtonTemplate"
-    )
-    -- v2.23.0: anchor moved from autoAffixNote to dupeAffixNote so the
-    -- new child toggle sits between the affix toggle and the chance-
-    -- on-hit toggle visually.
-    -- v2.26.0: x-offset corrected to -52 so procCB returns to the
-    -- parent toggle's indent column (dupeAffixNote sits at +52 from
-    -- the parent toggle column: +26 for the dupeAffixCB indent, +26
-    -- for the note's indent under that). -26 only un-did one of those.
-    procCB:SetPoint("TOPLEFT", dupeAffixNote, "BOTTOMLEFT", -52, -10)
-    procCB:SetChecked(DB.protectChanceOnHitItems)
-    local pcText = _G[procCB:GetName() .. "Text"]
-    if pcText then
-        pcText:SetText("Protect items with Chance on hit: effects")
-        EC_compCache.setPanelWidth(pcText, 60)
-        pcText:SetJustifyH("LEFT")
-    end
-    self.procCB = procCB
+        -- Wire parent CB's OnClick to keep the child's enabled state in
+        -- sync. (Replaces the simpler OnClick the parent had above.)
+        autoAffixCB:SetScript("OnClick", function(cb)
+            DB.protectAffixedRareItems = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+            UpdateDupeAffixEnabled()
+        end)
 
-    local procNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    procNote:SetPoint("TOPLEFT", procCB, "BOTTOMLEFT", 26, -2)
-    EC_compCache.setPanelWidth(procNote, 60)
-    procNote:SetJustifyH("LEFT")
-    if procNote.SetWordWrap then
-        procNote:SetWordWrap(true)
-    end
-    procNote:SetText(
-        "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc are skipped by the quality-threshold sweep. Explicitly listing them on the Sell or Delete List still works.|r"
-    )
+        -- v2.20.0 Chance-on-hit protection. Sibling toggle to the affix
+        -- check above: Project Ebonhold lets players extract a weapon's
+        -- "Chance on hit:" proc spell and apply it to another item, so an
+        -- item with that proc text is meaningfully different from the
+        -- base itemID. Same gate-at-decision-time design as the affix
+        -- toggle. No quality filter because chance-on-hit is a stable
+        -- per-itemID property and extraction works regardless of rarity.
+        local procCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceProtectChanceOnHitCB",
+            content,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        -- v2.23.0: anchor moved from autoAffixNote to dupeAffixNote so the
+        -- new child toggle sits between the affix toggle and the chance-
+        -- on-hit toggle visually.
+        -- v2.26.0: x-offset corrected to -52 so procCB returns to the
+        -- parent toggle's indent column (dupeAffixNote sits at +52 from
+        -- the parent toggle column: +26 for the dupeAffixCB indent, +26
+        -- for the note's indent under that). -26 only un-did one of those.
+        procCB:SetPoint("TOPLEFT", dupeAffixNote, "BOTTOMLEFT", -52, -10)
+        procCB:SetChecked(DB.protectChanceOnHitItems)
+        local pcText = _G[procCB:GetName() .. "Text"]
+        if pcText then
+            pcText:SetText("Protect items with Chance on hit: effects")
+            EC_compCache.setPanelWidth(pcText, 60)
+            pcText:SetJustifyH("LEFT")
+        end
+        self.procCB = procCB
 
-    -- v2.26.0 child toggle: exact-proc duplicate gate on the chance-
-    -- on-hit protection. When ON AND a bag item's proc description
-    -- matches an engraving spell the player has already extracted (via
-    -- PE's Extraction Service / spellbook), the protection releases
-    -- the item to the normal sell / DE rules. Inert without any
-    -- learned procs.
-    procCB:SetScript("OnClick", function(cb)
-        DB.protectChanceOnHitItems = cb:GetChecked() and true or false
-        PlaySound("igMainMenuOptionCheckBoxOn")
-    end)
+        local procNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        procNote:SetPoint("TOPLEFT", procCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(procNote, 60)
+        procNote:SetJustifyH("LEFT")
+        if procNote.SetWordWrap then
+            procNote:SetWordWrap(true)
+        end
+        procNote:SetText(
+            "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc are skipped by the quality-threshold sweep. Explicitly listing them on the Sell or Delete List still works.|r"
+        )
+
+        -- v2.26.0 child toggle: exact-proc duplicate gate on the chance-
+        -- on-hit protection. When ON AND a bag item's proc description
+        -- matches an engraving spell the player has already extracted (via
+        -- PE's Extraction Service / spellbook), the protection releases
+        -- the item to the normal sell / DE rules. Inert without any
+        -- learned procs.
+        procCB:SetScript("OnClick", function(cb)
+            DB.protectChanceOnHitItems = cb:GetChecked() and true or false
+            PlaySound("igMainMenuOptionCheckBoxOn")
+        end)
 
         EC_FitScrollContent(content, procNote)
     end, true)
@@ -9632,8 +9667,7 @@ function EC_compCache.rearmProcessButton()
     -- ~100 slot checks + per-Rare/Epic tooltip scans per BAG_UPDATE.
     -- This was the dominant cost during pet AOE looting (1.5 s freezes
     -- reported by the user during v2.22.0+v2.23.0 testing).
-    local hasBinding = GetBindingKey
-        and GetBindingKey("CLICK EbonClearanceProcessCastBtn:LeftButton") ~= nil
+    local hasBinding = GetBindingKey and GetBindingKey("CLICK EbonClearanceProcessCastBtn:LeftButton") ~= nil
     if not panel:IsShown() and not hasBinding then
         return
     end
@@ -9809,7 +9843,7 @@ function EC_compCache.skipProcessTarget()
         end
     end
     if not idx then
-        return  -- everything collapsed, leave cursor as-is
+        return -- everything collapsed, leave cursor as-is
     end
     EC_compCache.armedIndex = idx
     EC_compCache.armedMode = list[idx].mode
@@ -9889,10 +9923,11 @@ function EC_compCache.refreshProcessPanel()
                 txt:SetJustifyH("LEFT")
                 header.text = txt
                 header:SetScript("OnClick", function(self)
-                    if not self.mode then return end
+                    if not self.mode then
+                        return
+                    end
                     DB.processCollapsedModes = DB.processCollapsedModes or {}
-                    DB.processCollapsedModes[self.mode] =
-                        not (DB.processCollapsedModes[self.mode] == true)
+                    DB.processCollapsedModes[self.mode] = not (DB.processCollapsedModes[self.mode] == true)
                     PlaySound("igMainMenuOptionCheckBoxOn")
                     EC_compCache.refreshProcessPanel()
                 end)
@@ -9905,12 +9940,14 @@ function EC_compCache.refreshProcessPanel()
             header.mode = entry.mode
             local isCollapsed = collapsedModes[entry.mode] == true
             local indicator = isCollapsed and "|cffaaaaaa>|r" or "|cffaaaaaav|r"
-            header.text:SetText(string.format(
-                "%s |cffffb84d%s|r |cffaaaaaa(%d)|r",
-                indicator,
-                entry.mode:upper(),
-                modeCounts[entry.mode]
-            ))
+            header.text:SetText(
+                string.format(
+                    "%s |cffffb84d%s|r |cffaaaaaa(%d)|r",
+                    indicator,
+                    entry.mode:upper(),
+                    modeCounts[entry.mode]
+                )
+            )
             header:Show()
             rowY = rowY - 18
             lastMode = entry.mode
@@ -9921,99 +9958,99 @@ function EC_compCache.refreshProcessPanel()
         -- the next section's header anchors directly below the
         -- collapsed-section header.
         if not (collapsedModes[entry.mode] == true) then
-        rowIdx = rowIdx + 1
-        local row = panel.rows[rowIdx]
-        if not row then
-            row = CreateFrame("Button", nil, panel.content)
-            row:SetHeight(20)
-            row:EnableMouse(true)
-            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-            local txt = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-            txt:SetPoint("LEFT", row, "LEFT", 16, 0)
-            txt:SetPoint("RIGHT", row, "RIGHT", -16, 0)
-            txt:SetJustifyH("LEFT")
-            row.text = txt
-            -- sel: persistent "armed" highlight. Yellow tint via the
-            -- ADD blend so it doesn't fight the hover texture above.
-            local sel = row:CreateTexture(nil, "BACKGROUND")
-            sel:SetAllPoints(row)
-            sel:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-            sel:SetBlendMode("ADD")
-            sel:SetVertexColor(1.0, 0.85, 0.3)
-            sel:SetAlpha(0)
-            row.sel = sel
-            local hl = row:CreateTexture(nil, "ARTWORK")
-            hl:SetAllPoints(row)
-            hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-            hl:SetBlendMode("ADD")
-            hl:SetAlpha(0)
-            row:SetScript("OnEnter", function(self)
-                hl:SetAlpha(0.3)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                if self.bag and self.slot then
-                    GameTooltip:SetBagItem(self.bag, self.slot)
-                elseif self.itemLink then
-                    GameTooltip:SetHyperlink(self.itemLink)
-                end
-                GameTooltip:Show()
-            end)
-            row:SetScript("OnLeave", function()
+            rowIdx = rowIdx + 1
+            local row = panel.rows[rowIdx]
+            if not row then
+                row = CreateFrame("Button", nil, panel.content)
+                row:SetHeight(20)
+                row:EnableMouse(true)
+                row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                local txt = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+                txt:SetPoint("LEFT", row, "LEFT", 16, 0)
+                txt:SetPoint("RIGHT", row, "RIGHT", -16, 0)
+                txt:SetJustifyH("LEFT")
+                row.text = txt
+                -- sel: persistent "armed" highlight. Yellow tint via the
+                -- ADD blend so it doesn't fight the hover texture above.
+                local sel = row:CreateTexture(nil, "BACKGROUND")
+                sel:SetAllPoints(row)
+                sel:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+                sel:SetBlendMode("ADD")
+                sel:SetVertexColor(1.0, 0.85, 0.3)
+                sel:SetAlpha(0)
+                row.sel = sel
+                local hl = row:CreateTexture(nil, "ARTWORK")
+                hl:SetAllPoints(row)
+                hl:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+                hl:SetBlendMode("ADD")
                 hl:SetAlpha(0)
-                GameTooltip:Hide()
-            end)
-            row:SetScript("OnClick", function(self, button)
-                if button == "RightButton" and self.itemString then
-                    DB.processIgnored = DB.processIgnored or {}
-                    DB.processIgnored[self.itemString] = true
-                    PrintNicef(
-                        "Ignored |cffb6ffb6%s|r in Process Bags. Click |cffffb84dClear Ignored|r on the panel to restore.",
-                        (GetItemInfo(self.itemID)) or "item"
+                row:SetScript("OnEnter", function(self)
+                    hl:SetAlpha(0.3)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    if self.bag and self.slot then
+                        GameTooltip:SetBagItem(self.bag, self.slot)
+                    elseif self.itemLink then
+                        GameTooltip:SetHyperlink(self.itemLink)
+                    end
+                    GameTooltip:Show()
+                end)
+                row:SetScript("OnLeave", function()
+                    hl:SetAlpha(0)
+                    GameTooltip:Hide()
+                end)
+                row:SetScript("OnClick", function(self, button)
+                    if button == "RightButton" and self.itemString then
+                        DB.processIgnored = DB.processIgnored or {}
+                        DB.processIgnored[self.itemString] = true
+                        PrintNicef(
+                            "Ignored |cffb6ffb6%s|r in Process Bags. Click |cffffb84dClear Ignored|r on the panel to restore.",
+                            (GetItemInfo(self.itemID)) or "item"
+                        )
+                        EC_compCache.refreshProcessPanel()
+                        PlaySound("igMainMenuOptionCheckBoxOn")
+                    elseif button == "LeftButton" and self.entryIndex and self.entryMode then
+                        -- Pick this row as the armed target directly.
+                        EC_compCache.armedIndex = self.entryIndex
+                        EC_compCache.armedMode = self.entryMode
+                        EC_compCache.armedBag = self.bag
+                        EC_compCache.armedSlot = self.slot
+                        EC_compCache.rearmProcessButton()
+                        PlaySound("igMainMenuOptionCheckBoxOn")
+                    end
+                end)
+                panel.rows[rowIdx] = row
+            end
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", anchor, "TOPLEFT", 16, rowY)
+            row:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -16, rowY)
+            row.bag = entry.bag
+            row.slot = entry.slot
+            row.itemID = entry.itemID
+            row.itemString = entry.itemString
+            row.itemLink = entry.link
+            -- v2.25.0: entryIndex tracks the list[] position (which spans
+            -- both visible and collapsed entries), not the visible-row
+            -- counter. armedIndex is also a list[] index, so this keeps
+            -- the selection-paint comparison correct after some sections
+            -- are collapsed.
+            row.entryIndex = i
+            row.entryMode = entry.mode
+            if entry.perCast and entry.perCast > 1 then
+                row.text:SetText(
+                    string.format(
+                        "%s  |cffaaaaaax%d -> %d cast%s|r",
+                        entry.link,
+                        entry.count,
+                        entry.casts,
+                        entry.casts == 1 and "" or "s"
                     )
-                    EC_compCache.refreshProcessPanel()
-                    PlaySound("igMainMenuOptionCheckBoxOn")
-                elseif button == "LeftButton" and self.entryIndex and self.entryMode then
-                    -- Pick this row as the armed target directly.
-                    EC_compCache.armedIndex = self.entryIndex
-                    EC_compCache.armedMode = self.entryMode
-                    EC_compCache.armedBag = self.bag
-                    EC_compCache.armedSlot = self.slot
-                    EC_compCache.rearmProcessButton()
-                    PlaySound("igMainMenuOptionCheckBoxOn")
-                end
-            end)
-            panel.rows[rowIdx] = row
-        end
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", anchor, "TOPLEFT", 16, rowY)
-        row:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -16, rowY)
-        row.bag = entry.bag
-        row.slot = entry.slot
-        row.itemID = entry.itemID
-        row.itemString = entry.itemString
-        row.itemLink = entry.link
-        -- v2.25.0: entryIndex tracks the list[] position (which spans
-        -- both visible and collapsed entries), not the visible-row
-        -- counter. armedIndex is also a list[] index, so this keeps
-        -- the selection-paint comparison correct after some sections
-        -- are collapsed.
-        row.entryIndex = i
-        row.entryMode = entry.mode
-        if entry.perCast and entry.perCast > 1 then
-            row.text:SetText(
-                string.format(
-                    "%s  |cffaaaaaax%d -> %d cast%s|r",
-                    entry.link,
-                    entry.count,
-                    entry.casts,
-                    entry.casts == 1 and "" or "s"
                 )
-            )
-        else
-            row.text:SetText(string.format("%s  |cffaaaaaax%d|r", entry.link, entry.count))
-        end
-        row:Show()
-        rowY = rowY - 20
-        end  -- end "if not collapsed" wrap (v2.25.0)
+            else
+                row.text:SetText(string.format("%s  |cffaaaaaax%d|r", entry.link, entry.count))
+            end
+            row:Show()
+            rowY = rowY - 20
+        end -- end "if not collapsed" wrap (v2.25.0)
     end
     -- Grow content so rows fit below rowAnchor. The cast/refresh
     -- buttons live on the panel itself (outside the scroll), so the
@@ -10436,20 +10473,19 @@ local function EC_BuildBugReport()
     add("Quality Rules:")
     for q = 1, 4 do
         local r = DB.qualityRules and DB.qualityRules[q] or {}
-        local rarityName = (q == 1) and "White"
-            or (q == 2) and "Green"
-            or (q == 3) and "Blue"
-            or "Epic"
+        local rarityName = (q == 1) and "White" or (q == 2) and "Green" or (q == 3) and "Blue" or "Epic"
         local capStr = (r.maxILvl and r.maxILvl > 0) and tostring(r.maxILvl) or "no cap"
         local bindStr = tostring(r.bindFilter or "any")
-        add(string.format(
-            "  %s: enabled=%s, max iLvl=%s, useEquipped=%s, bind=%s",
-            rarityName,
-            tostring(r.enabled),
-            capStr,
-            tostring(r.useEquippedILvl),
-            bindStr
-        ))
+        add(
+            string.format(
+                "  %s: enabled=%s, max iLvl=%s, useEquipped=%s, bind=%s",
+                rarityName,
+                tostring(r.enabled),
+                capStr,
+                tostring(r.useEquippedILvl),
+                bindStr
+            )
+        )
     end
     add("Active Profile: " .. tostring(DB.activeProfileName))
     add("Sell List Items: " .. tostring(EC_CountItems(DB.whitelist)))
@@ -10524,28 +10560,36 @@ local function EC_BuildBugReport()
     -- follow-up. Generic flags so the report doesn't depend on specific
     -- third-party addon names.
     add("--- Environment Capabilities ---")
-    local hostBagUI = (_G.Bagnon ~= nil)
-        or (_G.BagnonFrame ~= nil)
-        or (_G.ArkInventory ~= nil)
-        or (_G.ElvUI ~= nil)
+    local hostBagUI = (_G.Bagnon ~= nil) or (_G.BagnonFrame ~= nil) or (_G.ArkInventory ~= nil) or (_G.ElvUI ~= nil)
     add("Host bag UI detected: " .. (hostBagUI and "yes" or "no"))
-    add("Host bag-UI category API: " .. ((_G.LibStub and pcall(_G.LibStub, "AceAddon-3.0", true)) and "available" or "absent"))
+    add(
+        "Host bag-UI category API: "
+            .. ((_G.LibStub and pcall(_G.LibStub, "AceAddon-3.0", true)) and "available" or "absent")
+    )
     add("LibItemSearch: " .. (_G.LibStub and _G.LibStub("LibItemSearch-1.0", true) and "yes" or "no"))
-    add("Auction pricing source: " .. ((_G.Atr_GetAuctionBuyout ~= nil or _G.Auctionator ~= nil) and "detected" or "absent"))
-    add("Project Ebonhold extraction catalog: " .. ((_G.ExtractionService and _G.ExtractionService.learnedAffixes) and "exposed" or "absent"))
+    add(
+        "Auction pricing source: "
+            .. ((_G.Atr_GetAuctionBuyout ~= nil or _G.Auctionator ~= nil) and "detected" or "absent")
+    )
+    add(
+        "Project Ebonhold extraction catalog: "
+            .. ((_G.ExtractionService and _G.ExtractionService.learnedAffixes) and "exposed" or "absent")
+    )
 
     add("")
     add("--- Bag Display ---")
     add("Sell-border tint enabled: " .. (DB.sellBorderEnabled and "yes" or "no"))
     if DB.sellBorderColor then
         local c = DB.sellBorderColor
-        add(string.format(
-            "Sell-border colour (r,g,b,a): %.2f, %.2f, %.2f, %.2f",
-            c.r or 0,
-            c.g or 0,
-            c.b or 0,
-            c.a or 0
-        ))
+        add(
+            string.format(
+                "Sell-border colour (r,g,b,a): %.2f, %.2f, %.2f, %.2f",
+                c.r or 0,
+                c.g or 0,
+                c.b or 0,
+                c.a or 0
+            )
+        )
     end
     local decoratedCount = 0
     if EC_compCache.sellBorderButtons then
@@ -10820,8 +10864,7 @@ function EC_compCache.buildStaleUpgradeReport()
                     if not lowestEquipped then
                         skipped[#skipped + 1] = { id = id, name = name }
                     elseif iLvl <= lowestEquipped then
-                        stale[#stale + 1] =
-                            { id = id, name = name, iLvl = iLvl, lowestEquipped = lowestEquipped }
+                        stale[#stale + 1] = { id = id, name = name, iLvl = iLvl, lowestEquipped = lowestEquipped }
                     end
                 end
             end
@@ -10939,17 +10982,16 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
                     if affix then
                         PrintNicef(
                             "bag (%d,%d) %s: name=[%s] rank=[%s] desc=[%s]",
-                            bag, slot, link,
+                            bag,
+                            slot,
+                            link,
                             tostring(affix.name),
                             tostring(affix.rank),
                             tostring(affix.description)
                         )
                         local norm = EC_compCache.normaliseAffixDesc(affix.description)
                         PrintNicef("  norm=[%s]", tostring(norm))
-                        PrintNicef(
-                            "  match? %s",
-                            tostring(EC_compCache.playerHasAffixDescription(affix.description))
-                        )
+                        PrintNicef("  match? %s", tostring(EC_compCache.playerHasAffixDescription(affix.description)))
                         return
                     end
                 end
@@ -10986,14 +11028,11 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
             for slot = 1, slots do
                 local link = GetContainerItemLink(bag, slot)
                 local itemID = GetContainerItemID(bag, slot)
-                if link and itemID
-                    and EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
-                then
+                if link and itemID and EC_compCache.itemHasChanceOnHit(bag, slot, itemID) then
                     PrintNicef("procdump: scanning (%d,%d) %s", bag, slot, link)
                     local hrp = HasRandomProperty and HasRandomProperty(link)
                     PrintNicef("  HasRandomProperty=%s", tostring(hrp))
-                    local rec = EC_compCache.findLearnedAffixForItem
-                        and EC_compCache.findLearnedAffixForItem(link)
+                    local rec = EC_compCache.findLearnedAffixForItem and EC_compCache.findLearnedAffixForItem(link)
                     if rec then
                         PrintNicef(
                             "  match: name=[%s] id=%s learned=%s weaponOnly=%s",
@@ -11098,10 +11137,14 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
         PrintNice("|cffffff00/ec profile delete <name>|r  Delete a profile")
         PrintNice("|cffffff00/ec clean|r  Report items present in more than one list")
         PrintNice("|cffffff00/ec clean apply|r  Auto-resolve conflicts (Keep List > Delete List > Sell List)")
-        PrintNice("|cffffff00/ec clean upgrades|r  Report stale 'Upgrade'-tagged Keep List entries no longer above equipped")
+        PrintNice(
+            "|cffffff00/ec clean upgrades|r  Report stale 'Upgrade'-tagged Keep List entries no longer above equipped"
+        )
         PrintNice("|cffffff00/ec clean upgrades apply|r  Remove the stale 'Upgrade' entries (with confirmation)")
         PrintNice("|cffffff00/ec bugreport|r  Generate a diagnostic report for bug reports")
-        PrintNice("|cffffff00/ec sellinfo [bag slot]|r  Trace why a bag item will/won't sell (defaults to first non-empty slot)")
+        PrintNice(
+            "|cffffff00/ec sellinfo [bag slot]|r  Trace why a bag item will/won't sell (defaults to first non-empty slot)"
+        )
         PrintNice("|cffaaaaaaTip: Alt+Shift+Right-Click a bag item for the same trace.|r")
         PrintNice("|cffffff00/ecdebug|r  Show debug info and bag scan")
         return
@@ -11217,10 +11260,7 @@ SlashCmdList["ECDEBUG"] = function()
     PrintNice("|cffffff00=== EbonClearance Debug ===|r")
     for q = 1, 4 do
         local r = DB.qualityRules and DB.qualityRules[q] or {}
-        local rarityName = (q == 1) and "White"
-            or (q == 2) and "Green"
-            or (q == 3) and "Blue"
-            or "Epic"
+        local rarityName = (q == 1) and "White" or (q == 2) and "Green" or (q == 3) and "Blue" or "Epic"
         local capStr = (r.maxILvl and r.maxILvl > 0) and tostring(r.maxILvl) or "no cap"
         PrintNicef("Quality[%s]: enabled=%s, max iLvl=%s", rarityName, tostring(r.enabled), capStr)
     end
@@ -11256,8 +11296,7 @@ SlashCmdList["ECDEBUG"] = function()
                 if sellable then
                     local name, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemID)
                     local junk = (quality ~= nil) and (quality == 0) and sellPrice and sellPrice > 0
-                    local wp = IsInSet(DB.whitelist, itemID)
-                        or (ADB and IsInSet(ADB.whitelist, itemID))
+                    local wp = IsInSet(DB.whitelist, itemID) or (ADB and IsInSet(ADB.whitelist, itemID))
                     -- Quality-rule path is whatever's left when the
                     -- authoritative EC_IsSellable says yes but neither
                     -- of the explicit list/junk paths matched.
@@ -11438,8 +11477,11 @@ f:SetScript("OnEvent", function(self, event, ...)
         -- per combat exit is noisy for rogues farming heavy zones).
         -- Only counts containers, not casts available; the user picks
         -- which one to open via the panel / hold-key-to-drain.
-        if DB.lockpickEnabled and DB.lockpickNotifyOnCombatExit
-            and IsSpellKnown and IsSpellKnown(EC_compCache.SPELL_PICK_LOCK)
+        if
+            DB.lockpickEnabled
+            and DB.lockpickNotifyOnCombatExit
+            and IsSpellKnown
+            and IsSpellKnown(EC_compCache.SPELL_PICK_LOCK)
         then
             local n = 0
             for bag = 0, 4 do
@@ -11469,13 +11511,14 @@ f:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "LEARNED_SPELL_IN_TAB" or event == "SPELLS_CHANGED" then
-        -- v2.23.0: refresh the known-affix description set when the
-        -- spellbook changes. LEARNED_SPELL_IN_TAB covers extracting a
-        -- new affix; SPELLS_CHANGED covers initial bulk-populate and
-        -- bulk updates. Both routes hit the same rebuild path.
-        if EC_compCache.refreshKnownAffixes then
-            EC_compCache.refreshKnownAffixes()
-        end
+        -- v2.28.0 perf: debounced. Soul ash tree and login can fire
+        -- dozens of spell events in rapid succession; a synchronous
+        -- spellbook scan on each one caused 30+ second freezes. Reset
+        -- the accumulator on every event so we wait for 0.5 s of quiet
+        -- before doing a single rebuild.
+        EC_compCache.spellUpdatePending = true
+        EC_compCache.spellUpdateAccum = 0
+        EC_compCache.spellUpdateFrame:Show()
     elseif event == "BAG_UPDATE" or event == "ITEM_LOCK_CHANGED" then
         -- v2.24.0 perf: bag-full handler stays synchronous so the
         -- cycle's responsiveness across the free-slot threshold is
@@ -11652,9 +11695,7 @@ f:SetScript("OnEvent", function(self, event, ...)
                     "  |cffaaaaaa-|r Equipped gear and looted upgrades are auto-added to "
                         .. "your Keep list (never sold)."
                 )
-                PrintNice(
-                    "Type |cff00ff00/ec|r to customise, or pick a setup mode in the popup."
-                )
+                PrintNice("Type |cff00ff00/ec|r to customise, or pick a setup mode in the popup.")
                 EC_Delay(0.5, function()
                     StaticPopup_Show("EC_WELCOME")
                 end)

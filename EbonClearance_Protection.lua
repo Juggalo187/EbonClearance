@@ -421,6 +421,28 @@ EC_compCache.procIdToDescription = {}
 -- refreshKnownAffixes invocation.
 EC_compCache.spellbookAffixCache = {}
 
+-- v2.28.0 perf: debounce SPELLS_CHANGED / LEARNED_SPELL_IN_TAB events.
+-- Soul ash tree application and login can fire dozens of spell events in
+-- rapid succession; each triggering a full spellbook walk with tooltip
+-- scans caused 30+ second freezes. Same debounce pattern as BAG_UPDATE:
+-- accumulate events, wait for a 0.5 s idle window, then fire once.
+EC_compCache.spellUpdatePending = false
+EC_compCache.spellUpdateAccum = 0
+EC_compCache.SPELL_UPDATE_DEBOUNCE_S = 0.5
+EC_compCache.spellUpdateFrame = CreateFrame("Frame")
+EC_compCache.spellUpdateFrame:Hide()
+EC_compCache.spellUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
+    EC_compCache.spellUpdateAccum = EC_compCache.spellUpdateAccum + elapsed
+    if EC_compCache.spellUpdateAccum < EC_compCache.SPELL_UPDATE_DEBOUNCE_S then
+        return
+    end
+    self:Hide()
+    EC_compCache.spellUpdatePending = false
+    if EC_compCache.refreshKnownAffixes then
+        EC_compCache.refreshKnownAffixes()
+    end
+end)
+
 function EC_compCache.refreshKnownAffixes()
     local map = {}
     local cache = EC_compCache.spellbookAffixCache
