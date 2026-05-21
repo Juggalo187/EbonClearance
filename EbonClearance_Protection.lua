@@ -297,7 +297,7 @@ function EC_compCache.bagSlotAffixData(bag, slot)
     if itemString then
         local cached = EC_compCache.affixDataCache[itemString]
         if cached ~= nil then
-            return cached or nil  -- `false` means "scanned, no affix"
+            return cached or nil -- `false` means "scanned, no affix"
         end
     end
     local baseName = GetItemInfo(itemID)
@@ -414,9 +414,16 @@ EC_compCache.knownExtractionVersion = 0
 -- characters). /reload wipes this naturally (EC_compCache is not
 -- persisted).
 EC_compCache.procIdToDescription = {}
+-- v2.28.0: spellbook tooltip cache. Same rationale as procIdToDescription
+-- but covers the spellbook walk. Maps spellID -> normalised affix
+-- description string, or false if the spell is not an affix engraving.
+-- Avoids re-scanning hundreds of tooltip SetHyperlink calls on every
+-- refreshKnownAffixes invocation.
+EC_compCache.spellbookAffixCache = {}
 
 function EC_compCache.refreshKnownAffixes()
     local map = {}
+    local cache = EC_compCache.spellbookAffixCache
     -- Walk the player's spellbook; for each spell whose tooltip
     -- includes the engrave-affix prefix, pull the description text
     -- after the colon and store it (normalised) in the map. This is
@@ -431,21 +438,29 @@ function EC_compCache.refreshKnownAffixes()
                     local link = GetSpellLink(i, BOOKTYPE_SPELL)
                     local spellId = link and tonumber(link:match("spell:(%d+)"))
                     if spellId then
-                        scanTip():ClearLines()
-                        scanTip():SetHyperlink("spell:" .. spellId)
-                        for j = 1, scanTip():NumLines() do
-                            local fs = _G["EbonClearanceScanTooltipTextLeft" .. j]
-                            if fs and fs.GetText then
-                                local txt = fs:GetText()
-                                if txt and txt:find(EC_compCache.AFFIX_SPELL_PREFIX, 1, true) then
-                                    local desc = txt:match(":%s*(.+)$")
-                                    desc = EC_compCache.normaliseAffixDesc(desc)
-                                    if desc and desc ~= "" then
-                                        map[desc] = true
+                        local cached = cache[spellId]
+                        if cached == nil then
+                            cached = false
+                            scanTip():ClearLines()
+                            scanTip():SetHyperlink("spell:" .. spellId)
+                            for j = 1, scanTip():NumLines() do
+                                local fs = _G["EbonClearanceScanTooltipTextLeft" .. j]
+                                if fs and fs.GetText then
+                                    local txt = fs:GetText()
+                                    if txt and txt:find(EC_compCache.AFFIX_SPELL_PREFIX, 1, true) then
+                                        local desc = txt:match(":%s*(.+)$")
+                                        desc = EC_compCache.normaliseAffixDesc(desc)
+                                        if desc and desc ~= "" then
+                                            cached = desc
+                                        end
+                                        break
                                     end
-                                    break
                                 end
                             end
+                            cache[spellId] = cached
+                        end
+                        if cached then
+                            map[cached] = true
                         end
                     end
                 end
@@ -671,7 +686,7 @@ function EC_compCache.findLearnedAffixForItem(link)
     end
     local cached = EC_compCache.itemAffixLookupCache[link]
     if cached ~= nil then
-        return cached or nil  -- `false` cached "scanned, no match"
+        return cached or nil -- `false` cached "scanned, no match"
     end
     local svc = _G.ExtractionService
     if not svc or type(svc.learnedAffixes) ~= "table" then
@@ -706,9 +721,7 @@ function EC_compCache.findLearnedAffixForItem(link)
                         -- "ire" would match every word containing it.
                         local before = startPos > 1 and lower:sub(startPos - 1, startPos - 1) or ""
                         local after = lower:sub(endPos + 1, endPos + 1)
-                        if (before == "" or not before:match("%w"))
-                            and (after == "" or not after:match("%w"))
-                        then
+                        if (before == "" or not before:match("%w")) and (after == "" or not after:match("%w")) then
                             found = affix
                             break
                         end
@@ -716,7 +729,9 @@ function EC_compCache.findLearnedAffixForItem(link)
                 end
             end
         end
-        if found then break end
+        if found then
+            break
+        end
     end
     EC_compCache.itemAffixLookupCache[link] = found or false
     return found
