@@ -1397,6 +1397,64 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 34: baselineProtectedIDs profession-tool safety net.
+-- ---------------------------------------------------------------------------
+-- User Monrad reported that the basic Fishing Pole (6256), Mining Pick
+-- (2901), and Arclight Spanner (6219) were being auto-sold by a White-
+-- rule sweep. We added a hardcoded itemID safety net mirroring the
+-- v2.13.x quest-item narrowing: explicit Sell List entries still
+-- override, only auto-rule sweeps are gated. ADB.allowedItems[itemID]
+-- also bypasses (Allow Sell per-item override).
+do
+    -- Core's table literal declares baselineProtectedIDs.
+    check(
+        "EC_compCache.baselineProtectedIDs declared",
+        src:find("baselineProtectedIDs%s*=%s*{") ~= nil,
+        "Core's EC_compCache table literal must initialise baselineProtectedIDs as a map"
+    )
+
+    -- The three Monrad-reported itemIDs are in the set.
+    for _, id in ipairs({ 6256, 2901, 6219 }) do
+        check(
+            "baselineProtectedIDs contains itemID " .. id .. " (Monrad's report)",
+            src:find("%[" .. id .. "%]%s*=%s*true") ~= nil,
+            "the three items Monrad reported must remain in the safety-net list"
+        )
+    end
+
+    -- EC_IsSellable consults baselineProtectedIDs after the qualityPass
+    -- calculation, using the same narrowing pattern as isQuestItem.
+    check(
+        "EC_IsSellable consults baselineProtectedIDs",
+        src:find("baselineProtectedIDs%[itemID%]") ~= nil,
+        "EC_IsSellable must gate qualityPass on the baselineProtectedIDs map (mirrors the v2.13.x quest-item safety net)"
+    )
+
+    -- Allow Sell override bypasses the safety net (ADB.allowedItems check
+    -- must appear next to the baselineProtectedIDs check).
+    check(
+        "Allow Sell override bypasses baseline protection",
+        src:find("baselineProtectedIDs%[itemID%].-allowedItems") ~= nil
+            or src:find("allowedItems.-baselineProtectedIDs%[itemID%]") ~= nil,
+        "ADB.allowedItems[itemID] must short-circuit the baseline safety net so per-item Allow Sell still works"
+    )
+
+    -- Tooltip annotation emits "Protected - Profession tool" for matched items.
+    check(
+        "tooltip annotation emits 'Protected - Profession tool'",
+        src:find("Protected %- Profession tool") ~= nil,
+        "EC_AnnotateTooltip must emit a Profession-tool annotation so users see why the item isn't selling"
+    )
+
+    -- Sellinfo trace step exists.
+    check(
+        "/ec sellinfo trace includes the professionToolSafetyNet step",
+        src:find('"professionToolSafetyNet"') ~= nil,
+        "describeSellability must surface the safety-net gate so /ec sellinfo and Alt+Shift+Right-Click trace it"
+    )
+end
+
+-- ---------------------------------------------------------------------------
 -- Result.
 -- ---------------------------------------------------------------------------
 print()

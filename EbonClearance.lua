@@ -4071,6 +4071,20 @@ local function EC_IsSellable(bag, slot, junkOnly)
     if qualityPass and EC_compCache.isQuestItem(itemID) then
         qualityPass = false
     end
+    -- Baseline profession-tool safety net. Same narrowing as the quest-item
+    -- gate above: explicit Sell List entries override (whitelistPass is
+    -- unchanged); only auto-rule sweeps are vetoed. ADB.allowedItems[itemID]
+    -- also bypasses (per-item Allow Sell override, mirrors the chance-on-hit
+    -- + affix pattern). Hardcoded list in EC_compCache.baselineProtectedIDs;
+    -- see the table for the rationale.
+    if
+        qualityPass
+        and EC_compCache.baselineProtectedIDs
+        and EC_compCache.baselineProtectedIDs[itemID]
+        and not (ADB and ADB.allowedItems and ADB.allowedItems[itemID])
+    then
+        qualityPass = false
+    end
     local blacklisted = IsInSet(DB.blacklist, itemID)
     if not (isJunk or qualityPass or whitelistPass) then
         return false
@@ -4625,6 +4639,19 @@ local function EC_AnnotateTooltip(tooltip)
                     -- silently skip. The whitelist match path above is
                     -- unaffected (whitelist overrides safety net).
                     statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Quest item|r"
+                elseif
+                    matchesILvl
+                    and EC_compCache.baselineProtectedIDs
+                    and EC_compCache.baselineProtectedIDs[id]
+                    and not (ADB and ADB.allowedItems and ADB.allowedItems[id])
+                then
+                    -- Baseline profession-tool safety net (Monrad's report).
+                    -- Same honesty as the quest-item case: the auto-rule
+                    -- sweep would have caught the tool but EC_IsSellable
+                    -- vetoes; the tooltip should say so. Allow Sell
+                    -- override unsets this annotation (the item flows to
+                    -- the normal sell path).
+                    statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Profession tool|r"
                 elseif matchesILvl then
                     -- v2.10.0: bind-filter check. EC_IsSellable applies this
                     -- AFTER the iLvl gate; the tooltip annotation has to

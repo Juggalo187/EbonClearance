@@ -197,6 +197,47 @@ local EC_compCache = {
     -- armed. Lives on EC_compCache for the same reason as vendorRunning
     -- above - cross-file access between Vendor and the event hub.
     pendingDelete = nil,
+    -- Baseline-protected itemIDs: profession tools the player needs to
+    -- keep around to perform their profession (fishing poles, mining
+    -- picks, the engineering Arclight Spanner, skinning knife, blacksmith
+    -- hammer). Reported by user Monrad after EC auto-sold their tools
+    -- through a White-rule sweep. Mirrors the v2.13.x quest-item narrowing
+    -- design: this safety net vetoes qualityPass (auto-rule sweeps) but
+    -- NOT whitelistPass (explicit Sell List entries) - the user's lists
+    -- are authoritative. ADB.allowedItems[itemID] also bypasses the
+    -- safety net for the per-item Allow Sell override case.
+    --
+    -- Item IDs are WoW WotLK 3.3.5a standard. Project Ebonhold custom
+    -- profession tools (if any) need to be added by the user via Keep
+    -- List or Allow Sell override.
+    baselineProtectedIDs = {
+        -- Fishing poles (all are itemSubType "Fishing Poles" weapons
+        -- equipped in main hand for fishing).
+        [6256]  = true, -- Fishing Pole
+        [6365]  = true, -- Strong Fishing Pole
+        [6366]  = true, -- Darkwood Fishing Pole
+        [6367]  = true, -- Big Iron Fishing Pole
+        [12225] = true, -- Blump Family Fishing Pole
+        [19022] = true, -- Nat Pagle's Extreme Angler FC-5000
+        [19970] = true, -- Arcanite Fishing Pole
+        [25979] = true, -- Seth's Graphite Fishing Pole
+        [44050] = true, -- Mastercraft Kalu'ak Fishing Pole
+        [45858] = true, -- Bone Fishing Pole
+        [46337] = true, -- Staats' Fishing Pole
+        -- Mining picks (required to mine nodes; the basic Mining Pick
+        -- 2901 is the trigger Monrad reported).
+        [2901]  = true, -- Mining Pick
+        [20723] = true, -- Brann's Trusty Pick
+        [40772] = true, -- Hammer Pick
+        [40892] = true, -- Mammoth Mining Pick
+        -- Engineering tool (required to use some Engineering devices;
+        -- Monrad reported the Arclight Spanner specifically).
+        [6219]  = true, -- Arclight Spanner
+        -- Skinning Knife (required to skin corpses).
+        [7005]  = true, -- Skinning Knife
+        -- Blacksmith Hammer (required for some Blacksmithing recipes).
+        [5956]  = true, -- Blacksmith Hammer
+    },
     -- v2.11.0 bag-full hysteresis. Without this, a single transient
     -- BAG_UPDATE that crosses DB.bagFullThreshold (a vendor opening up,
     -- an item splitting, an inventory shuffle) immediately fires the

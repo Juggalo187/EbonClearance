@@ -385,6 +385,20 @@ function EC_compCache.describeSellability(bag, slot)
         step("questSafetyNet", false, "vetoed — quest item; explicit Sell List entry would override this")
     end
 
+    if
+        qualityPass
+        and EC_compCache.baselineProtectedIDs
+        and EC_compCache.baselineProtectedIDs[itemID]
+        and not (ADB and ADB.allowedItems and ADB.allowedItems[itemID])
+    then
+        qualityPass = false
+        step(
+            "professionToolSafetyNet",
+            false,
+            "vetoed — baseline-protected profession tool; explicit Sell List entry or Allow Sell override would bypass this"
+        )
+    end
+
     local equipped = IsEquippedItem(itemID)
     if equipped then
         step("equippedVeto", false, "VETO — item is currently equipped")
