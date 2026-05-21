@@ -58,7 +58,7 @@ local ADDON_URL = NS.ADDON_URL
 -- .toc Version field so any future drift fails CI before shipping.
 -- DO NOT move this constant out of EbonClearance.lua without first
 -- updating the CI workflow's sed rule that targets this file by name.
-local ADDON_VERSION = "v2.29.0"
+local ADDON_VERSION = "v2.30.0"
 local function EC_GetVersion()
     if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
         return ADDON_VERSION
