@@ -181,6 +181,22 @@ local EC_compCache = {
     -- EC_IsLootSilenceStuck in EbonClearance.lua can both update / read
     -- it via the same shared cache table after the Stage 3 file split.
     lastScavSpokeAt = 0,
+    -- Vendor cycle gate. Set to true while the worker frame is processing
+    -- the sell/delete queue, false otherwise. Multiple cross-cutting
+    -- paths read it as a "skip while a vendor cycle is mid-flight"
+    -- guard (BAG_UPDATE handlers, mount cycle, scav-recovery summon,
+    -- auto-open driver). Lives on EC_compCache so EbonClearance_Vendor.lua
+    -- can write it from inside the worker and EbonClearance.lua's
+    -- non-vendor handlers can read it via the same shared cache table
+    -- after the Stage 5 file split.
+    vendorRunning = false,
+    -- Deletion-confirmation popup state. Set by DoNextAction when a
+    -- deletion needs the user to confirm via the StaticPopupDialog, read
+    -- by the HookDeletePopupOnce OnUpdate. Cleared at MERCHANT_CLOSED so
+    -- a vendor cycle that exits mid-deletion doesn't leave the popup
+    -- armed. Lives on EC_compCache for the same reason as vendorRunning
+    -- above - cross-file access between Vendor and the event hub.
+    pendingDelete = nil,
     -- v2.11.0 bag-full hysteresis. Without this, a single transient
     -- BAG_UPDATE that crosses DB.bagFullThreshold (a vendor opening up,
     -- an item splitting, an inventory shuffle) immediately fires the

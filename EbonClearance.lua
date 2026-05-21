@@ -161,7 +161,11 @@ local EC_manualSell = {
     snapshot = {},
     hookInstalled = false,
 }
-local running = false
+-- vendorRunning state was promoted from `local running = false` to
+-- EC_compCache.vendorRunning (initialised in EbonClearance_Core.lua's
+-- table literal) so EbonClearance_Vendor.lua can write it and the
+-- non-vendor handlers in this file can read it via the shared cache
+-- table after the Stage 5 file split.
 
 -- The Greedy Scavenger chat filter, the speech-bubble killer, and
 -- the secondary ApplyGreedyChatFilter live in EbonClearance_Companion.lua
@@ -1573,7 +1577,7 @@ local function EC_HandleBagFullForCycle()
     if not EC_IsAddonEnabledForChar() then
         return
     end
-    if running then
+    if EC_compCache.vendorRunning then
         return
     end
     if IsMounted() then
@@ -2219,7 +2223,7 @@ function EC_HandleAutoOpenContainers()
     if not DB or not DB.autoOpenContainers then
         return
     end
-    if running then
+    if EC_compCache.vendorRunning then
         return
     end
     if InCombatLockdown() then
@@ -2947,7 +2951,7 @@ function EC_compCache.checkBagsForUpgrades()
     -- built before any add we'd make now, so a fresh blacklist stamp
     -- wouldn't influence the current run anyway. Next BAG_UPDATE post-
     -- MERCHANT_CLOSED picks up the same items cleanly.
-    if running then
+    if EC_compCache.vendorRunning then
         return
     end
     for bag = 0, 4 do
@@ -3688,7 +3692,7 @@ local function EC_PetCheckTick()
     if IsMounted() then
         return
     end
-    if running then
+    if EC_compCache.vendorRunning then
         return
     end
 
@@ -3809,8 +3813,13 @@ EC_petCheckFrame:SetScript("OnUpdate", function(_, elapsed)
     EC_PetCheckTick()
 end)
 
-local pendingDelete = nil
-local deletePopupHooked = false
+-- pendingDelete state was promoted from a file-scope local to
+-- EC_compCache.pendingDelete (initialised in EbonClearance_Core.lua's
+-- table literal) for the same Stage 5 reason as vendorRunning above.
+-- The HookDeletePopupOnce body that consumes pendingDelete moved to
+-- EbonClearance_Vendor.lua (Stage 5 of the file split, exposed as
+-- NS.HookDeletePopupOnce). The deletePopupHooked install-once gate
+-- moved with it.
 
 -- v2.9.0: bag snapshot for manual-sell attribution. Run at MERCHANT_SHOW so
 -- the post-call hook can look up what was in (bag, slot) before the player
@@ -3903,60 +3912,6 @@ function EC_manualSell.installHookOnce()
         EC_Delay(0.1, function()
             EC_manualSell.refreshSlot(bag, slot)
         end)
-    end)
-end
-
-local function HookDeletePopupOnce()
-    if deletePopupHooked then
-        return
-    end
-    deletePopupHooked = true
-
-    local f = CreateFrame("Frame")
-    local popupElapsed = 0
-    f:SetScript("OnUpdate", function(self, elapsed)
-        -- Skip entirely unless a deletion is queued. Without this gate the
-        -- handler would tick ~60 times/s for the life of the session.
-        if not pendingDelete then
-            popupElapsed = 0
-            return
-        end
-        popupElapsed = popupElapsed + (elapsed or 0)
-        if popupElapsed < 0.1 then
-            return
-        end
-        popupElapsed = 0
-
-        -- v2.13.8: accept all four DELETE_* popup variants, not just the
-        -- simple yes/no DELETE_ITEM. Soulbound rare/epic items (e.g.
-        -- Tabard of Conquest itemID 49054 - BoP + Blue) trigger
-        -- DELETE_GOOD_ITEM which requires typing "DELETE" into a
-        -- confirmation edit box; the edit-box population already lived
-        -- in the handler body, but the outer gate was checking for the
-        -- wrong popup.which. The startswith check covers DELETE_ITEM,
-        -- DELETE_GOOD_ITEM, DELETE_QUEST_ITEM, DELETE_GOOD_QUEST_ITEM
-        -- in one expression and would accept any future Blizzard-added
-        -- DELETE_* variant.
-        local popup = StaticPopup1
-        local which = popup and popup.which
-        local isDeletePopup = which and which:find("^DELETE_") ~= nil
-        if popup and popup:IsShown() and isDeletePopup then
-            local id = pendingDelete.itemID
-            if id and IsInSet(DB.deleteList, id) then
-                local editBox = StaticPopup1EditBox
-                if editBox then
-                    editBox:SetText("DELETE")
-                    editBox:HighlightText()
-                end
-                local button1 = StaticPopup1Button1
-                if button1 and button1:IsEnabled() then
-                    button1:Click()
-                    pendingDelete = nil
-                end
-            else
-                pendingDelete = nil
-            end
-        end
     end)
 end
 
@@ -4270,7 +4225,7 @@ local function BuildQueue(junkOnly)
 end
 
 local function FinishRun()
-    running = false
+    EC_compCache.vendorRunning = false
     worker:Hide()
 
     DB.totalCopper = (DB.totalCopper or 0) + (goldThisVendoring or 0)
@@ -4288,7 +4243,7 @@ local function FinishRun()
             local merchantAllowed = EC_IsMerchantAllowed()
             BuildQueue(not merchantAllowed)
             if #queue > 0 then
-                running = true
+                EC_compCache.vendorRunning = true
                 worker.t = 0
                 worker:Show()
             else
@@ -4338,7 +4293,7 @@ end
 
 local function DoNextAction()
     if not MerchantFrame or not MerchantFrame:IsShown() then
-        running = false
+        EC_compCache.vendorRunning = false
         worker:Hide()
         return
     end
@@ -4376,7 +4331,7 @@ local function DoNextAction()
         local cursorType = GetCursorInfo()
 
         if cursorType == "item" then
-            pendingDelete = { bag = action.bag, slot = action.slot, itemID = action.itemID }
+            EC_compCache.pendingDelete = { bag = action.bag, slot = action.slot, itemID = action.itemID }
             DeleteCursorItem()
             ClearCursor()
             DB.totalItemsDeleted = (DB.totalItemsDeleted or 0) + (action.count or 1)
@@ -4387,7 +4342,7 @@ local function DoNextAction()
             end
         else
             ClearCursor()
-            pendingDelete = nil
+            EC_compCache.pendingDelete = nil
         end
     end
 
@@ -4887,15 +4842,15 @@ local function StartRun()
     if not EC_IsAddonEnabledForChar() then
         return
     end
-    if running then
+    if EC_compCache.vendorRunning then
         return
     end
 
     local merchantAllowed = EC_IsMerchantAllowed()
 
-    HookDeletePopupOnce()
+    NS.HookDeletePopupOnce()
 
-    running = true
+    EC_compCache.vendorRunning = true
 
     EC_RecordInventoryWorthSample()
 
@@ -4942,7 +4897,7 @@ local function StartRun()
 
     if #queue == 0 then
         PrintNice("Found nothing to sell.")
-        running = false
+        EC_compCache.vendorRunning = false
         if UnitExists("target") and UnitName("target") == TARGET_NAME and MerchantFrame and MerchantFrame:IsShown() then
             EC_SummonGreedyWithDelay()
         end
@@ -8950,7 +8905,7 @@ CharPanel:SetScript("OnShow", function(self)
         MakeHeader(self, "Character Settings", -16)
         local charDesc = MakeLabel(
             self,
-            "Prevents this addon from running on characters you didn't intend. If enabled, EbonClearance runs only on characters listed below.",
+            "Prevents this addon from EC_compCache.vendorRunning on characters you didn't intend. If enabled, EbonClearance runs only on characters listed below.",
             16,
             -44
         )
@@ -11358,7 +11313,7 @@ f:SetScript("OnEvent", function(self, event, ...)
             -- briefly leaked into _G. Harmless if absent. See v2.2.1 fix.
             _G.EC_summonGoblinPending = nil
             _G.EC_summonGoblinTimer = nil
-            HookDeletePopupOnce()
+            NS.HookDeletePopupOnce()
             EC_InstallFastLootHookOnce()
             if NS.ApplyGreedyChatFilter then
                 NS.ApplyGreedyChatFilter()
@@ -11621,9 +11576,9 @@ f:SetScript("OnEvent", function(self, event, ...)
             EC_wasMounted = mounted
         end
     elseif event == "MERCHANT_CLOSED" then
-        running = false
+        EC_compCache.vendorRunning = false
         worker:Hide()
-        pendingDelete = nil
+        EC_compCache.pendingDelete = nil
         -- Reset cycle state so the stuck detection can re-summon the Scavenger
         if EC_lootCycleState == STATE.SELLING then
             EC_lootCycleState = STATE.IDLE

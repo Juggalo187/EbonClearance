@@ -1379,6 +1379,68 @@ Stage 4 invariants (enforced by `tests/test_perf_guardrails.lua` Test 30):
 - `EbonClearance.lua` writes `NS.scanTooltip = EC_scanTooltip`
   immediately after creating the frame.
 
+### Stage 5: extract EbonClearance_Vendor.lua (commit `<pending>`)
+
+Stage 5 is deliberately scoped narrowly. The full vendor cycle
+(`EC_IsSellable`, `BuildQueue`, `DoNextAction`, `worker`, `StartRun`,
+`EC_manualSell`, `EC_PreviewSellable`) is interleaved with bag-display
+helpers (Stage 6 target) AND has wide cross-file dependencies on
+EbonClearance.lua-side helpers (`PrintNice`, `EC_Delay`, `EC_session`,
+`EC_lootCycleState`, `STATE`, `EC_GetItemPrice`, ...). Moving the whole
+thing in one stage requires either a large NS-exposure blast or
+function-entry capture boilerplate at every entry point.
+
+Instead, Stage 5 establishes the Vendor file with the smallest
+self-contained subsystem and leaves the rest for future stages.
+
+What moved in this stage:
+
+- **`HookDeletePopupOnce`** (the StaticPopup1 DELETE_* auto-confirm
+  driver) + its install-once gate `deletePopupHooked`. Exposed as
+  `NS.HookDeletePopupOnce`.
+
+What was promoted (Stage 5 prep, both inside this same diff):
+
+- **`running`** -> `EC_compCache.vendorRunning` (vendor cycle gate).
+  Cross-cutting readers in 5+ non-vendor handlers in EbonClearance.lua
+  all read the new cache field; future Vendor-extraction stages can
+  write to the same field from their new home.
+- **`pendingDelete`** -> `EC_compCache.pendingDelete` (deletion-popup
+  state). Written by `HookDeletePopupOnce` (now in Vendor) AND by
+  `DoNextAction` (still in EbonClearance.lua); cleared at
+  MERCHANT_CLOSED (event hub in EbonClearance.lua). Cache promotion
+  was needed because the writers + clearer ended up in different files.
+
+What did NOT move (future stage targets):
+
+- `EC_IsSellable`, `BuildQueue`, `FinishRun`, `DoNextAction`, `worker`,
+  `EC_IsMerchantAllowed`, `EC_PreviewSellable`, `StartRun`,
+  `EC_compCache.isQuestItem` (the merchant cycle itself).
+- `EC_manualSell` table + methods (manual-sell attribution via
+  `hooksecurefunc("UseContainerItem", ...)`).
+- The bag-display helpers (`sellBorderButtons`, `applySellBorder`,
+  `bagSlotWillSell`, `updateSellBordersForBagFrame`,
+  `installHostBagBorderHook`, the `EC_RefreshSellBorders` body,
+  `qualityNames`, `describeSellability`, `printSellabilityTrace`,
+  `bagSlotFromButton`) which are physically interleaved with vendor
+  code in EbonClearance.lua but belong in Stage 6 (BagDisplay).
+
+Future "Stage 5b" / "Stage 5c" will extract those incrementally as
+their cross-file dependencies are sorted (probably by exposing the
+helpers they call on `NS` one cluster at a time).
+
+Stage 5 invariants (enforced by `tests/test_perf_guardrails.lua` Test 31):
+
+- `NS.HookDeletePopupOnce` exposed by Vendor at file load.
+- No bare `HookDeletePopupOnce()` call sites (every call NS-qualified).
+- `EC_compCache.vendorRunning` initialised to `false` in Core's table
+  literal.
+- `EC_compCache.pendingDelete` initialised to `nil` in Core's table
+  literal.
+- No file-scope `local running` or `local pendingDelete` lurking
+  anywhere in the shipped sources (either would silently desync from
+  the cache field).
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:

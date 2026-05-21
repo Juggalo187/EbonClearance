@@ -208,7 +208,7 @@ feature work into a split stage - keep diffs move-only where possible.
 | 2 | Extract `EbonClearance_Core.lua` (provenance globals, EC_Fingerprint, EC_compCache table literal) | **DONE** (commit `119eca8`) |
 | 3 | Extract `EbonClearance_Companion.lua` (chat filters + speech-bubble killer cluster) | **DONE** (commit `987b5b5`) |
 | 4 | Extract `EbonClearance_Protection.lua` (PE affix + chance-on-hit + Anvil-bridge cluster; bind-type cache stays in EbonClearance.lua for later) | **DONE** (commit `9d65e64`) |
-| 5 | Extract `EbonClearance_Vendor.lua` (EC_IsSellable, BuildQueue, DoNextAction, vendor worker, auto-repair) | pending |
+| 5 | Extract `EbonClearance_Vendor.lua` (narrow scope: just HookDeletePopupOnce + the deletePopupHooked gate; `running` + `pendingDelete` promoted to EC_compCache as Stage 5 prep). EC_IsSellable / BuildQueue / DoNextAction / worker / StartRun / EC_manualSell remain in EbonClearance.lua for future "Stage 5b"+ stages | **DONE** (commit `<pending>`) |
 | 6 | Extract `EbonClearance_Process.lua` (Process Bags engine, hold-key-to-drain) | pending |
 | 7 | Extract `EbonClearance_BagDisplay.lua` (sell-border hooks, /ec sellinfo, auto-open driver, Fast Loot) | pending |
 | 8 | Extract `EbonClearance_UI.lua` (CreateListUI + helpers, all Interface Options panels, minimap, LDB, bug-report) | pending |

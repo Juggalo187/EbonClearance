@@ -45,6 +45,7 @@ local SOURCE_PATHS = {
     "EbonClearance_Core.lua",
     "EbonClearance_Companion.lua",
     "EbonClearance_Protection.lua",
+    "EbonClearance_Vendor.lua",
     "EbonClearance.lua",
 }
 
@@ -1086,6 +1087,105 @@ do
         "NS.scanTooltip exposed by EbonClearance.lua frame creation",
         src:find("NS%.scanTooltip%s*=%s*EC_scanTooltip") ~= nil,
         "EbonClearance.lua must write `NS.scanTooltip = EC_scanTooltip` immediately after creating the frame, so Protection's lazy dereference works"
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 31 (Stage 5): vendor-cycle state promoted to EC_compCache;
+-- HookDeletePopupOnce moved to EbonClearance_Vendor.lua.
+-- ---------------------------------------------------------------------------
+-- Stage 5 is narrowly scoped: only the deletion-popup hook moves to
+-- EbonClearance_Vendor.lua. The vendor cycle itself (EC_IsSellable,
+-- BuildQueue, worker, StartRun, EC_manualSell) stays in EbonClearance.lua
+-- for future stages because its cross-file dependency surface is wide.
+--
+-- Two vendor-cycle scalars WERE promoted in Stage 5 prep:
+--   * running -> EC_compCache.vendorRunning
+--   * pendingDelete -> EC_compCache.pendingDelete
+-- Both initialise in Core's table literal. If a future refactor reintroduces
+-- file-scope `local running` or `local pendingDelete` in EbonClearance.lua,
+-- it would silently desync from the cache table; the count check below
+-- catches that.
+do
+    -- Vendor.lua publishes NS.HookDeletePopupOnce at file load.
+    check(
+        "NS.HookDeletePopupOnce exposed",
+        src:find("NS%.HookDeletePopupOnce%s*=%s*HookDeletePopupOnce") ~= nil,
+        "EbonClearance_Vendor.lua must publish `NS.HookDeletePopupOnce = HookDeletePopupOnce`"
+    )
+
+    -- No bare-identifier call sites for HookDeletePopupOnce. Definition
+    -- in Vendor is masked from the scan.
+    local function hasBareCall(s, name)
+        local cleaned = s:gsub("local function " .. name .. "%(", "local function _def_" .. name .. "(")
+        for line in cleaned:gmatch("[^\n]+") do
+            local stripped = line:gsub("^%s+", "")
+            if stripped:sub(1, 2) ~= "--" then
+                local commentAt = stripped:find("%-%-", 1, true)
+                local code = commentAt and stripped:sub(1, commentAt - 1) or stripped
+                if code:find("[^.%w_]" .. name .. "%s*%(") then
+                    return stripped
+                end
+                if code:sub(1, #name + 1) == name .. "(" then
+                    return stripped
+                end
+            end
+        end
+        return nil
+    end
+    local bareHook = hasBareCall(src, "HookDeletePopupOnce")
+    check(
+        "no bare HookDeletePopupOnce() call sites (must be NS.HookDeletePopupOnce)",
+        bareHook == nil,
+        "found bare call: " .. tostring(bareHook)
+    )
+
+    -- vendorRunning + pendingDelete fields initialised in Core's
+    -- EC_compCache table literal.
+    check(
+        "EC_compCache.vendorRunning initialised in Core",
+        src:find("vendorRunning%s*=%s*false") ~= nil,
+        "Core's EC_compCache table literal must initialise `vendorRunning = false` (promoted Stage 5 prep)"
+    )
+    check(
+        "EC_compCache.pendingDelete initialised in Core",
+        src:find("pendingDelete%s*=%s*nil") ~= nil,
+        "Core's EC_compCache table literal must initialise `pendingDelete = nil` (promoted Stage 5 prep)"
+    )
+
+    -- No file-scope `local running` or `local pendingDelete` lurking in
+    -- the shipped sources. Either would silently desync from the cache
+    -- table. Comment lines mentioning these names are allowed.
+    local lines_iter = {}
+    for ln in src:gmatch("[^\n]+") do
+        table.insert(lines_iter, ln)
+    end
+    local function noBareLocalDecl(name)
+        for _, ln in ipairs(lines_iter) do
+            local stripped = ln:gsub("^%s+", "")
+            if stripped:sub(1, 2) ~= "--" then
+                local commentAt = stripped:find("%-%-", 1, true)
+                local code = commentAt and stripped:sub(1, commentAt - 1) or stripped
+                -- Look for `local NAME =` or `local NAME\b` at start of code
+                if code:match("^local%s+" .. name .. "%s*=") or
+                   code:match("^local%s+" .. name .. "%s*$") then
+                    return ln
+                end
+            end
+        end
+        return nil
+    end
+    local lurkingRunning = noBareLocalDecl("running")
+    local lurkingPending = noBareLocalDecl("pendingDelete")
+    check(
+        "no file-scope `local running` (post Stage 5 promotion)",
+        lurkingRunning == nil,
+        "found: " .. tostring(lurkingRunning)
+    )
+    check(
+        "no file-scope `local pendingDelete` (post Stage 5 promotion)",
+        lurkingPending == nil,
+        "found: " .. tostring(lurkingPending)
     )
 end
 
