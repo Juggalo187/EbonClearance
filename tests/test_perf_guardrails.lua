@@ -49,6 +49,7 @@ local SOURCE_PATHS = {
     "EbonClearance_Process.lua",
     "EbonClearance_ProcessBagsPanel.lua",
     "EbonClearance_MerchantPanel.lua",
+    "EbonClearance_ScavengerPanel.lua",
     "EbonClearance.lua",
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",
@@ -2261,6 +2262,68 @@ do
             "the affix branch must declare a `local playerKnows` that captures playerHasAffixDescription without gating on DB.affixAllowExactDupes"
         )
     end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 45 (Stage 8e-iii): Scavenger Settings panel extracted.
+-- ---------------------------------------------------------------------------
+-- Stage 8e-iii moves the Scavenger Settings Interface Options panel
+-- (frame creation + OnShow body) into EbonClearance_ScavengerPanel.lua.
+-- Smallest extraction yet because all five widget primitives the
+-- OnShow body uses (MakeHeader, MakeLabel, AddCheckbox, AddSlider,
+-- FitScrollContent) are already NS-exposed from 8e-i / 8e-ii prep -
+-- zero new NS exposures needed.
+do
+    -- ScavengerPanel frame must be created in the new file (not in
+    -- EbonClearance.lua anymore).
+    local spFile = io.open("EbonClearance_ScavengerPanel.lua", "rb")
+    if spFile then
+        local spSrc = spFile:read("*a") or ""
+        spFile:close()
+        check(
+            "ScavengerPanel frame created in EbonClearance_ScavengerPanel.lua",
+            spSrc:find('CreateFrame%("Frame", "EbonClearanceOptionsScavenger"') ~= nil,
+            "ScavengerPanel frame creation must live in EbonClearance_ScavengerPanel.lua (Stage 8e-iii)"
+        )
+        local code = (spSrc:gsub("\n%-%-[^\n]*", ""))
+        check(
+            "EbonClearance_ScavengerPanel.lua uses NS.MakeHeader (not bare MakeHeader)",
+            code:find("NS%.MakeHeader%(") ~= nil
+                and code:find("[^.%w_]MakeHeader%(") == nil,
+            "panel build body must call NS.MakeHeader (the local lives in EbonClearance.lua)"
+        )
+        check(
+            "EbonClearance_ScavengerPanel.lua uses NS.AddCheckbox (not bare AddCheckbox)",
+            code:find("NS%.AddCheckbox%(") ~= nil
+                and code:find("[^.%w_]AddCheckbox%(") == nil,
+            "panel build body must call NS.AddCheckbox"
+        )
+        check(
+            "EbonClearance_ScavengerPanel.lua uses NS.AddSlider (not bare AddSlider)",
+            code:find("NS%.AddSlider%(") ~= nil
+                and code:find("[^.%w_]AddSlider%(") == nil,
+            "panel build body must call NS.AddSlider"
+        )
+    end
+
+    -- The ScavengerPanel local must NOT be re-created in EbonClearance.lua.
+    local ecFile = io.open("EbonClearance.lua", "rb")
+    if ecFile then
+        local ecSrc = ecFile:read("*a") or ""
+        ecFile:close()
+        check(
+            "ScavengerPanel frame no longer created in EbonClearance.lua",
+            ecSrc:find('local ScavengerPanel%s*=%s*CreateFrame') == nil,
+            "duplicate definition in EbonClearance.lua would clobber the Stage 8e-iii extracted frame"
+        )
+    end
+
+    -- Registration uses the _G lookup.
+    check(
+        "Scavenger Settings panel registered via _G lookup in EbonClearance.lua",
+        src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsScavenger"%]%)') ~= nil,
+        "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
+    )
 end
 
 -- ---------------------------------------------------------------------------

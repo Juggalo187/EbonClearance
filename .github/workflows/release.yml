@@ -45,7 +45,7 @@ jobs:
           cp EbonClearance.lua EbonClearance_Core.lua EbonClearance_Companion.lua \
              EbonClearance_Protection.lua EbonClearance_Vendor.lua \
              EbonClearance_Process.lua EbonClearance_ProcessBagsPanel.lua \
-             EbonClearance_MerchantPanel.lua \
+             EbonClearance_MerchantPanel.lua EbonClearance_ScavengerPanel.lua \
              EbonClearance_BagDisplay.lua \
              EbonClearance_BugReport.lua EbonClearance_Minimap.lua \
              EbonClearance_Tooltip.lua EbonClearance_BagContextMenu.lua \

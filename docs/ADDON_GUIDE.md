@@ -1909,6 +1909,33 @@ Stage 8e-ii invariants (enforced by `tests/test_perf_guardrails.lua` Test 41):
   `NS.AddSlider` / `NS.FitScrollContent` (not bare locals).
 - `EbonClearance.lua` registers the panel via the `_G[]` lookup.
 
+### Stage 8e-iii: extract EbonClearance_ScavengerPanel.lua (commit `<pending>`)
+
+Stage 8e-iii moves the Scavenger Settings Interface Options panel
+(~275 LOC moved, file is ~304 LOC with header) to
+`EbonClearance_ScavengerPanel.lua`. **Zero new NS exposures needed** -
+the five widget primitives the OnShow body uses (`NS.MakeHeader`,
+`NS.MakeLabel`, `NS.AddCheckbox`, `NS.AddSlider`,
+`NS.FitScrollContent`) were all exposed in 8e-i / 8e-ii prep. The
+smallest extraction in the panel-split sequence so far.
+
+Moved into the new file:
+
+- `local ScavengerPanel = CreateFrame(...)` frame creation.
+- The ScavengerPanel OnShow handler (companion summon toggles,
+  summon-delay slider, mute / hide-chat / hide-bubbles toggles,
+  auto-loot cycle, bag-full threshold, auto-open containers, fast
+  loot driver).
+
+`InterfaceOptions_AddCategory(ScavengerPanel)` converted to the
+`_G[]` lookup; .toc loads the new file BEFORE `EbonClearance.lua`.
+DB captured at OnShow entry per the established pattern.
+
+Stage 8e-iii invariants (Test 45): ScavengerPanel frame lives in the
+new file (not duplicated in EbonClearance.lua); new file uses
+`NS.MakeHeader` / `NS.AddCheckbox` / `NS.AddSlider` (not bare
+locals); registration uses `_G[]` lookup.
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:
