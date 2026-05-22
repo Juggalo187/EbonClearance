@@ -322,7 +322,20 @@ local function EC_AnnotateTooltip(tooltip)
                     elseif IsInSet(DB.whitelist, id) then
                         statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Character Sell|r"
                     elseif manualAllow then
-                        statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                        -- Allow Sell is on but no list claims the item. If
+                        -- the per-rarity sweep chain above already produced
+                        -- a "Will Sell - <reason>" verdict, the item IS
+                        -- being auto-sold by the rule - rewrite the prefix
+                        -- to "Allowed - <reason>" to match the established
+                        -- "Allowed - Character Sell" / "Allowed - Account
+                        -- Sell" label family. Without this, the user sees
+                        -- "Choose List" while the item is actually being
+                        -- vendored.
+                        if statusLine and statusLine:find("Will Sell", 1, true) then
+                            statusLine = statusLine:gsub("Will Sell", "Allowed", 1)
+                        else
+                            statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                        end
                     else
                         -- autoDupe only, not on any list - keep the
                         -- v2.23.0 informational label.
@@ -378,12 +391,21 @@ local function EC_AnnotateTooltip(tooltip)
             elseif IsInSet(DB.whitelist, id) then
                 statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Character Sell|r"
             else
-                -- Marked allowed but no specific list chosen. "Allowed
-                -- - Sell" reads as "this will be auto-sold" which is
-                -- misleading - releasing the protection just opens
-                -- the item up to the user's decision. The label is a
-                -- call to action: pick a list.
-                statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                -- Marked allowed but no specific list chosen. If the
+                -- per-rarity sweep chain above already produced a
+                -- "Will Sell - <reason>" verdict, the item IS being
+                -- auto-sold by the rule - rewrite the prefix to
+                -- "Allowed - <reason>" to match the established
+                -- "Allowed - Character Sell" / "Allowed - Account
+                -- Sell" label family. Without this, the user sees
+                -- "Choose List" while the merchant cycle silently
+                -- vendors the item. When no rule verdict exists, fall
+                -- back to the "pick a list" call to action.
+                if statusLine and statusLine:find("Will Sell", 1, true) then
+                    statusLine = statusLine:gsub("Will Sell", "Allowed", 1)
+                else
+                    statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                end
             end
         else
             statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Chance on hit|r"

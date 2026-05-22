@@ -9708,11 +9708,18 @@ f:SetScript("OnEvent", function(self, event, ...)
                     EC_compCache.buildElvUIBagButtons()
                 end
             end)
-            -- Sell-border tint: install the host bag-UI adapter once the
-            -- host has had a chance to build its slot class. Same 2 s
-            -- defer rationale as the ElvUI bind above; the call self-gates
-            -- on LibStub + AceAddon presence so non-host users pay one
-            -- nil-check per login.
+            -- Sell-border tint: try installing the host bag-UI adapter
+            -- IMMEDIATELY (the common case: host already loaded by
+            -- PLAYER_LOGIN). If the host's slot class isn't ready yet, the
+            -- call self-gates on LibStub + AceAddon presence and no-ops;
+            -- the 2 s fallback below catches the late-load case. Both
+            -- calls are idempotent via _hostBagBorderHookInstalled. Without
+            -- the immediate attempt, bags opened during the 2 s window
+            -- paint without our hook attached and the first border only
+            -- appears after the next host-driven slot refresh.
+            if EC_compCache.installHostBagBorderHook then
+                EC_compCache.installHostBagBorderHook()
+            end
             EC_Delay(2, function()
                 if EC_compCache.installHostBagBorderHook then
                     EC_compCache.installHostBagBorderHook()

@@ -314,11 +314,29 @@ local function EC_ShowItemContextMenu(button)
                     end
                     frame:Hide()
                     NS.PrintNicef("Removed %s from Allow List.", itemName)
-                    -- The Allow List feeds into EC_IsSellable's chance-on-hit
-                    -- and random-affix branches, so its mutation can flip a
-                    -- slot's would-sell verdict. Repaint the border tints
-                    -- across already-decorated buttons so the ring tracks
-                    -- the new state without waiting for the next bag event.
+                    -- Cascade: removing Allow Sell expresses the user intent
+                    -- "re-protect this proc / affix item from auto-selling".
+                    -- If the item is also on a Sell List, the protection
+                    -- only narrows back to the auto-rule sweep (per the
+                    -- v2.20.1 "explicit user intent overrides safety net"
+                    -- design) - the item would STILL vendor via the
+                    -- whitelist path. Clearing the Sell List entries here
+                    -- matches the menu-driven workflow most users follow
+                    -- (Allow Sell + Add to Sell + later Remove from Allow
+                    -- List = full undo). Keep List and Delete List are NOT
+                    -- cascaded: those are different intents (Keep = never
+                    -- sell, Delete = destroy) that the protection toggle
+                    -- doesn't logically conflict with. NS.RemoveItemFromList
+                    -- no-ops when the item isn't on the list, prints its
+                    -- own "Removed X from <list>" line when it does, and
+                    -- handles panel refresh + border repaint.
+                    NS.RemoveItemFromList("whitelist", itemID, "Character Sell List")
+                    NS.RemoveItemFromList("accountWhitelist", itemID, "Account Sell List")
+                    -- Border repaint covers the case where neither sell
+                    -- list contained the item (so RemoveItemFromList no-
+                    -- op'd and didn't trigger its own repaint). Same
+                    -- rationale as before the cascade: the Allow List
+                    -- mutation can flip a slot's would-sell verdict.
                     if NS.RefreshSellBorders then
                         NS.RefreshSellBorders()
                     end

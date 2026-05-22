@@ -229,6 +229,18 @@ function EC_compCache.installHostBagBorderHook()
         hooksecurefunc(ItemSlot, "UpdateBorder", refresh)
     end
     EC_compCache._hostBagBorderHookInstalled = true
+
+    -- Force a one-shot repaint of any already-visible host bag frames.
+    -- Without this, slots painted by the host BEFORE our hook installed
+    -- sit with no border until the player triggers another host refresh
+    -- (open bag, visit bank, move an item). The hook only fires forward.
+    if host.frames then
+        for _, frame in pairs(host.frames) do
+            if frame and frame.UpdateEverything and frame.IsVisible and frame:IsVisible() then
+                pcall(frame.UpdateEverything, frame)
+            end
+        end
+    end
 end
 
 -- Settings-flip refresh body. The forward-declared name was stubbed to a
