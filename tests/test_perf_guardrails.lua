@@ -52,6 +52,7 @@ local SOURCE_PATHS = {
     "EbonClearance_BugReport.lua",
     "EbonClearance_Minimap.lua",
     "EbonClearance_Tooltip.lua",
+    "EbonClearance_BagContextMenu.lua",
 }
 
 local pieces = {}
@@ -1718,6 +1719,85 @@ do
         bare == nil,
         "found bare call: " .. tostring(bare)
     )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 39 (Stage 8d): bag context menu extracted; list-mutation helpers
+-- exposed on NS.
+-- ---------------------------------------------------------------------------
+-- Stage 8d moves the Alt+Right-Click bag context menu to
+-- EbonClearance_BagContextMenu.lua. The hook installer is exposed on NS
+-- for the ADDON_LOADED branch. Three list-mutation helpers
+-- (AddItemToList, RemoveItemFromList, FindAddConflict) needed NS
+-- exposure to support the move - row-click handlers in the menu call
+-- them.
+do
+    check(
+        "NS.InstallBagContextHookOnce exposed by BagContextMenu",
+        src:find("NS%.InstallBagContextHookOnce%s*=%s*EC_InstallBagContextHookOnce") ~= nil,
+        "EbonClearance_BagContextMenu.lua must publish NS.InstallBagContextHookOnce"
+    )
+    check(
+        "NS.AddItemToList exposed",
+        src:find("NS%.AddItemToList%s*=%s*EC_AddItemToList") ~= nil,
+        "EbonClearance.lua must publish NS.AddItemToList for the context menu's row-click handlers"
+    )
+    check(
+        "NS.RemoveItemFromList exposed",
+        src:find("NS%.RemoveItemFromList%s*=%s*EC_RemoveItemFromList") ~= nil,
+        "EbonClearance.lua must publish NS.RemoveItemFromList for the context menu's row-click handlers"
+    )
+    check(
+        "NS.FindAddConflict exposed",
+        src:find("NS%.FindAddConflict%s*=%s*EC_FindAddConflict") ~= nil,
+        "EbonClearance.lua must publish NS.FindAddConflict for the context menu's add-time conflict guard"
+    )
+    check(
+        "NS.GetListTable exposed",
+        src:find("NS%.GetListTable%s*=%s*EC_GetListTable") ~= nil,
+        "EbonClearance.lua must publish NS.GetListTable for the context menu's list-membership check"
+    )
+
+    -- No bare EC_InstallBagContextHookOnce() or EC_GetListTable() call sites
+    -- inside EbonClearance_BagContextMenu.lua. (Other files may still call
+    -- EC_GetListTable directly as a file-scope local.)
+    local function hasBareCall(s, name)
+        local cleaned = s:gsub("local function " .. name .. "%(", "local function _def_" .. name .. "(")
+        for line in cleaned:gmatch("[^\n]+") do
+            local stripped = line:gsub("^%s+", "")
+            if stripped:sub(1, 2) ~= "--" then
+                local commentAt = stripped:find("%-%-", 1, true)
+                local code = commentAt and stripped:sub(1, commentAt - 1) or stripped
+                if code:find("[^.%w_]" .. name .. "%s*%(") then
+                    return stripped
+                end
+                if code:sub(1, #name + 1) == name .. "(" then
+                    return stripped
+                end
+            end
+        end
+        return nil
+    end
+    local bare = hasBareCall(src, "EC_InstallBagContextHookOnce")
+    check(
+        "no bare EC_InstallBagContextHookOnce() call sites (must be NS.InstallBagContextHookOnce)",
+        bare == nil,
+        "found bare call: " .. tostring(bare)
+    )
+
+    -- Read BagContextMenu file directly for a focused bare-EC_GetListTable check;
+    -- the global src concat includes EbonClearance.lua where the local is fine.
+    local ctxFile = io.open("EbonClearance_BagContextMenu.lua", "rb")
+    if ctxFile then
+        local ctxSrc = ctxFile:read("*a") or ""
+        ctxFile:close()
+        local bareList = hasBareCall(ctxSrc, "EC_GetListTable")
+        check(
+            "no bare EC_GetListTable() call sites in EbonClearance_BagContextMenu.lua (must be NS.GetListTable)",
+            bareList == nil,
+            "found bare call: " .. tostring(bareList)
+        )
+    end
 end
 
 -- ---------------------------------------------------------------------------

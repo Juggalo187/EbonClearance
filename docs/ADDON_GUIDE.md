@@ -1712,6 +1712,49 @@ Stage 8c invariants (enforced by `tests/test_perf_guardrails.lua` Test 38):
   by Tooltip.
 - No bare `EC_InstallTooltipHookOnce()` call sites anywhere.
 
+### Stage 8d: extract EbonClearance_BagContextMenu.lua (commit `<pending>`)
+
+Stage 8d moves the Alt+Right-Click bag-item quick-action popup
+(~375 LOC) to `EbonClearance_BagContextMenu.lua`. A custom popup
+frame (not a Blizzard DropDownMenu) wired through `hooksecurefunc`
+on `ContainerFrameItemButton_OnModifiedClick`.
+
+Moved into BagContextMenu:
+
+- `EC_CTX_ROWS` (row metadata: list rows + special rows like cancel /
+  allow-sell).
+- `EC_BuildCtxFrame` (lazy popup frame creation).
+- `EC_ShowItemContextMenu` (per-show: sets row labels + OnClick
+  handlers, anchors at cursor, shows the frame).
+- `EC_InstallBagContextHookOnce` (hooks
+  `ContainerFrameItemButton_OnModifiedClick`). Exposed as
+  `NS.InstallBagContextHookOnce` for ADDON_LOADED.
+
+Stage 8d prep (NS exposures, same commit):
+
+- `NS.AddItemToList = EC_AddItemToList`
+- `NS.RemoveItemFromList = EC_RemoveItemFromList`
+- `NS.FindAddConflict = EC_FindAddConflict`
+
+Row-click handlers in the context menu call these three list-mutation
+helpers; they were file-scope locals in EbonClearance.lua, so the
+move required publishing them on NS first.
+
+Local `IsInSet` helper carried along (same pattern as Vendor /
+BagDisplay / Tooltip).
+
+One external call site in EbonClearance.lua's ADDON_LOADED branch
+updated:
+
+- `EC_InstallBagContextHookOnce()` → `NS.InstallBagContextHookOnce()`
+
+Stage 8d invariants (enforced by `tests/test_perf_guardrails.lua` Test 39):
+
+- `NS.InstallBagContextHookOnce` exposed by BagContextMenu.
+- `NS.AddItemToList` / `NS.RemoveItemFromList` / `NS.FindAddConflict`
+  exposed by EbonClearance.lua.
+- No bare `EC_InstallBagContextHookOnce()` call sites anywhere.
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:

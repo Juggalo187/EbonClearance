@@ -17,3 +17,4 @@ EbonClearance_BagDisplay.lua
 EbonClearance_BugReport.lua
 EbonClearance_Minimap.lua
 EbonClearance_Tooltip.lua
+EbonClearance_BagContextMenu.lua
