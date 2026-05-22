@@ -1562,7 +1562,7 @@ Stage 7 invariants (enforced by `tests/test_perf_guardrails.lua` Test 35):
   Process panel's spell-known checks.
 - `NS.Delay = EC_Delay` and `NS.IsAddonEnabledForChar` published.
 
-### Stage 8: extract EbonClearance_BugReport.lua (commit `<pending>`)
+### Stage 8: extract EbonClearance_BugReport.lua (commit `d2fe9b6`)
 
 Stage 8 in the original plan was "extract everything UI" - ~3,500 LOC
 of dense Interface Options panels, list-row factories, the minimap +
