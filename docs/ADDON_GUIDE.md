@@ -2124,6 +2124,47 @@ new file uses `NS.SaveProfile` / `NS.HookScrollbarAutoHide` (not bare
 locals); `EC_GetWhitelistForScope` confirmed gone from
 `EbonClearance.lua`; both registrations use `_G[]` lookups.
 
+### Stage 8e-ix-a: extract EbonClearance_MainPanel.lua (commit `<pending>`)
+
+Stage 8e-ix-a moves the top-level "EbonClearance" Interface Options
+panel (MainOptions) + its BuildMainPanel helper into
+`EbonClearance_MainPanel.lua`. ~241 LOC moved across three
+non-contiguous chunks (frame creation, BuildMainPanel body, OnShow
+handler). Final file is ~283 LOC.
+
+The panel-infrastructure helpers (`MakeHeader`, `MakeLabel`,
+`AddCheckbox`, `AddSlider`, `EC_PANEL_WIDTH`, `EC_UpdatePanelWidth`,
+`EC_compCache.initPanel`, `setPanelWidth`, etc.) STAY in
+`EbonClearance.lua`. They're shared across every panel and will move
+in a later stage (Stage 8e-ix-b / 8e-ix-c).
+
+Stage 8e-ix-a prep (1 new NS exposure):
+
+- `NS.ResetSession` - the session-stats reset handler used by the
+  Reset Session button on this panel. Body stays in `EbonClearance.lua`.
+
+In addition, five call sites that previously used the bare
+`MainOptions` local for `InterfaceOptionsFrame_OpenToCategory` were
+converted to `_G["EbonClearanceOptionsMain"]` lookups:
+
+- The welcome-popup `OnCancel` handler (when a brand-new install
+  asks "open settings?").
+- `EbonClearance_ToggleSettings` (the keybind handler).
+- The `/ec` slash command with no args.
+- The unknown-subcommand fallback in `/ec`.
+- The combat-deferred panel-open queue in `PLAYER_REGEN_ENABLED`.
+
+Registration line converted to `_G[]` lookup. .toc loads the new
+file BEFORE `EbonClearance.lua`. DB + ADB captured at OnShow entry
+and BuildMainPanel entry.
+
+Stage 8e-ix-a invariants (Test 51): NS.ResetSession exposed;
+MainOptions frame + BuildMainPanel in the new file; new file uses
+NS.ResetSession + NS.CopperToColoredText (not bare locals);
+MainOptions + BuildMainPanel confirmed gone from `EbonClearance.lua`;
+no bare `MainOptions` identifier references remain; registration
+uses `_G[]` lookup.
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:

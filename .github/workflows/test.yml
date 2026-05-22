@@ -39,6 +39,7 @@ jobs:
           luac5.1 -p EbonClearance_ProtectionPanel.lua
           luac5.1 -p EbonClearance_ItemHighlightingPanel.lua
           luac5.1 -p EbonClearance_ProfilesPanel.lua
+          luac5.1 -p EbonClearance_MainPanel.lua
           luac5.1 -p EbonClearance_BagDisplay.lua
           luac5.1 -p EbonClearance_BugReport.lua
           luac5.1 -p EbonClearance_Minimap.lua

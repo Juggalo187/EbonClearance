@@ -55,6 +55,7 @@ local SOURCE_PATHS = {
     "EbonClearance_ProtectionPanel.lua",
     "EbonClearance_ItemHighlightingPanel.lua",
     "EbonClearance_ProfilesPanel.lua",
+    "EbonClearance_MainPanel.lua",
     "EbonClearance.lua",
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",
@@ -2766,6 +2767,102 @@ do
         "Import/Export panel registered via _G lookup",
         src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsImportExport"%]%)') ~= nil,
         "post-extraction, EbonClearance.lua must use the _G lookup"
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 51 (Stage 8e-ix-a): MainOptions panel + BuildMainPanel extracted.
+-- ---------------------------------------------------------------------------
+-- Stage 8e-ix-a moves three non-contiguous chunks from EbonClearance.lua
+-- into EbonClearance_MainPanel.lua:
+--   - local MainOptions = CreateFrame(...) frame creation
+--   - BuildMainPanel function body
+--   - MainOptions:SetScript("OnShow", ...) panel-build handler
+-- The panel-infra helpers (MakeHeader, MakeLabel, EC_PANEL_WIDTH,
+-- EC_UpdatePanelWidth, etc.) stay in EbonClearance.lua for later
+-- stages.
+do
+    check(
+        "NS.ResetSession exposed",
+        src:find("NS%.ResetSession%s*=%s*EC_ResetSession") ~= nil,
+        "EbonClearance.lua must publish NS.ResetSession for the Main panel's Reset Session button"
+    )
+
+    local mpFile = io.open("EbonClearance_MainPanel.lua", "rb")
+    if mpFile then
+        local mpSrc = mpFile:read("*a") or ""
+        mpFile:close()
+        check(
+            "MainOptions frame in EbonClearance_MainPanel.lua",
+            mpSrc:find('CreateFrame%("Frame", "EbonClearanceOptionsMain"') ~= nil,
+            "MainOptions frame creation must live in EbonClearance_MainPanel.lua (Stage 8e-ix-a)"
+        )
+        check(
+            "BuildMainPanel function in EbonClearance_MainPanel.lua",
+            mpSrc:find("local function BuildMainPanel%(") ~= nil,
+            "BuildMainPanel must move along with the MainOptions OnShow that calls it"
+        )
+        local code = (mpSrc:gsub("\n%-%-[^\n]*", ""))
+        check(
+            "EbonClearance_MainPanel.lua uses NS.ResetSession (not bare EC_ResetSession)",
+            code:find("NS%.ResetSession%(") ~= nil
+                and code:find("[^.%w_]EC_ResetSession%(") == nil,
+            "the Reset Session button must call NS.ResetSession (the local lives in EbonClearance.lua)"
+        )
+        check(
+            "EbonClearance_MainPanel.lua uses NS.CopperToColoredText",
+            code:find("NS%.CopperToColoredText%(") ~= nil
+                and code:find("[^.%w_]CopperToColoredText%(") == nil,
+            "stats display must call NS.CopperToColoredText (the local lives in EbonClearance.lua)"
+        )
+        -- Catch other common file-scope-locals-as-globals traps from the
+        -- extraction: ADDON_AUTHOR / ADDON_URL / EC_session are file-
+        -- scope locals in EbonClearance.lua that the byline + stats
+        -- panel use. The new file must call them through NS.
+        check(
+            "EbonClearance_MainPanel.lua uses NS.ADDON_AUTHOR / NS.ADDON_URL",
+            code:find("NS%.ADDON_AUTHOR") ~= nil
+                and code:find("NS%.ADDON_URL") ~= nil
+                and code:find("[^.%w_]ADDON_AUTHOR[^.%w_]") == nil
+                and code:find("[^.%w_]ADDON_URL[^.%w_]") == nil,
+            "byline must call NS.ADDON_AUTHOR / NS.ADDON_URL; bare globals would be nil"
+        )
+        check(
+            "EbonClearance_MainPanel.lua uses NS.session (not bare EC_session)",
+            code:find("NS%.session%.") ~= nil
+                and code:find("[^.%w_]EC_session[^.%w_]") == nil,
+            "stats display must call NS.session (the EC_session table lives in EbonClearance.lua)"
+        )
+    end
+
+    local ecFile = io.open("EbonClearance.lua", "rb")
+    if ecFile then
+        local ecSrc = ecFile:read("*a") or ""
+        ecFile:close()
+        check(
+            "MainOptions no longer created in EbonClearance.lua",
+            ecSrc:find('local MainOptions%s*=%s*CreateFrame') == nil,
+            "duplicate definition would clobber the Stage 8e-ix-a extracted frame"
+        )
+        check(
+            "BuildMainPanel no longer defined in EbonClearance.lua",
+            ecSrc:find('local function BuildMainPanel%(') == nil,
+            "BuildMainPanel must move with the panel; leftover definition in EbonClearance.lua is dead code"
+        )
+        -- The 5 in-EbonClearance.lua MainOptions call sites must all be
+        -- replaced with _G[] lookups so they still work after the local
+        -- binding moves out.
+        check(
+            "no bare MainOptions identifier references in EbonClearance.lua",
+            ecSrc:find("[^_%w\"]MainOptions[^_%w\"]") == nil,
+            "every InterfaceOptionsFrame_OpenToCategory(MainOptions) and similar must use _G[\"EbonClearanceOptionsMain\"] after extraction"
+        )
+    end
+
+    check(
+        "Main panel registered via _G lookup",
+        src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsMain"%]%)') ~= nil,
+        "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
     )
 end
 
