@@ -1968,7 +1968,7 @@ file (not duplicated in EbonClearance.lua); new file uses
 registrations use `_G[]` lookups; the two new NS exposures are
 present.
 
-### Stage 8e-v: extract EbonClearance_KeepDeletePanels.lua (commit `<pending>`)
+### Stage 8e-v: extract EbonClearance_KeepDeletePanels.lua (commit `17c8d12`)
 
 Stage 8e-v bundles two sibling list-management panels (Keep List +
 Delete List) into one file: `EbonClearance_KeepDeletePanels.lua`.
