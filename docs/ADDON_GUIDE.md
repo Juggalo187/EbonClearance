@@ -2040,7 +2040,7 @@ in EbonClearance.lua); uses `NS.MakeHeader` / `NS.FitScrollContent`
 (not bare locals); Issue B refresh calls preserved; registration
 uses `_G[]` lookup.
 
-### Stage 8e-vii: extract EbonClearance_ItemHighlightingPanel.lua (commit `<pending>`)
+### Stage 8e-vii: extract EbonClearance_ItemHighlightingPanel.lua (commit `e768df9`)
 
 Stage 8e-vii moves the Item Highlighting Interface Options panel
 (`CharPanel` - internal frame name `EbonClearanceOptionsCharacter`
