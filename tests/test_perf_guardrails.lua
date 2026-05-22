@@ -51,6 +51,7 @@ local SOURCE_PATHS = {
     "EbonClearance_MerchantPanel.lua",
     "EbonClearance_ScavengerPanel.lua",
     "EbonClearance_SellListPanels.lua",
+    "EbonClearance_KeepDeletePanels.lua",
     "EbonClearance.lua",
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",
@@ -2421,6 +2422,76 @@ do
     check(
         "Account Sell List panel registered via _G lookup",
         src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsAccountWhitelist"%]%)') ~= nil,
+        "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 47 (Stage 8e-v): Keep List + Delete List panels bundled.
+-- ---------------------------------------------------------------------------
+-- Stage 8e-v moves two sibling list-management panels (BlacklistPanel
+-- and DeletePanel) into one bundled file. The Protection Settings
+-- panel (BlacklistSettingsPanel) stays in EbonClearance.lua for a
+-- later stage - it's a different domain (auto-protect toggles, not
+-- list management). Zero new NS exposures needed - both panels use
+-- NS.MakeHeader / NS.MakeLabel / NS.CreateListUI already exposed in
+-- earlier stages.
+do
+    local kdFile = io.open("EbonClearance_KeepDeletePanels.lua", "rb")
+    if kdFile then
+        local kdSrc = kdFile:read("*a") or ""
+        kdFile:close()
+        check(
+            "BlacklistPanel frame in EbonClearance_KeepDeletePanels.lua",
+            kdSrc:find('CreateFrame%("Frame", "EbonClearanceOptionsBlacklist"') ~= nil,
+            "BlacklistPanel (Keep List) frame must live in EbonClearance_KeepDeletePanels.lua (Stage 8e-v)"
+        )
+        check(
+            "DeletePanel frame in EbonClearance_KeepDeletePanels.lua",
+            kdSrc:find('CreateFrame%("Frame", "EbonClearanceOptionsDeletion"') ~= nil,
+            "DeletePanel (Delete List) frame must live in EbonClearance_KeepDeletePanels.lua"
+        )
+        local code = (kdSrc:gsub("\n%-%-[^\n]*", ""))
+        check(
+            "EbonClearance_KeepDeletePanels.lua uses NS.CreateListUI (not bare CreateListUI)",
+            code:find("NS%.CreateListUI%(") ~= nil
+                and code:find("[^.%w_]CreateListUI%(") == nil,
+            "panel builds must call NS.CreateListUI (the local lives in EbonClearance.lua)"
+        )
+    end
+
+    local ecFile = io.open("EbonClearance.lua", "rb")
+    if ecFile then
+        local ecSrc = ecFile:read("*a") or ""
+        ecFile:close()
+        check(
+            "BlacklistPanel no longer created in EbonClearance.lua",
+            ecSrc:find('local BlacklistPanel%s*=%s*CreateFrame') == nil,
+            "duplicate definition in EbonClearance.lua would clobber the extracted frame"
+        )
+        check(
+            "DeletePanel no longer created in EbonClearance.lua",
+            ecSrc:find('local DeletePanel%s*=%s*CreateFrame') == nil,
+            "duplicate definition in EbonClearance.lua would clobber the extracted frame"
+        )
+        -- BlacklistSettingsPanel (Protection Settings) is a DIFFERENT
+        -- panel that stays in EbonClearance.lua for a later stage. The
+        -- pattern above must NOT match it.
+        check(
+            "BlacklistSettingsPanel still in EbonClearance.lua (different stage)",
+            ecSrc:find('local BlacklistSettingsPanel') ~= nil,
+            "Protection Settings panel is a separate domain and stays in EbonClearance.lua for now"
+        )
+    end
+
+    check(
+        "Keep List panel registered via _G lookup",
+        src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsBlacklist"%]%)') ~= nil,
+        "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
+    )
+    check(
+        "Delete List panel registered via _G lookup",
+        src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsDeletion"%]%)') ~= nil,
         "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
     )
 end

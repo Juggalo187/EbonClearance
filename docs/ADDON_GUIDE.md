@@ -1968,6 +1968,43 @@ file (not duplicated in EbonClearance.lua); new file uses
 registrations use `_G[]` lookups; the two new NS exposures are
 present.
 
+### Stage 8e-v: extract EbonClearance_KeepDeletePanels.lua (commit `<pending>`)
+
+Stage 8e-v bundles two sibling list-management panels (Keep List +
+Delete List) into one file: `EbonClearance_KeepDeletePanels.lua`.
+Both are list-management UIs anchored on the shared `CreateListUI`
+helper, with the same panel rhythm (header + description + hint +
+list).
+
+~123 LOC moved, new file is ~156 LOC.
+
+**Zero new NS exposures needed** - `NS.MakeHeader`, `NS.MakeLabel`,
+`NS.CreateListUI` are all already NS-exposed from 8e-i / 8e-iv prep.
+
+Moved into the new file:
+
+- `local DeletePanel = CreateFrame(...)` + OnShow build body (Delete
+  List, including the `Enable item deletion` checkbox with its
+  refresh-on-toggle wiring from Issue B)
+- `local BlacklistPanel = CreateFrame(...)` + OnShow build body
+  (Keep List)
+
+**`BlacklistSettingsPanel` (Protection Settings) stays in
+EbonClearance.lua for now.** Despite the name overlap with
+BlacklistPanel, it's a different domain (auto-protect toggles for
+equipped / upgrades / sets / affixes / chance-on-hit) and will move
+in a later stage.
+
+Both registrations converted to `_G[]` lookups. .toc loads the new
+file BEFORE `EbonClearance.lua`. DB captured at each OnShow entry.
+
+Stage 8e-v invariants (Test 47): both panel frames in the new file
+(not duplicated in EbonClearance.lua); new file uses `NS.CreateListUI`
+(not bare local); both registrations use `_G[]` lookups; the
+`BlacklistSettingsPanel` (Protection Settings) frame is still in
+EbonClearance.lua (sentinel check that the wrong panel didn't get
+swept up by accident).
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:
