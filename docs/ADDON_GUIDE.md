@@ -1936,6 +1936,38 @@ new file (not duplicated in EbonClearance.lua); new file uses
 `NS.MakeHeader` / `NS.AddCheckbox` / `NS.AddSlider` (not bare
 locals); registration uses `_G[]` lookup.
 
+### Stage 8e-iv: extract EbonClearance_SellListPanels.lua (commit `<pending>`)
+
+Stage 8e-iv bundles two sibling panels (Sell List + Account Sell
+List) into one file: `EbonClearance_SellListPanels.lua`. Same
+concept, different scope (per-character vs account-wide); both are
+list-management UIs anchored on the shared `CreateListUI` helper.
+~98 LOC moved, new file is ~125 LOC.
+
+Two new NS exposures (Stage 8e-iv prep) - both share between Sell
+List family panels AND Keep / Delete list panels (a future stage),
+so the exposures stay on the cross-file surface:
+
+- `NS.CreateListUI` - the scrollable item-list UI builder; called by
+  every list-management panel.
+- `NS.AddScanByQualityRow` - the "Add from bags: White / Green /
+  Blue" bulk-add row used by Sell List + Account Sell List.
+
+Moved into the new file:
+
+- `local WhitelistPanel = CreateFrame(...)` + OnShow build body
+- `local AccountWhitelistPanel = CreateFrame(...)` + OnShow build body
+
+Both `InterfaceOptions_AddCategory` calls converted to `_G[]` lookups;
+.toc loads the new file BEFORE `EbonClearance.lua`. DB captured at
+each OnShow entry per the established pattern.
+
+Stage 8e-iv invariants (Test 46): both panel frames live in the new
+file (not duplicated in EbonClearance.lua); new file uses
+`NS.CreateListUI` / `NS.AddScanByQualityRow` (not bare locals); both
+registrations use `_G[]` lookups; the two new NS exposures are
+present.
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:

@@ -36,6 +36,7 @@ local SOURCE_PATHS = {
     "EbonClearance_ProcessBagsPanel.lua",
     "EbonClearance_MerchantPanel.lua",
     "EbonClearance_ScavengerPanel.lua",
+    "EbonClearance_SellListPanels.lua",
     "EbonClearance.lua",
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",

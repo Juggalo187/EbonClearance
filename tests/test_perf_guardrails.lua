@@ -50,6 +50,7 @@ local SOURCE_PATHS = {
     "EbonClearance_ProcessBagsPanel.lua",
     "EbonClearance_MerchantPanel.lua",
     "EbonClearance_ScavengerPanel.lua",
+    "EbonClearance_SellListPanels.lua",
     "EbonClearance.lua",
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",
@@ -2108,6 +2109,27 @@ do
         "DB%.qualityRules%[qualityIdx%]%.bindFilter%s*=%s*entry%.value",
         "DB.qualityRules[qualityIdx].bindFilter (Merchant per-rarity dropdown)"
     )
+
+    -- EC_LoadProfile wholesale-rewrites DB.whitelist + DB.blacklist; it
+    -- must follow up with NS.RefreshSellBorders so slot tints repaint.
+    -- Same root rule as Test 26 / Test 42 - any write that changes
+    -- EC_IsSellable's verdict must repaint.
+    local function bodyHasRefresh(funcSig)
+        local startIdx = src:find(funcSig)
+        if not startIdx then
+            return nil
+        end
+        local nextLocal = src:find("\nlocal function ", startIdx + 1) or #src
+        local nextTbl = src:find("\nfunction [A-Za-z_]+%.", startIdx + 1) or #src
+        local endIdx = math.min(nextLocal, nextTbl)
+        local body = src:sub(startIdx, endIdx)
+        return body:find("NS%.RefreshSellBorders") ~= nil
+    end
+    check(
+        "EC_LoadProfile calls NS.RefreshSellBorders",
+        bodyHasRefresh("local function EC_LoadProfile%(") == true,
+        "profile load rewrites DB.whitelist + DB.blacklist wholesale; slot-border tints must repaint immediately"
+    )
 end
 
 -- ---------------------------------------------------------------------------
@@ -2322,6 +2344,83 @@ do
     check(
         "Scavenger Settings panel registered via _G lookup in EbonClearance.lua",
         src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsScavenger"%]%)') ~= nil,
+        "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 46 (Stage 8e-iv): Sell List + Account Sell List panels bundled.
+-- ---------------------------------------------------------------------------
+-- Stage 8e-iv moves the two sibling list-management panels
+-- (WhitelistPanel + AccountWhitelistPanel) into a single bundled
+-- file: EbonClearance_SellListPanels.lua. Both share the same
+-- helpers (CreateListUI + EC_AddScanByQualityRow) so co-locating is
+-- the right shape.
+do
+    check(
+        "NS.CreateListUI exposed",
+        src:find("NS%.CreateListUI%s*=%s*CreateListUI") ~= nil,
+        "EbonClearance.lua must publish NS.CreateListUI for split panels to build list UIs"
+    )
+    check(
+        "NS.AddScanByQualityRow exposed",
+        src:find("NS%.AddScanByQualityRow%s*=%s*EC_AddScanByQualityRow") ~= nil,
+        "EbonClearance.lua must publish NS.AddScanByQualityRow for the Sell List family panels"
+    )
+
+    local slFile = io.open("EbonClearance_SellListPanels.lua", "rb")
+    if slFile then
+        local slSrc = slFile:read("*a") or ""
+        slFile:close()
+        check(
+            "WhitelistPanel frame in EbonClearance_SellListPanels.lua",
+            slSrc:find('CreateFrame%("Frame", "EbonClearanceOptionsWhitelist"') ~= nil,
+            "WhitelistPanel frame must live in EbonClearance_SellListPanels.lua (Stage 8e-iv)"
+        )
+        check(
+            "AccountWhitelistPanel frame in EbonClearance_SellListPanels.lua",
+            slSrc:find('CreateFrame%("Frame", "EbonClearanceOptionsAccountWhitelist"') ~= nil,
+            "AccountWhitelistPanel frame must live in EbonClearance_SellListPanels.lua"
+        )
+        local code = (slSrc:gsub("\n%-%-[^\n]*", ""))
+        check(
+            "EbonClearance_SellListPanels.lua uses NS.CreateListUI (not bare CreateListUI)",
+            code:find("NS%.CreateListUI%(") ~= nil
+                and code:find("[^.%w_]CreateListUI%(") == nil,
+            "panel builds must call NS.CreateListUI (the local lives in EbonClearance.lua)"
+        )
+        check(
+            "EbonClearance_SellListPanels.lua uses NS.AddScanByQualityRow",
+            code:find("NS%.AddScanByQualityRow%(") ~= nil
+                and code:find("[^.%w_]EC_AddScanByQualityRow%(") == nil,
+            "panel builds must call NS.AddScanByQualityRow"
+        )
+    end
+
+    local ecFile = io.open("EbonClearance.lua", "rb")
+    if ecFile then
+        local ecSrc = ecFile:read("*a") or ""
+        ecFile:close()
+        check(
+            "WhitelistPanel no longer created in EbonClearance.lua",
+            ecSrc:find('local WhitelistPanel%s*=%s*CreateFrame') == nil,
+            "duplicate definition in EbonClearance.lua would clobber the extracted frame"
+        )
+        check(
+            "AccountWhitelistPanel no longer created in EbonClearance.lua",
+            ecSrc:find('local AccountWhitelistPanel%s*=') == nil,
+            "duplicate definition in EbonClearance.lua would clobber the extracted frame"
+        )
+    end
+
+    check(
+        "Sell List panel registered via _G lookup",
+        src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsWhitelist"%]%)') ~= nil,
+        "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
+    )
+    check(
+        "Account Sell List panel registered via _G lookup",
+        src:find('InterfaceOptions_AddCategory%(_G%["EbonClearanceOptionsAccountWhitelist"%]%)') ~= nil,
         "post-extraction, EbonClearance.lua must call InterfaceOptions_AddCategory with the _G lookup"
     )
 end

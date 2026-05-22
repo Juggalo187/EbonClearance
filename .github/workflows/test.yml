@@ -34,6 +34,7 @@ jobs:
           luac5.1 -p EbonClearance_ProcessBagsPanel.lua
           luac5.1 -p EbonClearance_MerchantPanel.lua
           luac5.1 -p EbonClearance_ScavengerPanel.lua
+          luac5.1 -p EbonClearance_SellListPanels.lua
           luac5.1 -p EbonClearance_BagDisplay.lua
           luac5.1 -p EbonClearance_BugReport.lua
           luac5.1 -p EbonClearance_Minimap.lua

@@ -1081,6 +1081,15 @@ local function EC_LoadProfile(name)
     if bp and bp.listUI then
         bp.listUI:Refresh()
     end
+    -- Profile load wholesale-rewrites DB.whitelist + DB.blacklist, which
+    -- changes EC_IsSellable's verdict for every item previously / newly
+    -- on those lists. Repaint slot-border tints so the categories
+    -- (charSell / and the indirect knock-on through the rule category)
+    -- track immediately. Same rule as the list-mutation refresh invariant
+    -- (Test 26) and the settings-toggle refresh invariant (Test 42).
+    if NS.RefreshSellBorders then
+        NS.RefreshSellBorders()
+    end
     return true, string.format('Loaded profile "|cffffff00%s|r" (%d sell, %d keep).', name, wlCount, blCount)
 end
 
@@ -4862,6 +4871,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
     box.Refresh = Refresh
     return box
 end
+NS.CreateListUI = CreateListUI
 
 local function AddCheckbox(parent, name, anchor, labelText, getter, setter, yOff)
     local cb = CreateFrame("CheckButton", name, parent, "InterfaceOptionsCheckButtonTemplate")
@@ -5407,57 +5417,8 @@ local function EC_AddScanByQualityRow(parent, anchorFrame, setTableName, listLab
 
     return rowFrame
 end
+NS.AddScanByQualityRow = EC_AddScanByQualityRow
 
-local WhitelistPanel = CreateFrame("Frame", "EbonClearanceOptionsWhitelist", InterfaceOptionsFramePanelContainer)
-WhitelistPanel.name = "Sell List"
-WhitelistPanel.parent = "EbonClearance"
-
-WhitelistPanel:SetScript("OnShow", function(self)
-    EC_compCache.initPanel(self, function(self)
-        if self.listUI then
-            self.listUI:Refresh()
-        end
-    end, function(self)
-        MakeHeader(self, "Sell List", -16)
-
-        -- Panel-specific description only. Cross-cutting info (grey junk
-        -- auto-sell, quality threshold) lives on the Main panel to avoid
-        -- repeating the same explanation on every list page.
-        local descLabel = MakeLabel(
-            self,
-            "Specific items to always auto-sell on this character, regardless of rarity rules. Use the |cffb6ffb6Add from bags|r buttons below to bulk-add by colour, or shift-click an item to add it manually.",
-            16,
-            -44
-        )
-
-        -- Grey side-note on its own line.
-        local descNote = self:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        descNote:SetPoint("TOPLEFT", descLabel, "BOTTOMLEFT", 0, -6)
-        EC_compCache.setPanelWidth(descNote, 16)
-        descNote:SetJustifyH("LEFT")
-        descNote:SetJustifyV("TOP")
-        if descNote.SetWordWrap then
-            descNote:SetWordWrap(true)
-        end
-        descNote:SetText(
-            "|cffaaaaaaProfiles let you swap between different sell lists. For items you want sold on every alt, use |r|cffb6ffb6Account Sell List|r|cffaaaaaa instead.|r"
-        )
-
-        -- Cascade-anchor the scan row to the grey note's BOTTOMLEFT so it stays
-        -- below regardless of how many lines the description / note wrap to.
-        local scanRow = EC_AddScanByQualityRow(self, descNote, "whitelist", "the Sell List", function()
-            if self.listUI then
-                self.listUI:Refresh()
-            end
-        end, 0, -10)
-
-        self.listUI = CreateListUI(self, "Manual Add (Shift-click item or type ID)", "whitelist", 16, -118)
-        self.listUI:ClearAllPoints()
-        self.listUI:SetPoint("TOPLEFT", scanRow, "BOTTOMLEFT", 0, -16)
-        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-        self.listUI:Refresh()
-    end)
-end)
 
 -- ============================================================
 -- Whitelist Profiles Panel
@@ -7310,54 +7271,6 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
     end, true)
 end)
 
-local AccountWhitelistPanel =
-    CreateFrame("Frame", "EbonClearanceOptionsAccountWhitelist", InterfaceOptionsFramePanelContainer)
-AccountWhitelistPanel.name = "Account Sell List"
-AccountWhitelistPanel.parent = "EbonClearance"
-
-AccountWhitelistPanel:SetScript("OnShow", function(self)
-    EC_compCache.initPanel(self, function(self)
-        if self.listUI then
-            self.listUI:Refresh()
-        end
-    end, function(self)
-        MakeHeader(self, "Account Sell List", -16)
-        local descLabel = MakeLabel(
-            self,
-            "Specific items to always auto-sell on |cffffff00every|r character on this account. Useful for shared trash like reagents or seasonal items.",
-            16,
-            -44
-        )
-
-        -- Grey side-note on its own line so the action text and the
-        -- side info stay visually separate.
-        local descNote = self:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        descNote:SetPoint("TOPLEFT", descLabel, "BOTTOMLEFT", 0, -6)
-        EC_compCache.setPanelWidth(descNote, 16)
-        descNote:SetJustifyH("LEFT")
-        descNote:SetJustifyV("TOP")
-        if descNote.SetWordWrap then
-            descNote:SetWordWrap(true)
-        end
-        descNote:SetText("|cffaaaaaaThis list is not part of profiles - it stays the same when you switch profiles.|r")
-
-        -- Cascade-anchor the scan row to the grey note's BOTTOMLEFT so it stays
-        -- below regardless of how many lines the description / note wrap to.
-        local scanRow = EC_AddScanByQualityRow(self, descNote, "accountWhitelist", "the Account Sell List", function()
-            if self.listUI then
-                self.listUI:Refresh()
-            end
-        end, 0, -10)
-
-        self.listUI = CreateListUI(self, "Account-Wide Items", "accountWhitelist", 16, -118)
-        self.listUI:ClearAllPoints()
-        self.listUI:SetPoint("TOPLEFT", scanRow, "BOTTOMLEFT", 0, -16)
-        -- Fill remaining vertical space rather than fixed-height; mirrors
-        -- WhitelistPanel and avoids bottom-row clipping at narrow widths.
-        self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
-        self.listUI:Refresh()
-    end)
-end)
 
 
 -- Register sub-panels in v2.30.x discovery order.
@@ -7392,8 +7305,8 @@ InterfaceOptions_AddCategory(_G["EbonClearanceOptionsMerchant"]) -- Merchant Set
 InterfaceOptions_AddCategory(BlacklistSettingsPanel) -- Protection Settings
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsScavenger"]) -- Scavenger Settings
 InterfaceOptions_AddCategory(CharPanel) -- Item Highlighting
-InterfaceOptions_AddCategory(WhitelistPanel) -- Sell List
-InterfaceOptions_AddCategory(AccountWhitelistPanel) -- Account Sell List
+InterfaceOptions_AddCategory(_G["EbonClearanceOptionsWhitelist"]) -- Sell List
+InterfaceOptions_AddCategory(_G["EbonClearanceOptionsAccountWhitelist"]) -- Account Sell List
 InterfaceOptions_AddCategory(BlacklistPanel) -- Keep List
 InterfaceOptions_AddCategory(DeletePanel) -- Delete List
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsProcessBags"]) -- Process Bags
