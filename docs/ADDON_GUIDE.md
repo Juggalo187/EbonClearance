@@ -2080,7 +2080,7 @@ preserved; new file uses `NS.MakeHeader` (not bare local);
 `CreateNameListUI` confirmed dropped from EbonClearance.lua;
 registration uses `_G[]` lookup.
 
-### Stage 8e-viii: extract EbonClearance_ProfilesPanel.lua (commit `<pending>`)
+### Stage 8e-viii: extract EbonClearance_ProfilesPanel.lua (commit `a1c473a`)
 
 Stage 8e-viii bundles two related panels into one new file:
 ProfilesPanel (named-profile management) + ImportExportPanel (profile
