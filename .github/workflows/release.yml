@@ -46,6 +46,7 @@ jobs:
              EbonClearance_Protection.lua EbonClearance_Vendor.lua \
              EbonClearance_Process.lua EbonClearance_BagDisplay.lua \
              EbonClearance_BugReport.lua EbonClearance_Minimap.lua \
+             EbonClearance_Tooltip.lua \
              EbonClearance.toc Bindings.xml LICENSE EbonClearance/
           zip -r EbonClearance.zip EbonClearance/
 

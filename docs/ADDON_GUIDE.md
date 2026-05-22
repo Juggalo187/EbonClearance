@@ -1670,6 +1670,48 @@ Stage 8b invariants (enforced by `tests/test_perf_guardrails.lua` Test 37):
 - No bare `EC_CreateMinimapButton()` / `EC_CreateTargetMerchantButton()` /
   `EC_CreateLDBLauncher()` call sites in any shipped source.
 
+### Stage 8c: extract EbonClearance_Tooltip.lua (commit `<pending>`)
+
+Stage 8c moves the bag-item tooltip annotation system to
+`EbonClearance_Tooltip.lua` (~362 LOC). The system that adds the
+coloured "Will Sell" / "Protected - Random affix" / "Allowed -
+Account Sell" / "Protected - Profession tool" / etc. line on every
+bag item's tooltip.
+
+Moved into Tooltip:
+
+- `EC_AnnotateTooltip` (per-tooltip body — walks the same decision
+  chain as `EC_IsSellable` and produces a humane status line;
+  mirrors rather than calls `EC_IsSellable` because tooltip output
+  needs to know WHY, not just yes/no; see docs/CODE_REVIEW.md
+  item 6 for the documented parallel-impl tradeoff).
+- `EC_ClearTooltipFlag` (resets the per-tooltip dedupe flag —
+  recipe tooltips fire `OnTooltipSetItem` twice).
+- `EC_InstallTooltipHookOnce` (hooks `OnTooltipSetItem` +
+  `OnTooltipCleared` on `GameTooltip` + `ItemRefTooltip`).
+  Exposed as `NS.InstallTooltipHookOnce` for the ADDON_LOADED
+  branch.
+
+Cross-file pattern:
+
+- Tooltip carries its own local `IsInSet` helper (same convention
+  as Vendor and BagDisplay - pure function, cheap to duplicate,
+  avoids cross-file lookup on every tooltip refresh).
+- `EC_IsAddonEnabledForChar` substituted to `NS.IsAddonEnabledForChar`
+  (exposure already present from Stage 7).
+- 9 `EC_compCache.*` references work via the shared cache table.
+
+One external call site in EbonClearance.lua's ADDON_LOADED branch
+updated:
+
+- `EC_InstallTooltipHookOnce()` → `NS.InstallTooltipHookOnce()`
+
+Stage 8c invariants (enforced by `tests/test_perf_guardrails.lua` Test 38):
+
+- `NS.InstallTooltipHookOnce = EC_InstallTooltipHookOnce` published
+  by Tooltip.
+- No bare `EC_InstallTooltipHookOnce()` call sites anywhere.
+
 ### Target architecture (post-split)
 
 Per docs/CODE_REVIEW.md item 4, the planned split shape is:

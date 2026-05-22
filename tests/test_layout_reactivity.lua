@@ -37,6 +37,7 @@ local SOURCE_PATHS = {
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",
     "EbonClearance_Minimap.lua",
+    "EbonClearance_Tooltip.lua",
 }
 
 local pieces = {}

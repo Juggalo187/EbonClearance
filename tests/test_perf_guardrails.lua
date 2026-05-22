@@ -51,6 +51,7 @@ local SOURCE_PATHS = {
     "EbonClearance_BagDisplay.lua",
     "EbonClearance_BugReport.lua",
     "EbonClearance_Minimap.lua",
+    "EbonClearance_Tooltip.lua",
 }
 
 local pieces = {}
@@ -1677,6 +1678,46 @@ do
             "found bare call: " .. tostring(bare)
         )
     end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 38 (Stage 8c): tooltip annotation extracted.
+-- ---------------------------------------------------------------------------
+-- Stage 8c moves the per-bag-item tooltip annotation system
+-- (EC_AnnotateTooltip + EC_ClearTooltipFlag + EC_InstallTooltipHookOnce)
+-- to EbonClearance_Tooltip.lua. The install entry point is exposed
+-- on NS for the ADDON_LOADED branch in EbonClearance.lua to call.
+do
+    check(
+        "NS.InstallTooltipHookOnce exposed by Tooltip",
+        src:find("NS%.InstallTooltipHookOnce%s*=%s*EC_InstallTooltipHookOnce") ~= nil,
+        "EbonClearance_Tooltip.lua must publish NS.InstallTooltipHookOnce"
+    )
+
+    -- No bare EC_InstallTooltipHookOnce() call sites anywhere.
+    local function hasBareCall(s, name)
+        local cleaned = s:gsub("local function " .. name .. "%(", "local function _def_" .. name .. "(")
+        for line in cleaned:gmatch("[^\n]+") do
+            local stripped = line:gsub("^%s+", "")
+            if stripped:sub(1, 2) ~= "--" then
+                local commentAt = stripped:find("%-%-", 1, true)
+                local code = commentAt and stripped:sub(1, commentAt - 1) or stripped
+                if code:find("[^.%w_]" .. name .. "%s*%(") then
+                    return stripped
+                end
+                if code:sub(1, #name + 1) == name .. "(" then
+                    return stripped
+                end
+            end
+        end
+        return nil
+    end
+    local bare = hasBareCall(src, "EC_InstallTooltipHookOnce")
+    check(
+        "no bare EC_InstallTooltipHookOnce() call sites (must be NS.InstallTooltipHookOnce)",
+        bare == nil,
+        "found bare call: " .. tostring(bare)
+    )
 end
 
 -- ---------------------------------------------------------------------------
