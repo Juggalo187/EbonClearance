@@ -2253,7 +2253,7 @@ new file; no widget primitive is duplicated in `EbonClearance.lua`;
 no bare `StyleInputBox()` call sites remain in `EbonClearance.lua`
 code (comments stripped before the scan via per-line `%-%-` parse).
 
-### Stage 8e-ix-d: extract EbonClearance_ListWidget.lua (commit `<pending>`)
+### Stage 8e-ix-d: extract EbonClearance_ListWidget.lua (commit `91ea0d5`)
 
 Stage 8e-ix-d is the densest remaining cluster: the reusable list
 widget that every list panel (Sell List, Account Sell List, Keep
