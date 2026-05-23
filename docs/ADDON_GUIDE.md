@@ -2019,6 +2019,9 @@ The panel hosts:
 - v2.20.0 affix + chance-on-hit protection toggles
   (`protectAffixedRareItems`, `protectChanceOnHitItems`).
 - `affixAllowExactDupes` setting.
+- v2.32.0 tome / recipe protection: parent toggle
+  `protectUnlearnedTomes` + child toggle `protectAllTomes` (greyed
+  when the parent is off; same shape as the affix-dupe pair).
 - Explanatory notes interleaved between toggles (the reason the panel
   builds checkboxes inline rather than using AddCheckbox's flat
   format).
