@@ -67,6 +67,20 @@ another addon is not present in this codebase. Anyone wishing to
 verify can clone the EC repository and review the commit log
 alongside the cited competitor source.
 
+The acknowledgement runs both ways. AutoDelete's v3.20 README (May
+2026) includes a `Credits` section noting "AutoDelete has been
+re-implemented in part by EbonClearance" and "We appreciate the
+shoutouts in their source comments", reciprocating the source-comment
+mentions of AutoDelete that have been present in EC's code since the
+early `EbonholdStuff` fork. Both projects ship under their own
+licences (AutoDelete: MIT; EbonClearance: source-available attribution
+licence; see [`LICENSE`](LICENSE)) and both are written as original
+codebases against the shared Blizzard 3.3.5a API. Where a feature
+shape converges (e.g. a "Process Bags" panel grouping disenchant /
+mill / prospect / open under one window), the implementations are
+independent; the convergence reflects the small API surface and the
+specific gameplay loop both addons are solving for.
+
 ---
 
 ## Source-available licence pattern
