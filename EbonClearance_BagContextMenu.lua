@@ -39,16 +39,10 @@
 local NS = select(2, ...)
 local EC_compCache = NS.compCache
 
--- Set-membership helper. Local copy of EbonClearance.lua's IsInSet
--- (different upvalue scope; pure function so duplication is cheap).
--- Same convention as Vendor / BagDisplay / Tooltip.
-local function IsInSet(setTable, itemID)
-    if not itemID or not setTable then
-        return false
-    end
-    local v = setTable[itemID]
-    return (v == true) or (v == 1)
-end
+-- IsInSet binding intentionally not imported here; the bag-context popup
+-- doesn't consult set membership directly (the list-mutation helpers it
+-- delegates to handle their own checks). If a future row handler needs
+-- it, add `local IsInSet = NS.IsInSet` here.
 
 -- Row metadata for the popup. Each "list" row toggles between "Add to ..."
 -- (white) and "Remove from ..." (orange) based on the item's live list

@@ -70,6 +70,29 @@ local function EC_Fingerprint(payload)
 end
 NS.Fingerprint = EC_Fingerprint
 
+-- Set-membership helper. Single canonical definition for the addon; the
+-- consuming files (Vendor, Process, Tooltip, BagContextMenu, BagDisplay,
+-- Events) bind it as `local IsInSet = NS.IsInSet` at file head so the
+-- per-call cost is one local read, identical to the previous file-local
+-- function pattern. Centralising the definition fixes the Stage 7
+-- regression where one of the split files silently dropped its local
+-- copy: `tests/test_perf_guardrails.lua` Test 65 still enforces the
+-- per-file invariant via the `local IsInSet = ...` import line.
+--
+-- Strict semantics: only `true` or `1` count as membership. The pre-
+-- unification BagDisplay and Vendor copies used a more permissive
+-- `~= nil` check, but DB / ADB only ever stores `true` (verified by
+-- audit), so the strict version is a no-op semantic narrowing on
+-- current data and a safety improvement against hand-edited
+-- SavedVariables.
+function NS.IsInSet(setTable, itemID)
+    if not itemID or not setTable then
+        return false
+    end
+    local v = setTable[itemID]
+    return (v == true) or (v == 1)
+end
+
 -- Cached companion creature IDs and v2.9.0 dismiss-vs-leash classifier state,
 -- colocated on a single table to keep the main-chunk local count down (Lua
 -- 5.1 caps that at 200; see docs/ADDON_GUIDE.md).

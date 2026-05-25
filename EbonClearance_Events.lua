@@ -1031,13 +1031,9 @@ end
 -- on this; any future per-character feature can read it via NS.
 NS.IsAddonEnabledForChar = EC_IsAddonEnabledForChar
 
-local function IsInSet(setTable, itemID)
-    if not itemID or not setTable then
-        return false
-    end
-    local v = setTable[itemID]
-    return (v == true) or (v == 1)
-end
+-- Set-membership helper. Captures the canonical NS.IsInSet (defined in
+-- EbonClearance_Core.lua); per-call cost is one local read.
+local IsInSet = NS.IsInSet
 
 -- Whitelist profile functions
 local function EC_ValidateProfileName(name)
@@ -1926,15 +1922,39 @@ function EC_HandleAutoOpenContainers()
         return
     end
     if InCombatLockdown() then
-        -- One-shot deferral announce per combat instance. The earlier
-        -- implementation walked all 5 bags with a 30-line tooltip scan per
-        -- slot purely to print an exact count (~80 tooltip scans on the
-        -- first BAG_UPDATE-during-combat); the count itself wasn't worth
-        -- that cost. Skip the walk and let the user discover the deferral
-        -- once if needed; PLAYER_REGEN_ENABLED resumes the driver.
+        -- Session-scoped one-shot deferral announce. The earlier per-combat
+        -- variant re-fired the message on every combat instance that
+        -- happened to have a BAG_UPDATE-during-combat with openable items
+        -- in bag; rogues leveling with lockboxes in bag (continuous kill-
+        -- mob-combat cycle) saw the line spam. The flag is now NEVER
+        -- cleared at PLAYER_REGEN_ENABLED, so a user sees the deferral
+        -- notice at most once per /reload. The driver still resumes
+        -- post-combat through PLAYER_REGEN_ENABLED's EC_HandleAutoOpenContainers
+        -- call; the message is just discoverability, not load-bearing.
+        --
+        -- Short-circuit openable scan: walk bags but bail on the first
+        -- openable, so the worst case (no openables in bag) is bounded by
+        -- a single bag walk per /reload. Without this gate, the announce
+        -- would fire on every combat-during-BAG_UPDATE event regardless of
+        -- whether anything is actually deferred.
         if not EC_compCache.combatDeferredAnnounced then
-            PrintNice("Containers deferred until out of combat.")
             EC_compCache.combatDeferredAnnounced = true
+            local hasOpenable = false
+            for bag = 0, 4 do
+                local slots = GetContainerNumSlots(bag) or 0
+                for slot = 1, slots do
+                    if EC_IsOpenable(bag, slot) then
+                        hasOpenable = true
+                        break
+                    end
+                end
+                if hasOpenable then
+                    break
+                end
+            end
+            if hasOpenable then
+                PrintNice("Containers deferred until out of combat.")
+            end
         end
         return
     end
@@ -5133,11 +5153,16 @@ f:SetScript("OnEvent", function(self, event, ...)
             EC_scavStateBootstrapped = true
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Combat ended: clear the deferred-announce gate and re-fire the
-        -- open driver. If the toggle is off or the queue is empty the
-        -- driver early-returns; cost on combat exit for opted-out users is
-        -- one branch.
-        EC_compCache.combatDeferredAnnounced = false
+        -- Combat ended: re-fire the open driver. If the toggle is off or
+        -- the queue is empty the driver early-returns; cost on combat
+        -- exit for opted-out users is one branch.
+        --
+        -- The combatDeferredAnnounced flag is intentionally NOT cleared
+        -- here. It used to be (per-combat re-announce), but a tester
+        -- rogue-leveling with lockboxes in bag reported the deferral line
+        -- firing repeatedly across short mob fights. The announce is now
+        -- session-scoped (one per /reload) since its purpose is one-time
+        -- discoverability, not a per-combat status reminder.
         EC_HandleAutoOpenContainers()
         -- Drain any settings-panel open that was queued while combat was
         -- active. Same double-call workaround as the original click paths.

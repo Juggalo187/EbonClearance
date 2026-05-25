@@ -56,22 +56,11 @@ local IsSpellKnown = IsSpellKnown
 local IsEquippableItem = IsEquippableItem
 local GetSpellInfo = GetSpellInfo
 
--- Set-membership helper. Local copy of EbonClearance_Events.lua's IsInSet
--- (same convention as Vendor / Tooltip / BagDisplay / BagContextMenu - pure
--- function, cheap to duplicate, avoids cross-file lookup inside the
--- BAG_UPDATE-driven bag walk). The earlier Stage 7 extraction silently
--- dropped this; the bag walk's `if not skip and IsInSet and IsInSet(...)`
--- short-circuited on the bare global nil and the Keep List skip-gate never
--- fired, so Keep-listed items appeared in Process Bags as DE / Mill /
--- Prospect candidates. Test 56 (in tests/test_perf_guardrails.lua) locks
--- the call-site-defines-helper invariant.
-local function IsInSet(setTable, itemID)
-    if not itemID or not setTable then
-        return false
-    end
-    local v = setTable[itemID]
-    return (v == true) or (v == 1)
-end
+-- Set-membership helper. Captures the canonical NS.IsInSet (defined in
+-- EbonClearance_Core.lua) into a file-local upvalue so per-call cost
+-- stays at one local read. Test 65 in tests/test_perf_guardrails.lua
+-- locks the bind-where-used invariant per file.
+local IsInSet = NS.IsInSet
 
 -- ---------------------------------------------------------------------------
 -- v2.22.0 Process Bags helpers

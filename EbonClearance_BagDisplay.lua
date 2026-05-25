@@ -87,15 +87,9 @@ local IsEquippedItem = IsEquippedItem
 
 EC_compCache.sellBorderButtons = setmetatable({}, { __mode = "k" })
 
--- Set-membership helper. Local copy of EbonClearance.lua's IsInSet (same
--- pattern as the other split files; pure function so duplication is cheap).
-local function IsInSet(setTable, itemID)
-    if not itemID or not setTable then
-        return false
-    end
-    local v = setTable[itemID]
-    return (v == true) or (v == 1)
-end
+-- Set-membership helper. Captures the canonical NS.IsInSet (defined in
+-- EbonClearance_Core.lua); per-call cost is one local read.
+local IsInSet = NS.IsInSet
 
 -- Per-category sell-verdict resolver. Returns one of the category string
 -- keys defined in EnsureDB's DB.sellBorderCategories ("delete" /

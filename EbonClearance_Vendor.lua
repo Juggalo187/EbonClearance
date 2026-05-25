@@ -50,11 +50,9 @@ local EC_compCache = NS.compCache
 -- a long-lived OnUpdate ticker; re-installing would duplicate it).
 local deletePopupHooked = false
 
--- Set-membership helper. Local copy of EbonClearance.lua's IsInSet
--- (different upvalue scope; pure function so duplication is cheap).
-local function IsInSet(setTable, itemID)
-    return setTable and itemID and setTable[itemID] ~= nil
-end
+-- Set-membership helper. Captures the canonical NS.IsInSet (defined in
+-- EbonClearance_Core.lua); per-call cost is one local read.
+local IsInSet = NS.IsInSet
 
 -- Watches StaticPopup1 for DELETE_* variants and auto-confirms when the
 -- queued deletion (EC_compCache.pendingDelete) names an item still on

@@ -35,16 +35,43 @@
 local NS = select(2, ...)
 local EC_compCache = NS.compCache
 
--- Set-membership helper. Local copy of EbonClearance.lua's IsInSet
--- (different upvalue scope; pure function so duplication is cheap and
--- avoids a cross-file lookup on every tooltip refresh). Same pattern
--- as EbonClearance_Vendor.lua and EbonClearance_BagDisplay.lua.
-local function IsInSet(setTable, itemID)
-    if not itemID or not setTable then
-        return false
+-- Set-membership helper. Captures the canonical NS.IsInSet (defined in
+-- EbonClearance_Core.lua); per-call cost is one local read.
+local IsInSet = NS.IsInSet
+
+-- Allow Sell destination rewrite. Walks the explicit-list precedence
+-- chain when a protection (affix / chance-on-hit / tome) has been
+-- manually allow-listed and decides what the tooltip should say:
+--   * Keep List membership returns currentLine unchanged (the earlier
+--     Keep label stays - blacklist wins over Allow Sell).
+--   * deleteList -> Will Delete
+--   * account whitelist -> Will Sell (your Account List)
+--   * character whitelist -> Will Sell (your Character List)
+--   * no list claims it -> nil, and the caller picks the fallback
+--     ("Override on - add to a list to sell" for Allow Sell prompts,
+--     "Will Sell (you have this affix)" for the autoDupe path, etc.).
+-- The pre-extraction code duplicated this chain across the affix and
+-- tome blocks; centralising removes the drift surface so a future
+-- protection rule reuses the same precedence without paired edits.
+local function destinationLabel(id, currentLine)
+    local DB = NS.DB
+    local ADB = NS.ADB
+    if not DB then
+        return nil
     end
-    local v = setTable[itemID]
-    return (v == true) or (v == 1)
+    if IsInSet(DB.blacklist, id) then
+        return currentLine
+    end
+    if IsInSet(DB.deleteList, id) and DB.enableDeletion then
+        return "|cff66ccff[EC]|r |cffff4444Will Delete|r"
+    end
+    if ADB and ADB.whitelist and IsInSet(ADB.whitelist, id) then
+        return "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Account List)|r"
+    end
+    if IsInSet(DB.whitelist, id) then
+        return "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Character List)|r"
+    end
+    return nil
 end
 
 -- Tooltip annotation. Adds a coloured line indicating whether EbonClearance
@@ -78,6 +105,15 @@ local function EC_AnnotateTooltip(tooltip)
     if not id then
         return
     end
+
+    -- Hoisted GetItemInfo: the function used to call it three separate
+    -- times (whitelist branch reading sellPrice, qualityRules branch
+    -- reading quality/ilvl/equipLoc/sellPrice, affix block reading
+    -- quality). All read different subsets of the same cached tuple, so
+    -- a single call up here serves every branch below without changing
+    -- any per-branch nil-handling. Uncached items still surface as
+    -- "Won't Sell (no value)" via the existing sellPrice nil-guards.
+    local _, _, itemQuality, itemILvl, _, _, _, _, itemEquipLoc, _, itemSellPrice = GetItemInfo(id)
 
     local statusLine
     if IsInSet(DB.blacklist, id) then
@@ -122,16 +158,15 @@ local function EC_AnnotateTooltip(tooltip)
         -- with no vendor price, or items the player has equipped). Surface
         -- both reasons in warning-yellow so the user sees them at the point
         -- of decision instead of wondering why the cycle skipped them.
-        local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(id)
         if IsEquippedItem(id) then
             statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell (equipped)|r"
-        elseif not (sellPrice and sellPrice > 0) then
+        elseif not (itemSellPrice and itemSellPrice > 0) then
             statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell (no value)|r"
         else
             statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell|r"
         end
     elseif DB.qualityRules then
-        local _, _, quality, ilvl, _, _, _, _, equipLoc, _, sellPrice = GetItemInfo(id)
+        local quality, ilvl, equipLoc, sellPrice = itemQuality, itemILvl, itemEquipLoc, itemSellPrice
         -- Grey-quality invariant. EC_IsSellable's "isJunk" branch always
         -- matches a grey item with a positive sell price - independent of
         -- DB.qualityRules, useEquippedILvl, bind filter, or any other
@@ -282,7 +317,7 @@ local function EC_AnnotateTooltip(tooltip)
     -- the v2.26.0 chance-on-hit tooltip pass so Epic items with
     -- affixes also show their state.
     if DB.protectAffixedRareItems then
-        local _, _, quality = GetItemInfo(id)
+        local quality = itemQuality
         if quality and quality >= 3 then
             local affix = EC_compCache.liveTooltipAffixData(tooltip, id)
             if affix then
@@ -329,27 +364,22 @@ local function EC_AnnotateTooltip(tooltip)
                     or false
                 local autoDupe = DB.affixAllowExactDupes and playerKnows
                 if manualAllow or autoDupe then
-                    -- Destination-list label wins; when the override is
-                    -- active and the item is on a list, just show what
-                    -- happens. When no list claims it, surface "you have
-                    -- this affix" as the reason it will sell.
-                    if IsInSet(DB.blacklist, id) then
-                        -- Keep wins; leave the earlier Keep label alone.
-                    elseif IsInSet(DB.deleteList, id) and DB.enableDeletion then
-                        statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete|r"
-                    elseif ADB and ADB.whitelist and IsInSet(ADB.whitelist, id) then
-                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Account List)|r"
-                    elseif IsInSet(DB.whitelist, id) then
-                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Character List)|r"
+                    -- Destination-list label wins. destinationLabel walks
+                    -- the explicit-list precedence chain (Keep / Delete /
+                    -- Account Sell / Character Sell) and returns the
+                    -- appropriate label; Keep List leaves the earlier
+                    -- Keep label unchanged. Returns nil when no list
+                    -- claims it, in which case the manualAllow / autoDupe
+                    -- branch picks its own fallback.
+                    local newLine = destinationLabel(id, statusLine)
+                    if newLine then
+                        statusLine = newLine
                     elseif manualAllow then
-                        -- Allow Sell is on but no list claims the item.
-                        -- If a quality-rule already produced a "Will
-                        -- Sell (...)" verdict, leave it alone - the
-                        -- verdict already tells the truth. Otherwise
-                        -- prompt the user to pick a list.
-                        if statusLine and statusLine:find("Will Sell", 1, true) then
-                            -- Existing verdict stands.
-                        else
+                        -- Allow Sell is on but no list claims it. An
+                        -- existing "Will Sell (...)" verdict from the
+                        -- quality-rule sweep already tells the truth;
+                        -- otherwise prompt the user to pick a list.
+                        if not (statusLine and statusLine:find("Will Sell", 1, true)) then
                             statusLine = "|cff66ccff[EC]|r |cffffea80Override on - add to a list to sell|r"
                         end
                     else
@@ -466,16 +496,14 @@ local function EC_AnnotateTooltip(tooltip)
         if IsInSet(DB.blacklist, id) then
             -- Keep List wins; leave the earlier Keep label alone.
         elseif ADB.allowedItems and ADB.allowedItems[id] then
-            if IsInSet(DB.deleteList, id) and DB.enableDeletion then
-                statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete|r"
-            elseif ADB and ADB.whitelist and IsInSet(ADB.whitelist, id) then
-                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Account List)|r"
-            elseif IsInSet(DB.whitelist, id) then
-                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Character List)|r"
-            elseif statusLine and statusLine:find("Will Sell", 1, true) then
-                -- Existing quality-rule verdict already says "Will
-                -- Sell"; leave it alone.
-            else
+            -- destinationLabel walks the explicit-list precedence chain.
+            -- Returns nil when no list claims it; the fallback picks an
+            -- existing quality-rule "Will Sell" verdict if there is one,
+            -- otherwise prompts the user to pick a list.
+            local newLine = destinationLabel(id, statusLine)
+            if newLine then
+                statusLine = newLine
+            elseif not (statusLine and statusLine:find("Will Sell", 1, true)) then
                 statusLine = "|cff66ccff[EC]|r |cffffea80Override on - add to a list to sell|r"
             end
         else

@@ -3981,9 +3981,18 @@ do
             --    but defensive)
             local sCode = s:gsub("%-%-[^\n]*", ""):gsub("%-%-%[%[.-%]%]", "")
 
-            local hasCall = sCode:find("IsInSet%s*%(") ~= nil
+            -- Definition forms recognised:
+            --   * `local function IsInSet(...)` - file-local body
+            --   * `local IsInSet = ...` - file-local capture from NS
+            --   * `function NS.IsInSet(...)` - canonical namespace
+            --     publication (Core.lua only)
+            -- A "call" is any other `IsInSet(` site. Definitions count
+            -- as their own callers, so a file that only defines and
+            -- never calls IsInSet passes trivially via hasDef.
             local hasDef = sCode:find("local%s+function%s+IsInSet%s*%(") ~= nil
                 or sCode:find("local%s+IsInSet%s*=") ~= nil
+                or sCode:find("function%s+NS%.IsInSet%s*%(") ~= nil
+            local hasCall = sCode:find("IsInSet%s*%(") ~= nil
 
             if hasCall then
                 check(
