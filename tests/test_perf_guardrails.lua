@@ -3809,6 +3809,112 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 62 (v2.33.x): isDowngradeVsEquipped narrows to {16} when 2H equipped.
+-- ---------------------------------------------------------------------------
+-- Bug reported by "Perfect Bidoof": a player wielding an iLvl 258 2H
+-- (Justicebringer of Judgment) had every green 1H weapon in bags
+-- labelled "Keep (Green, possible upgrade)" and refusing to sell, even
+-- when the 1H was iLvl 134 - obviously not an upgrade.
+--
+-- Root cause: INVTYPE_WEAPON's candidate slots are {16, 17}. The
+-- iLvl-vs-equipped loop bailed with `empty_slot` the moment it hit
+-- slot 17 (because the 2H locks the offhand). That bailout is correct
+-- for dual-wielders with one weapon equipped (the loot could fill the
+-- offhand), but wrong when the main hand holds a 2H - the offhand is
+-- locked, not unfilled. Fix: detect the main-hand 2H and narrow the
+-- candidate slot list to {16} so the comparison happens against the
+-- equipped 2H's iLvl.
+--
+-- Test asserts the function body contains the INVTYPE_2HWEAPON check
+-- and the `slots = { 16 }` narrowing. A future refactor that drops
+-- either piece fails this test before merge.
+do
+    local fnStart = src:find("function EC_compCache%.isDowngradeVsEquipped%(")
+    local body
+    if fnStart then
+        body = src:sub(fnStart, fnStart + 3000)
+        local nextFnIdx = body:find("\nfunction ", 2)
+        if nextFnIdx then
+            body = body:sub(1, nextFnIdx - 1)
+        end
+    end
+    check(
+        "isDowngradeVsEquipped checks main hand for INVTYPE_2HWEAPON",
+        body ~= nil
+            and body:find('"INVTYPE_2HWEAPON"', 1, true) ~= nil
+            and body:find('GetInventoryItemLink') ~= nil,
+        "the 2H-aware narrowing must read the main hand's equipLoc; without this, every 1H in bags gets falsely kept while the player wields a 2H"
+    )
+    check(
+        "isDowngradeVsEquipped narrows slots to {16} when main hand is 2H",
+        body ~= nil and body:find("slots%s*=%s*{%s*16%s*}") ~= nil,
+        "the narrowing assignment must literally rewrite slots to {16}; the loop downstream then compares only against the main hand"
+    )
+    check(
+        "isDowngradeVsEquipped narrows only when equipLoc is INVTYPE_WEAPON",
+        body ~= nil and body:find('equipLoc%s*==%s*"INVTYPE_WEAPON"') ~= nil,
+        "single-slot offhand equipLocs (SHIELD / HOLDABLE / WEAPONOFFHAND) keep the original empty_slot bailout - only the multi-slot INVTYPE_WEAPON case gets the 2H narrowing"
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 63 (v2.33.x): checkBagsForUpgrades cleans stale "upgrade" entries.
+-- ---------------------------------------------------------------------------
+-- Bug reported by user "Blaken" (own test character): an Ornamental
+-- Mace iLvl 17 sat in bags labelled "Keep (upgrade)" even though the
+-- equipped Prospector Axe was iLvl 20 - the mace was added to the
+-- Keep List during early levelling when the player had a sub-iLvl-17
+-- starter weapon, and stayed on the list forever after the player
+-- upgraded past it.
+--
+-- Root cause: checkBagsForUpgrades was one-way - it ADDED entries but
+-- never re-evaluated them. The `if not DB.blacklist[itemID]` pre-
+-- condition skipped already-listed items, and the upgradeProcessed
+-- per-session memo skipped them again on later runs. The existing
+-- `/ec clean upgrades apply` slash command was the only way to clean
+-- stale entries, but users shouldn't need to remember a manual command
+-- for an auto-protect path that's supposed to be hands-off.
+--
+-- Fix: re-evaluation pass at the top of checkBagsForUpgrades walks
+-- DB.blacklistAuto entries with tag=="upgrade" and removes ones whose
+-- iLvl is no longer above the lowest populated equipped slot.
+do
+    local fnStart = src:find("function EC_compCache%.checkBagsForUpgrades%(")
+    local body
+    if fnStart then
+        body = src:sub(fnStart, fnStart + 5000)
+        local nextFnIdx = body:find("\nfunction ", 2)
+        if nextFnIdx then
+            body = body:sub(1, nextFnIdx - 1)
+        end
+    end
+    check(
+        "checkBagsForUpgrades iterates DB.blacklistAuto and inspects autoTag",
+        body ~= nil
+            and body:find("for itemID, tag in pairs%(DB%.blacklistAuto%)") ~= nil
+            and body:find('tag == "upgrade"') ~= nil,
+        "the re-evaluation pass must walk DB.blacklistAuto and pick out 'upgrade' entries - other autoTags (equipped / set) have their own sync paths"
+    )
+    check(
+        "checkBagsForUpgrades removes from both DB.blacklist and DB.blacklistAuto on stale entry",
+        body ~= nil
+            and body:find("DB%.blacklist%[itemID%]%s*=%s*nil") ~= nil
+            and body:find("DB%.blacklistAuto%[itemID%]%s*=%s*nil") ~= nil,
+        "removing only one side leaves the entry in a half-state; both DB.blacklist and DB.blacklistAuto need to drop the itemID together"
+    )
+    check(
+        "checkBagsForUpgrades clears upgradeProcessed when releasing a stale entry",
+        body ~= nil and body:find("EC_compCache%.upgradeProcessed%[itemID%]%s*=%s*nil") ~= nil,
+        "without clearing the per-session memo, a future gear DOWNGRADE wouldn't re-add the item - the new-entry loop's processed-check would skip it"
+    )
+    check(
+        "checkBagsForUpgrades cleanup respects empty slots conservatively",
+        body ~= nil and body:find("if lowestEquipped and iLvl <= lowestEquipped then") ~= nil,
+        "must only remove when lowestEquipped is non-nil (a slot is populated); when every candidate slot is empty, keep the entry rather than mass-clearing the Keep List on a temporary un-equip"
+    )
+end
+
+-- ---------------------------------------------------------------------------
 -- Result.
 -- ---------------------------------------------------------------------------
 print()

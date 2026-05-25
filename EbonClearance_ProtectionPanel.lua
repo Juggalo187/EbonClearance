@@ -517,7 +517,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
                     atText:SetTextColor(1, 1, 1)
                 end
                 allTomeNote:SetText(
-                    "|cff888888Useful if you'd rather sell duplicates at the auction house yourself instead of vendoring them.|r"
+                    "|cff888888Useful for saving spares for alts (different characters know different tomes / recipes) or selling them at the auction house yourself.|r"
                 )
             else
                 allTomeCB:Disable()

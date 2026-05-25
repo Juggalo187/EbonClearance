@@ -465,12 +465,13 @@ local function EnsureDB()
     if type(DB.protectChanceOnHitItems) ~= "boolean" then
         DB.protectChanceOnHitItems = true
     end
-    -- Tome protection. Project Ebonhold stores learned tome / recipe
-    -- state account-wide, so all alts share the same "already known"
-    -- set - the per-character flag here lets the user pick a different
-    -- protection BEHAVIOUR per alt (e.g. main vendors freely, banker
-    -- alt hoards) without affecting the shared learn-state. Two
-    -- independent toggles:
+    -- Tome protection. Tome / recipe learn-state is per-character in
+    -- Project Ebonhold (only @affix@ items save account-wide via the
+    -- Anvil extraction), so different alts know different tomes /
+    -- recipes and may want different protection behaviour. The per-
+    -- character flag matches that - one alt can vendor freely while
+    -- another hoards spares for the auction house. Two independent
+    -- toggles:
     --   * protectUnlearnedTomes - items that teach a spell the
     --     character does NOT yet know are HARD-vetoed by EC_IsSellable
     --     even when on the Sell List. The user must explicitly mark
@@ -2797,6 +2798,26 @@ function EC_compCache.isDowngradeVsEquipped(itemID, lootedILvl, equipLoc)
     if not slots then
         return false, "no_slot_mapping"
     end
+    -- v2.33.x: 2H-aware narrowing for INVTYPE_WEAPON. A 1H weapon's
+    -- candidate slots are {16, 17} but the offhand (17) is LOCKED EMPTY
+    -- when the player wields a 2H - it's not an unfilled "could fill
+    -- this" slot, so the empty_slot bailout below would falsely keep
+    -- every 1H in bags (reported by "Perfect Bidoof"). When the main
+    -- hand holds an INVTYPE_2HWEAPON, narrow the candidate slots to
+    -- {16} only so the comparison happens against the equipped 2H.
+    -- Single-slot offhand equipLocs (SHIELD / HOLDABLE / WEAPONOFFHAND)
+    -- keep their current behaviour: the slot really is empty + the
+    -- looted item is a different playstyle commitment, separate
+    -- judgment call.
+    if equipLoc == "INVTYPE_WEAPON" then
+        local mhLink = GetInventoryItemLink and GetInventoryItemLink("player", 16)
+        if mhLink then
+            local _, _, _, _, _, _, _, _, mhEquipLoc = GetItemInfo(mhLink)
+            if mhEquipLoc == "INVTYPE_2HWEAPON" then
+                slots = { 16 }
+            end
+        end
+    end
     local lowestEquipped = nil
     for _, sid in ipairs(slots) do
         local eq = EC_compCache.getEquippedILvl(sid)
@@ -2826,6 +2847,51 @@ function EC_compCache.checkBagsForUpgrades()
     -- MERCHANT_CLOSED picks up the same items cleanly.
     if EC_compCache.vendorRunning then
         return
+    end
+    -- v2.33.x: re-evaluate existing "upgrade"-tagged Keep List entries
+    -- and release ones that are no longer above the currently equipped
+    -- iLvl. Without this, an item added when the player had a low-iLvl
+    -- weapon equipped (e.g. a starter weapon during early levelling)
+    -- stays on the Keep List forever even after the player upgrades
+    -- their gear past it. The `/ec clean upgrades apply` slash command
+    -- exists for manual cleanup but users shouldn't have to remember
+    -- it - the path that ADDED the entry should clean its own stale
+    -- entries. Only touches autoTag "upgrade" entries; manual Keep
+    -- List adds (no autoTag) and "equipped" / "set" autoTags are left
+    -- alone (those have their own reactive sync paths).
+    if DB.blacklistAuto then
+        for itemID, tag in pairs(DB.blacklistAuto) do
+            if tag == "upgrade" then
+                local _, _, _, iLvl, _, _, _, _, equipLoc = GetItemInfo(itemID)
+                local slots = equipLoc and EC_compCache.INVTYPE_SLOTS[equipLoc]
+                if iLvl and iLvl > 0 and slots then
+                    local lowestEquipped = nil
+                    for _, sid in ipairs(slots) do
+                        local eq = EC_compCache.getEquippedILvl(sid)
+                        if eq > 0 and (lowestEquipped == nil or eq < lowestEquipped) then
+                            lowestEquipped = eq
+                        end
+                    end
+                    -- Remove only when a slot is actually populated and
+                    -- the item's iLvl is at or below it. If every
+                    -- candidate slot is empty, be conservative and keep
+                    -- the entry - the next cycle will re-evaluate once
+                    -- gear comes back.
+                    if lowestEquipped and iLvl <= lowestEquipped then
+                        if DB.blacklist then
+                            DB.blacklist[itemID] = nil
+                        end
+                        DB.blacklistAuto[itemID] = nil
+                        -- Clear the per-session memo so a future gear
+                        -- downgrade can re-add this item via the
+                        -- new-entry loop below.
+                        if EC_compCache.upgradeProcessed then
+                            EC_compCache.upgradeProcessed[itemID] = nil
+                        end
+                    end
+                end
+            end
+        end
     end
     for bag = 0, 4 do
         local n = GetContainerNumSlots(bag) or 0

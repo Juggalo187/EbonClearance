@@ -59,8 +59,8 @@ All settings live under `/ec`, which opens the scrollable config panel. Highligh
 | `/ec profile delete <name>` | Delete a saved profile |
 | `/ec clean` | Report any item IDs present in more than one list |
 | `/ec clean apply` | Auto-resolve list conflicts using precedence Keep List > Delete List > Sell List |
-| `/ec clean upgrades` | Report stale `Auto-Protected (Upgrade)` Keep List entries that are no longer above your equipped iLvl |
-| `/ec clean upgrades apply` | Remove the stale `Auto-Protected (Upgrade)` entries (with confirmation) |
+| `/ec clean upgrades` | Report stale `Keep (upgrade)` Keep List entries that are no longer above your equipped iLvl (v2.33.1+ auto-cleans these on every bag update; this command is now mainly for one-shot inspection) |
+| `/ec clean upgrades apply` | Manually remove stale `Keep (upgrade)` entries (with confirmation) |
 | `/ec bugreport` | Generate a diagnostic report you can copy and paste into a bug report |
 | `/ec sellinfo [bag slot]` | Trace why a bag item will or won't sell - per-predicate chain trace (also available via Alt+Shift+Right-Click on the item) |
 | `/ec help` | Print the full slash-command reference in chat |
