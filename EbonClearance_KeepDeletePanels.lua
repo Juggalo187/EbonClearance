@@ -42,7 +42,7 @@ DeletePanel:SetScript("OnShow", function(self)
         NS.MakeHeader(self, "Deletion Settings", -16)
         local delDesc = NS.MakeLabel(
             self,
-            "Items on this list are destroyed automatically on the next bag scan. This cannot be undone.",
+            "Items on this list are destroyed when bags are scanned. This cannot be undone.",
             16,
             -44
         )
@@ -55,7 +55,7 @@ DeletePanel:SetScript("OnShow", function(self)
             delHint:SetWordWrap(true)
         end
         delHint:SetText(
-            "Add Items by Shift-Clicking an item, drag & drop into the text field below, or type the ItemID and press Add."
+            "Add items by shift-clicking them, dragging them in, or typing the item ID below."
         )
 
         local delCB =
@@ -64,7 +64,7 @@ DeletePanel:SetScript("OnShow", function(self)
         delCB:SetChecked(DB.enableDeletion)
         local dt = _G[delCB:GetName() .. "Text"]
         if dt then
-            dt:SetText("Enable item deletion")
+            dt:SetText("Allow items to be deleted")
             dt:SetWidth(420)
             dt:SetJustifyH("LEFT")
         end
@@ -113,10 +113,10 @@ BlacklistPanel:SetScript("OnShow", function(self)
         -- Sell List rhythm (header + description + hint + list). DB field names
         -- unchanged so all event handlers, tooltip annotations, and slash commands
         -- continue to work without modification.
-        NS.MakeHeader(self, "Keep List (Do Not Sell)", -16)
+        NS.MakeHeader(self, "Keep List", -16)
         local blDesc = NS.MakeLabel(
             self,
-            "Specific items to permanently protect from auto-sell. Use this for valuable items you'd rather list at the auction house.",
+            "Items the addon should never touch. Good for things you'd rather sell at the auction house yourself.",
             16,
             -44
         )
@@ -132,7 +132,7 @@ BlacklistPanel:SetScript("OnShow", function(self)
             blNote:SetWordWrap(true)
         end
         blNote:SetText(
-            "|cffaaaaaaFor automatic protection rules (equipped gear, looted upgrades, equipment sets, affixes, chance-on-hit), see the |r|cffffb84dProtection Settings|r|cffaaaaaa panel.|r"
+            "|cffaaaaaaAutomatic protection rules (equipped gear, upgrades, gear sets, affixes, chance-on-hit, tomes) are on the |r|cffffb84dProtection Settings|r|cffaaaaaa panel.|r"
         )
 
         -- Anchored to blNote so the hint stays below even when the
@@ -145,7 +145,7 @@ BlacklistPanel:SetScript("OnShow", function(self)
         if blHint.SetWordWrap then
             blHint:SetWordWrap(true)
         end
-        blHint:SetText("Add items by Shift-Clicking, dragging, or typing the Item ID below.")
+        blHint:SetText("Add items by shift-clicking them, dragging them in, or typing the item ID.")
 
         self.listUI = NS.CreateListUI(self, "Protected Items", "blacklist", 16, -130)
         self.listUI:ClearAllPoints()

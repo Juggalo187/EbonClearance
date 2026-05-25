@@ -194,9 +194,16 @@ function EC_compCache.buildListSearchAndSortRow(box, setTableName)
     searchLabel:SetPoint("TOPLEFT", 0, -52)
     searchLabel:SetText("Search:")
 
+    -- v2.32.x: sort buttons anchored 4 px higher than the label's
+    -- TOPLEFT Y so their top edge lines up with the search input
+    -- field's top edge. The search input centres on the LABEL's
+    -- vertical centre (LEFT to label.RIGHT anchor), which sits ~4 px
+    -- below the label's TOPLEFT Y because the small font height
+    -- centres around that point. Without the -4 offset, buttons
+    -- visibly sit lower than the input field next to them.
     local sortNameBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
     sortNameBtn:SetSize(62, 20)
-    sortNameBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -52)
+    sortNameBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -48)
     sortNameBtn:SetText("Name \226\150\178")
 
     local sortIDBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
@@ -226,9 +233,13 @@ function EC_compCache.buildListMatchRow(box, setTableName)
     matchLabel:SetPoint("TOPLEFT", 0, -76)
     matchLabel:SetText("Add matching in bags:")
 
+    -- v2.32.x: same +4 px lift as the sort buttons in the search row,
+    -- for the same reason. The match input centres on matchLabel.RIGHT
+    -- which sits below the label's TOPLEFT Y, so the button needs to
+    -- shift up to align with the input's top edge.
     local matchBtn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
     matchBtn:SetSize(80, 20)
-    matchBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -76)
+    matchBtn:SetPoint("TOPRIGHT", box, "TOPRIGHT", 0, -72)
     matchBtn:SetText("Add Match")
 
     local matchInput = CreateFrame("EditBox", "EbonClearanceMatchInput_" .. setTableName, box, "InputBoxTemplate")
@@ -251,13 +262,35 @@ end
 -- 5.1's 200-locals-per-main-chunk cap (CLAUDE.md discipline). Part of the
 -- CODE_REVIEW.md item 2 split of CreateListUI.
 function EC_compCache.buildListScrollArea(box, w, setTableName)
+    -- v2.32.x: backdrop chrome wrapper around the scroll area, matching
+    -- the Import/Export panel's text-box look. The wrapper inherits the
+    -- old scroll's external footprint, the scroll re-anchors 6 px inside
+    -- it on three sides and 28 px on the right (6 px chrome margin +
+    -- 22 px scrollbar gutter). Numbers borrowed from the I/E pattern in
+    -- EbonClearance_ProfilesPanel.lua so all five "scrollable list"
+    -- surfaces (Sell / Account Sell / Keep / Delete / Profiles) read
+    -- with the same visual containment.
+    local scrollBg = CreateFrame("Frame", nil, box)
+    scrollBg:SetPoint("TOPLEFT", 0, -102)
+    scrollBg:SetPoint("BOTTOMRIGHT", 0, 8)
+    scrollBg:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    scrollBg:SetBackdropColor(0, 0, 0, 0.6)
+    scrollBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
+
     local scroll =
-        CreateFrame("ScrollFrame", "EbonClearanceListScroll_" .. setTableName, box, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 0, -102)
-    scroll:SetPoint("BOTTOMRIGHT", -26, 8)
+        CreateFrame("ScrollFrame", "EbonClearanceListScroll_" .. setTableName, scrollBg, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 6, -6)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 6)
 
     local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(w - 26, 1)
+    content:SetSize(w - 34, 1)
     scroll:SetScrollChild(content)
     -- Auto-hide the scroll bar (arrows + thumb) when content fits the visible
     -- area. Wired once here; OnScrollRangeChanged fires on every Refresh that
@@ -265,17 +298,20 @@ function EC_compCache.buildListScrollArea(box, w, setTableName)
     NS.HookScrollbarAutoHide(scroll)
 
     -- v2.11.0: when the panel resizes the box stretches via its
-    -- BOTTOMRIGHT anchor (set externally), scroll stretches with the
-    -- box, but content (a ScrollChild) needs explicit SetWidth -
-    -- ScrollChild doesn't auto-track parent. Hook OnSizeChanged to keep
-    -- content width in step. Rows inside the content already track via
-    -- TOPLEFT/TOPRIGHT anchors so they stretch with content automatically.
+    -- BOTTOMRIGHT anchor (set externally), scrollBg stretches with the
+    -- box, scroll stretches with scrollBg, but content (a ScrollChild)
+    -- needs explicit SetWidth - ScrollChild doesn't auto-track parent.
+    -- Hook OnSizeChanged on box to keep content width in step. Rows
+    -- inside the content already track via TOPLEFT/TOPRIGHT anchors so
+    -- they stretch with content automatically. The -34 accounts for
+    -- 6 px chrome inset on left + 22 px scrollbar gutter + 6 px right
+    -- chrome margin.
     box:SetScript("OnSizeChanged", function(self, width)
         if not width or width <= 0 then
             return
         end
         if content and content.SetWidth then
-            content:SetWidth(width - 26)
+            content:SetWidth(width - 34)
         end
     end)
 

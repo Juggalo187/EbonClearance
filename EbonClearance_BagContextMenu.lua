@@ -56,9 +56,9 @@ end
 -- and fixed handlers. EC_ShowItemContextMenu sets per-row text + OnClick on
 -- every show; the buttons created in EC_BuildCtxFrame are empty placeholders.
 local EC_CTX_ROWS = {
-    { kind = "list", setName = "whitelist", label = "Sell List (Character)" },
-    { kind = "list", setName = "accountWhitelist", label = "Sell List (Account)" },
-    { kind = "list", setName = "blacklist", label = "Keep List (Do Not Sell)" },
+    { kind = "list", setName = "whitelist", label = "Sell List (this character)" },
+    { kind = "list", setName = "accountWhitelist", label = "Sell List (account-wide)" },
+    { kind = "list", setName = "blacklist", label = "Keep List" },
     { kind = "list", setName = "deleteList", label = "Delete List" },
     { kind = "sellNow" },
     { kind = "cancel" },

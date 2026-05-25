@@ -494,7 +494,7 @@ EC_compCache._affixScanFrame:SetScript("OnUpdate", function(self)
             cache[spellId] = cached
             scansLeft = scansLeft - 1
         end
-        -- Cached hits are free — no budget cost.
+        -- Cached hits are free - no budget cost.
         if cached then
             map[cached] = true
         end
@@ -504,7 +504,7 @@ EC_compCache._affixScanFrame:SetScript("OnUpdate", function(self)
 
     if idx > #spells then
         -- Spellbook walk done. Merge ExtractionService (small, always
-        -- synchronous — procIdToDescription cache keeps it cheap).
+        -- synchronous - procIdToDescription cache keeps it cheap).
         local svc = _G.ExtractionService
         if svc and type(svc.learnedAffixes) == "table" then
             for _, r in ipairs(svc.learnedAffixes) do
@@ -572,7 +572,7 @@ function EC_compCache.refreshKnownAffixes()
         end
     end
     -- Start (or restart) the chunked scan. Any in-flight scan is
-    -- abandoned — its partial map is discarded and we start fresh.
+    -- abandoned - its partial map is discarded and we start fresh.
     EC_compCache._affixScanState = {
         spells = spells,
         map = {},
@@ -810,14 +810,30 @@ function EC_compCache.itemIsTome(bag, slot, itemID)
     -- Fast path: GetItemInfo class "Recipe" covers every profession
     -- recipe (cookbook, schematic, manual, design, formula, etc.) and
     -- is set on the itemID alone, so it works even without a bag/slot.
-    local _, _, _, _, _, itype = GetItemInfo(itemID)
+    local _, _, _, _, _, itype, isubtype = GetItemInfo(itemID)
     if itype == "Recipe" then
         EC_compCache.tomeCache[itemID] = true
         return true
     end
+    -- v2.32.x: exclude vanity pets and mount-training scrolls from
+    -- tome detection. The text-scan path below matches "Use: Teaches"
+    -- which is too broad - it catches "Use: Teaches you how to summon
+    -- this companion" on pet items and "Use: Teaches you how to ride"
+    -- on mount scrolls. These are collectibles rather than spell
+    -- tomes worth vendoring after learning, so they fall back to the
+    -- normal rule chain (typical: bound + low vendor price = nothing
+    -- to sell anyway). Users who want protection for specific
+    -- collectibles can add the itemID to the Keep List manually.
+    if itype == "Miscellaneous"
+        and (isubtype == "Companion" or isubtype == "Mount")
+    then
+        EC_compCache.tomeCache[itemID] = false
+        return false
+    end
     -- Slow path: tooltip-scan for `Use: Teaches...`. Covers class
-    -- spell books (e.g. Death Knight talent tomes) and the various
-    -- mount-/critter-training scrolls. Needs bag/slot for SetBagItem.
+    -- spell books (e.g. Death Knight talent tomes) and other PE
+    -- custom tome formats whose class isn't "Recipe". Needs bag/slot
+    -- for SetBagItem.
     if not bag or not slot then
         EC_compCache.tomeCache[itemID] = false
         return false
@@ -836,6 +852,25 @@ function EC_compCache.itemIsTome(bag, slot, itemID)
             and txt:find(usePrefix, 1, true) == 1
             and txt:find("[Tt]eaches", 1, false)
         then
+            -- v2.32.x: belt-and-braces vanity-collectible reject.
+            -- The GetItemInfo class/subclass check above catches
+            -- the obvious case (class=Miscellaneous + subclass=
+            -- Companion/Mount), but in 3.3.5a many vanity pets are
+            -- actually filed under subclass="Junk" (the
+            -- "Companion Pets" subtype is a later WoW addition).
+            -- The tooltip text itself is the most reliable signal:
+            -- pets use "summon this companion", mount-summon items
+            -- use "summon this mount", and riding-training scrolls
+            -- use "how to ride". Spell tomes / profession recipes
+            -- don't carry any of these phrases. Hard-coded enUS
+            -- because the addon targets a single locale (enUS PE).
+            local low = txt:lower()
+            if low:find("this companion", 1, true)
+                or low:find("this mount", 1, true)
+                or low:find("how to ride", 1, true)
+            then
+                break
+            end
             result = true
             break
         end
@@ -923,10 +958,21 @@ function EC_compCache.liveTooltipIsTome(tooltip, itemID)
         return EC_compCache.tomeCache[itemID]
     end
     if itemID then
-        local _, _, _, _, _, itype = GetItemInfo(itemID)
+        local _, _, _, _, _, itype, isubtype = GetItemInfo(itemID)
         if itype == "Recipe" then
             EC_compCache.tomeCache[itemID] = true
             return true
+        end
+        -- v2.32.x: exclude vanity pets and mount-training scrolls.
+        -- Same rationale as itemIsTome above - the text-scan path
+        -- below over-matches "Use: Teaches" lines on collectible
+        -- items that aren't tome-protection targets. See itemIsTome
+        -- for the full reasoning.
+        if itype == "Miscellaneous"
+            and (isubtype == "Companion" or isubtype == "Mount")
+        then
+            EC_compCache.tomeCache[itemID] = false
+            return false
         end
     end
     if not tooltip or not tooltip.NumLines or not tooltip.GetName then
@@ -947,6 +993,19 @@ function EC_compCache.liveTooltipIsTome(tooltip, itemID)
                 and txt:find(usePrefix, 1, true) == 1
                 and txt:find("[Tt]eaches", 1, false)
             then
+                -- v2.32.x: belt-and-braces vanity-collectible
+                -- reject. Same phrasing-based filter as itemIsTome -
+                -- catches the case where GetItemInfo reports an
+                -- unexpected subclass (e.g. 3.3.5a pets often file
+                -- under "Junk" rather than "Companion"). Hard-coded
+                -- enUS; the addon targets a single locale.
+                local low = txt:lower()
+                if low:find("this companion", 1, true)
+                    or low:find("this mount", 1, true)
+                    or low:find("how to ride", 1, true)
+                then
+                    break
+                end
                 result = true
                 break
             end

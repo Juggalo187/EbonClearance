@@ -104,17 +104,33 @@ ProfilesPanel:SetScript("OnShow", function(self)
         listLabel:SetPoint("TOPLEFT", statusFS, "BOTTOMLEFT", 0, -8)
         listLabel:SetText("Saved Profiles")
 
-        local scroll = CreateFrame("ScrollFrame", "EbonClearanceProfileListScroll", self, "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", listLabel, "BOTTOMLEFT", 0, -4)
-        scroll:SetSize(NS.GetPanelWidth() - 42, 160)
-        -- v2.11.0: register width so the scroll tracks Interface Options
-        -- frame resizes. SetSize set the height to 160 here; registry's
-        -- SetWidth-only refresh leaves height alone.
-        EC_compCache.registerWidth(scroll, 42)
+        -- v2.32.x: backdrop chrome wrapper around the profile scroll list,
+        -- matching the Import/Export panel pattern and the list-widget
+        -- treatment in EbonClearance_ListWidget.lua. Same dark tooltip-
+        -- style frame so the Saved Profiles list reads as a contained
+        -- "where you look" surface instead of a transparent void.
+        local scrollBg = CreateFrame("Frame", nil, self)
+        scrollBg:SetPoint("TOPLEFT", listLabel, "BOTTOMLEFT", 0, -4)
+        scrollBg:SetSize(NS.GetPanelWidth() - 42, 160)
+        scrollBg:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        scrollBg:SetBackdropColor(0, 0, 0, 0.6)
+        scrollBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
+        EC_compCache.registerWidth(scrollBg, 42)
+
+        local scroll = CreateFrame("ScrollFrame", "EbonClearanceProfileListScroll", scrollBg, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", 6, -6)
+        scroll:SetPoint("BOTTOMRIGHT", -28, 6)
 
         local content = CreateFrame("Frame", nil, scroll)
-        content:SetSize(NS.GetPanelWidth() - 42, 1)
-        EC_compCache.registerWidth(content, 42)
+        content:SetSize(NS.GetPanelWidth() - 76, 1)
+        EC_compCache.registerWidth(content, 76)
         scroll:SetScrollChild(content)
         -- Auto-hide the scroll bar (arrows + thumb) when content fits the visible
         -- area. Wired once here; OnScrollRangeChanged fires on every Refresh that

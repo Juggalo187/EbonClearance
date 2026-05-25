@@ -40,7 +40,7 @@ WhitelistPanel:SetScript("OnShow", function(self)
         -- repeating the same explanation on every list page.
         local descLabel = NS.MakeLabel(
             self,
-            "Specific items to always auto-sell on this character, regardless of rarity rules. Use the |cffb6ffb6Add from bags|r buttons below to bulk-add by colour, or shift-click an item to add it manually.",
+            "Items this character should always sell. Use the |cffb6ffb6Add from bags|r buttons to add by colour, or shift-click an item to add it.",
             16,
             -44
         )
@@ -55,7 +55,7 @@ WhitelistPanel:SetScript("OnShow", function(self)
             descNote:SetWordWrap(true)
         end
         descNote:SetText(
-            "|cffaaaaaaProfiles let you swap between different sell lists. For items you want sold on every alt, use |r|cffb6ffb6Account Sell List|r|cffaaaaaa instead.|r"
+            "|cffaaaaaaThis list is per-character. For items every alt should sell, use the |r|cffb6ffb6Account Sell List|r|cffaaaaaa instead.|r"
         )
 
         -- Cascade-anchor the scan row to the grey note's BOTTOMLEFT so it stays
@@ -89,7 +89,7 @@ AccountWhitelistPanel:SetScript("OnShow", function(self)
         NS.MakeHeader(self, "Account Sell List", -16)
         local descLabel = NS.MakeLabel(
             self,
-            "Specific items to always auto-sell on |cffffff00every|r character on this account. Useful for shared trash like reagents or seasonal items.",
+            "Items |cffffff00every|r character on this account should sell. Good for shared trash like reagents or seasonal drops.",
             16,
             -44
         )
@@ -104,7 +104,7 @@ AccountWhitelistPanel:SetScript("OnShow", function(self)
         if descNote.SetWordWrap then
             descNote:SetWordWrap(true)
         end
-        descNote:SetText("|cffaaaaaaThis list is not part of profiles - it stays the same when you switch profiles.|r")
+        descNote:SetText("|cffaaaaaaThis list isn't part of profiles - it stays the same when you switch profiles.|r")
 
         -- Cascade-anchor the scan row to the grey note's BOTTOMLEFT so it stays
         -- below regardless of how many lines the description / note wrap to.

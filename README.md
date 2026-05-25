@@ -4,7 +4,7 @@
 [![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/powerfulqa/EbonClearance/badge-data/downloads.json&style=for-the-badge&cacheSeconds=3600)](https://github.com/powerfulqa/EbonClearance/releases)
 [![Licence](https://img.shields.io/badge/Licence-Source--Available-blue?style=for-the-badge)](LICENSE)
 
-A **Project Ebonhold-aware** bag manager. EbonClearance reads your account's affix-extraction and chance-on-hit-proc state from PE's own services and weaves that into every sell, delete, and process decision — so two identical-itemID drops can land on different sides of "sell this" or "keep this" depending on which specific affix rolled and which procs you've already extracted. Around that core: vendoring, deletion, looting, protection rules, and profession processing (disenchant, mill, prospect, lockpick). No external libraries; stock Blizzard 3.3.5a APIs only.
+A **Project Ebonhold-aware** bag manager. Out of the box it sells your junk and old gear at any merchant, keeps your upgrades, and never touches anything important. It reads your account's affix-extraction and chance-on-hit-proc state from PE's own services, so two identical-itemID drops can land on different sides of "sell" or "keep" depending on which affix rolled and which procs you've already extracted. No external libraries; stock Blizzard 3.3.5a APIs only.
 
 ## What It Does
 
@@ -14,7 +14,7 @@ A **Project Ebonhold-aware** bag manager. EbonClearance reads your account's aff
 - **Greedy Scavenger + Goblin Merchant loop.** Auto-summon, dismiss-on-mount, re-summon-if-stuck, combat-resilient. Auto-loot cycle dismisses the scavenger and brings up the merchant when bags fill, then re-summons to continue. Heavy-combat safe.
 - **Fast Loot.** Throttled drain (~110 ms per slot) on manual loot windows so private-server anti-flood doesn't disconnect you. BoP-bind popups auto-confirm.
 - **Process Bags panel** for disenchant / mill / prospect / pick-lock. One button drives the casts; bind a key and hold to drain a stack. Honours every protection.
-- **Tooltip annotations** show what the rule chain will do *before* it does it: `Will Sell - <reason>`, `Protected - <reason>`, `Allowed - <destination>`, `Will Delete`. No surprises at the merchant.
+- **Tooltip annotations** show what the addon will do *before* it does it: `Will Sell (<reason>)`, `Keep (<reason>)`, `Won't Sell (<reason>)`, `Will Delete`. No surprises at the merchant.
 - **Per-item sellability inspector** (`/ec sellinfo` or Alt+Shift+Right-Click) traces the entire decision chain in chat. "Why isn't this selling?" is always one click away.
 - **Per-category bag-slot border tints** in five colours (Delete / Account Sell / Character Sell / Junk / Rule-match), with per-category enable + colour picker. Slot-frame ring only, not an icon overlay.
 - **Profile import/export** for sharing whole settings packs (lists + per-rarity rules) between characters or with other players.
@@ -29,7 +29,7 @@ A complete enumeration of every feature lives in [docs/ADDON_GUIDE.md](docs/ADDO
 3. Log in and type `/ec` to open the settings panel.
 4. Sensible defaults are seeded for new characters - White and Green auto-vendor below your equipped iLvl, equipped gear is auto-Kept, the Scavenger / auto-loot cycle are on. Tune from there.
 
-Character-aware: restrict the addon to specific characters from the Character Settings panel if you'd rather not have it running on every alt.
+Per-character on/off: use the minimap button's right-click or `/ec` to disable the addon on alts you'd rather it skip.
 
 ## Configuration
 
@@ -62,7 +62,7 @@ All settings live under `/ec`, which opens the scrollable config panel. Highligh
 | `/ec clean upgrades` | Report stale `Auto-Protected (Upgrade)` Keep List entries that are no longer above your equipped iLvl |
 | `/ec clean upgrades apply` | Remove the stale `Auto-Protected (Upgrade)` entries (with confirmation) |
 | `/ec bugreport` | Generate a diagnostic report you can copy and paste into a bug report |
-| `/ec sellinfo [bag slot]` | Trace why a bag item will or won't sell — per-predicate chain trace (also available via Alt+Shift+Right-Click on the item) |
+| `/ec sellinfo [bag slot]` | Trace why a bag item will or won't sell - per-predicate chain trace (also available via Alt+Shift+Right-Click on the item) |
 | `/ec help` | Print the full slash-command reference in chat |
 | `/ecdebug` | Show debug info and run a bag scan |
 

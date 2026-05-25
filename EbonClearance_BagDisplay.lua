@@ -74,7 +74,7 @@ end
 -- so the slot's quality border + icon stay pristine.
 --
 -- Three surfaces are decorated:
---   1. The default container frames (`ContainerFrame_Update` hook) — covers
+--   1. The default container frames (`ContainerFrame_Update` hook) - covers
 --      the no-extra-bag-UI case and any user who hasn't installed a host
 --      bag UI replacement.
 --   2. The legacy AceAddon-3.0-registered host bag UI's per-slot class,
@@ -470,8 +470,8 @@ end
 -- Walks the same decision chain EC_IsSellable runs, in the same order, and
 -- emits a chat-line trace explaining which predicates passed / failed for a
 -- given bag slot. Surfaced two ways:
---   * /ec sellinfo [bag] [slot] — defaults to the first non-empty bag slot
---   * Alt+Shift+Right-Click on a bag item — uses the existing
+--   * /ec sellinfo [bag] [slot] - defaults to the first non-empty bag slot
+--   * Alt+Shift+Right-Click on a bag item - uses the existing
 --     ContainerFrameItemButton_OnModifiedClick override path
 --
 -- The trace mirrors EC_IsSellable's logic deliberately rather than calling
@@ -522,7 +522,7 @@ function EC_compCache.describeSellability(bag, slot)
     )
 
     if locked then
-        step("locked", false, "slot is locked (mid-pickup) — sell would skip this tick")
+        step("locked", false, "slot is locked (mid-pickup) - sell would skip this tick")
     end
 
     local hasSellPrice = sellPrice and sellPrice > 0
@@ -572,7 +572,7 @@ function EC_compCache.describeSellability(bag, slot)
                     qualityDetail = string.format("%s, ilvl=%d <= cap=%d", qName, ilvl, cap)
                 elseif not hasVisibleILvl then
                     qualityDetail =
-                        string.format("%s, no visible ilvl (reagent/consumable/etc — protected from cap)", qName)
+                        string.format("%s, no visible ilvl (reagent/consumable/etc - protected from cap)", qName)
                 else
                     qualityDetail = string.format("%s, ilvl=%d > cap=%d", qName, ilvl, cap)
                 end
@@ -584,7 +584,7 @@ function EC_compCache.describeSellability(bag, slot)
                     if bindFilter ~= bindType then
                         qualityPass = false
                         qualityDetail = qualityDetail
-                            .. string.format(" — bindFilter=%s but item is %s", bindFilter, bindType)
+                            .. string.format(" - bindFilter=%s but item is %s", bindFilter, bindType)
                     else
                         qualityDetail = qualityDetail .. string.format(", bindFilter=%s match", bindFilter)
                     end
@@ -600,7 +600,7 @@ function EC_compCache.describeSellability(bag, slot)
 
     if qualityPass and EC_compCache.isQuestItem and EC_compCache.isQuestItem(itemID) then
         qualityPass = false
-        step("questSafetyNet", false, "vetoed — quest item; explicit Sell List entry would override this")
+        step("questSafetyNet", false, "vetoed - quest item; explicit Sell List entry would override this")
     end
 
     if
@@ -613,20 +613,20 @@ function EC_compCache.describeSellability(bag, slot)
         step(
             "professionToolSafetyNet",
             false,
-            "vetoed — baseline-protected profession tool; explicit Sell List entry or Allow Sell override would bypass this"
+            "vetoed - baseline-protected profession tool; explicit Sell List entry or Allow Sell override would bypass this"
         )
     end
 
     local equipped = IsEquippedItem(itemID)
     if equipped then
-        step("equippedVeto", false, "VETO — item is currently equipped")
+        step("equippedVeto", false, "VETO - item is currently equipped")
     else
         step("equippedVeto", true, "not currently equipped")
     end
 
     local blacklisted = DB and IsInSet(DB.blacklist, itemID) or false
     if blacklisted then
-        step("keepListVeto", false, "VETO — on Keep List")
+        step("keepListVeto", false, "VETO - on Keep List")
     else
         step("keepListVeto", true, "not on Keep List")
     end
@@ -648,7 +648,7 @@ function EC_compCache.describeSellability(bag, slot)
                 step("affixProtection", true, "affix present but allow-listed (rank dupe)")
             else
                 affixProtected = true
-                step("affixProtection", false, "VETO — Rare/Epic random affix detected")
+                step("affixProtection", false, "VETO - Rare/Epic random affix detected")
             end
         else
             step("affixProtection", true, "no random affix on this item")
@@ -667,7 +667,7 @@ function EC_compCache.describeSellability(bag, slot)
         elseif not quality or quality < 3 then
             step("affixProtection", true, "n/a (quality below Rare)")
         else
-            step("affixProtection", true, "n/a (no positive sell signal — affix gate only fires for items the sell rules would otherwise touch; delete-list path is checked separately)")
+            step("affixProtection", true, "n/a (no positive sell signal - affix gate only fires for items the sell rules would otherwise touch; delete-list path is checked separately)")
         end
     end
 
@@ -684,7 +684,7 @@ function EC_compCache.describeSellability(bag, slot)
         else
             procProtected = true
             qualityPass = false
-            step("chanceOnHitProtection", false, "VETO — chance-on-hit proc detected (downgrades qualityRule veto)")
+            step("chanceOnHitProtection", false, "VETO - chance-on-hit proc detected (downgrades qualityRule veto)")
         end
     else
         step("chanceOnHitProtection", true, "n/a")
@@ -698,9 +698,9 @@ function EC_compCache.describeSellability(bag, slot)
     if wouldSell then
         summary = "|cff00ff00WILL SELL at the next vendor visit|r"
     elseif not positiveSignal then
-        summary = "|cffffb84dwon't sell — no rule matched|r"
+        summary = "|cffffb84dwon't sell - no rule matched|r"
     elseif vetoed then
-        summary = "|cffff4444won't sell — protected|r"
+        summary = "|cffff4444won't sell - protected|r"
     else
         summary = "|cffff4444won't sell|r"
     end
@@ -732,7 +732,7 @@ function EC_compCache.printSellabilityTrace(bag, slot)
     NS.PrintNicef("|cffffff00=== Sellability trace: bag %d slot %d ===|r", bag, slot)
     for _, s in ipairs(r.steps) do
         local marker = s.passed and "|cff00ff00+|r" or "|cffff4444-|r"
-        NS.PrintNicef("  %s %s — %s", marker, s.name, s.detail)
+        NS.PrintNicef("  %s %s - %s", marker, s.name, s.detail)
     end
     NS.PrintNice("Result: " .. r.summary)
 end

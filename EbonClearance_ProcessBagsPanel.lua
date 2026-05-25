@@ -493,14 +493,14 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         NS.MakeHeader(content, "Process Bags", -16)
         local desc = NS.MakeLabel(
             content,
-            "Disenchant, mill, prospect, or pick lock bag items. |cffffd870Left-click|r a row to select it. |cffffd870Right-click|r a row to hide it (use |cffffb84dClear Ignored|r to bring hidden items back). The |cffffb84d>|r arrow moves to the next item. Click |cffffb84dProcess Next|r to cast on the selected row.",
+            "Disenchant, mill, prospect, or pick locks in bulk. |cffffd870Left-click|r a row to select it. |cffffd870Right-click|r a row to hide it (|cffffb84dClear Ignored|r brings them back). Click |cffffb84dProcess Next|r to cast on the selected row.",
             16,
             -44
         )
 
         local tip = NS.MakeLabel(
             content,
-            "|cff888888Tip: bind a key to Process Next under Key Bindings, then hold it to drain a stack hands-free.|r",
+            "|cff888888Tip: bind a key to Process Next in Key Bindings, then hold it to drain a stack without clicking.|r",
             16,
             -44
         )
@@ -517,7 +517,7 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         sbCB:SetChecked(DB.processIncludeSoulbound)
         local sbText = _G[sbCB:GetName() .. "Text"]
         if sbText then
-            sbText:SetText("Include Soulbound items (Disenchant only)")
+            sbText:SetText("Include Soulbound items (disenchant only)")
             EC_compCache.setPanelWidth(sbText, 60)
             sbText:SetJustifyH("LEFT")
         end
@@ -589,25 +589,63 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         clearBtn:SetScript("OnLeave", GameTooltip_Hide)
         self.clearIgnoredBtn = clearBtn
 
-        -- rowAnchor frame: a zero-height anchor parked below the
-        -- dropdown so the dynamic rows / section headers stack from a
-        -- known Y without overlapping the static controls above.
-        local rowAnchor = CreateFrame("Frame", nil, content)
-        rowAnchor:SetPoint("TOPLEFT", ddLabel, "BOTTOMLEFT", 0, -20)
-        rowAnchor:SetPoint("TOPRIGHT", content, "TOPRIGHT", -16, 0)
+        -- v2.32.x: list area uses its own ScrollFrame so the scrollbar
+        -- sits inside the chrome (matches the Sell / Keep / Delete /
+        -- Profiles pattern). Chrome anchors below the dropdown down to
+        -- just above the bottom button strip; a UIPanelScrollFrame
+        -- inside it holds the section headers + item rows.
+
+        local scrollBg = CreateFrame("Frame", nil, content)
+        scrollBg:SetPoint("TOPLEFT", ddLabel, "BOTTOMLEFT", -4, -16)
+        scrollBg:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -12, 62)
+        scrollBg:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        scrollBg:SetBackdropColor(0, 0, 0, 0.6)
+        scrollBg:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
+        self.processScrollBg = scrollBg
+
+        -- Inner scroll for the rows. Same anchor offsets as the list-
+        -- widget panels (6 / -28) so the scrollbar sits inside the
+        -- chrome border with consistent spacing.
+        local rowScroll = CreateFrame(
+            "ScrollFrame",
+            "EbonClearanceProcessRowScroll",
+            scrollBg,
+            "UIPanelScrollFrameTemplate"
+        )
+        rowScroll:SetPoint("TOPLEFT", 6, -6)
+        rowScroll:SetPoint("BOTTOMRIGHT", -28, 6)
+
+        local rowContent = CreateFrame("Frame", nil, rowScroll)
+        rowContent:SetSize(NS.GetPanelWidth() - 50, 1)
+        rowScroll:SetScrollChild(rowContent)
+        NS.HookScrollbarAutoHide(rowScroll)
+        EC_compCache.registerWidth(rowContent, 50)
+        self.processRowScroll = rowScroll
+
+        -- rowAnchor at the top of the scroll content. Rows / headers
+        -- stack downwards from here. The old rowAnchorOffset (200,
+        -- which reserved space for the static controls when the whole
+        -- panel scrolled) is now 0 because the static controls live
+        -- outside the scroll area entirely.
+        local rowAnchor = CreateFrame("Frame", nil, rowContent)
+        rowAnchor:SetPoint("TOPLEFT", 0, 0)
+        rowAnchor:SetPoint("TOPRIGHT", rowContent, "TOPRIGHT", 0, 0)
         rowAnchor:SetHeight(1)
         self.rowAnchor = rowAnchor
-        -- Approximate vertical space reserved above rowAnchor (header +
-        -- desc + tip + checkbox + dropdown + paddings). Used by
-        -- SetHeight in refresh so the scroll content grows from the
-        -- proper origin.
-        self.rowAnchorOffset = 200
+        self.rowAnchorOffset = 0
 
-        -- Empty state pinned to rowAnchor so it sits where the list
-        -- would begin.
-        local empty = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        empty:SetPoint("TOPLEFT", rowAnchor, "TOPLEFT", 0, -4)
-        EC_compCache.setPanelWidth(empty, 16)
+        -- Empty state inside rowContent so it scrolls with the list
+        -- area and renders on top of the chrome backdrop.
+        local empty = rowContent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        empty:SetPoint("TOPLEFT", rowAnchor, "TOPLEFT", 8, -4)
+        EC_compCache.setPanelWidth(empty, 70)
         empty:SetJustifyH("LEFT")
         if empty.SetWordWrap then
             empty:SetWordWrap(true)
@@ -618,7 +656,7 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         empty:Hide()
         self.emptyState = empty
 
-        self.content = content
+        self.content = rowContent
         self.rows = {}
         self.headers = {}
 
@@ -693,17 +731,12 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         nextLbl:SetText("")
         self.nextItemLabel = nextLbl
 
-        -- Shrink the scroll frame from the bottom so it doesn't run
-        -- under the button strip. EC_WrapPanelInScrollFrame anchored it
-        -- to BOTTOMRIGHT(-26, 6); reserve 56 px for the button row +
-        -- "Next:" label + padding.
-        local scroll = _G[self:GetName() .. "Scroll"]
-        if scroll then
-            scroll:ClearAllPoints()
-            scroll:SetPoint("TOPLEFT", 0, 0)
-            scroll:SetPoint("BOTTOMRIGHT", -26, 62)
-        end
+        -- v2.32.x: panel no longer scroll-wrapped. The list area has
+        -- its own dedicated ScrollFrame inside scrollBg above, so the
+        -- outer panel scrollbar is gone. Static controls fit the
+        -- standard Interface Options viewport without needing the
+        -- outer scroll.
 
         EC_compCache.refreshProcessPanel()
-    end, true)
+    end)
 end)

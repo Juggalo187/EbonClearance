@@ -116,7 +116,7 @@ MerchantPanel:SetScript("OnShow", function(self)
         NS.MakeHeader(content, "Merchant Settings", -16)
         -- Panel-specific intro only. Generic "grey junk auto-sells" cross-cut
         -- removed; it's covered on the Main panel.
-        NS.MakeLabel(content, "Tune which items auto-sell and at which merchants.", 16, -44)
+        NS.MakeLabel(content, "Change which items sell automatically, and at which merchants.", 16, -44)
 
         -- Merchant mode dropdown
         local modeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -167,7 +167,7 @@ MerchantPanel:SetScript("OnShow", function(self)
         repairCB:SetChecked(DB.repairGear)
         local rt = _G[repairCB:GetName() .. "Text"]
         if rt then
-            rt:SetText("Repair gear while vendoring")
+            rt:SetText("Repair gear while selling")
             rt:SetWidth(420)
             rt:SetJustifyH("LEFT")
         end
@@ -188,7 +188,7 @@ MerchantPanel:SetScript("OnShow", function(self)
         guildRepairCB:SetChecked(DB.repairUseGuildBank)
         local grt = _G[guildRepairCB:GetName() .. "Text"]
         if grt then
-            grt:SetText("Use guild bank funds when available")
+            grt:SetText("Pay from guild bank when possible")
             EC_compCache.setPanelWidth(grt, 80)
             grt:SetJustifyH("LEFT")
         end
@@ -204,7 +204,7 @@ MerchantPanel:SetScript("OnShow", function(self)
         keepBagsCB:SetChecked(DB.keepBagsOpen)
         local kbt = _G[keepBagsCB:GetName() .. "Text"]
         if kbt then
-            kbt:SetText("Keep bags open when merchant window closes")
+            kbt:SetText("Keep bags open after talking to a merchant")
             EC_compCache.setPanelWidth(kbt, 60)
             kbt:SetJustifyH("LEFT")
         end
@@ -256,7 +256,7 @@ MerchantPanel:SetScript("OnShow", function(self)
             fastModeNote:SetWordWrap(true)
         end
         fastModeNote:SetText(
-            "|cff888888Higher throughput. Increases disconnect risk on unstable connections - disable if you DC mid-vendor.|r"
+            "|cff888888Sells faster. May cause disconnects on unstable connections - turn off if it does.|r"
         )
 
         -- Quality threshold (v2.4.0+): three per-rarity rows, each independently
@@ -274,7 +274,7 @@ MerchantPanel:SetScript("OnShow", function(self)
             thresholdDesc:SetWordWrap(true)
         end
         thresholdDesc:SetText(
-            "Auto-sell rules per rarity. Each rarity has its own toggle, an optional cap, and a bind-type filter. Tick |cffffff00Use equipped iLvl|r for a dynamic cap that follows your equipped iLvl in the same slot (recommended; default ON for whites/greens on fresh installs). Untick for a fixed |cffffff00max iLvl|r - 0 = sell every item of that rarity. |cffaaaaaaSell List always sells; Keep List always protects.|r"
+            "Sell rules for each rarity. Tick the box to turn a rule on. Tick |cffffff00Use equipped iLvl|r to compare against what you're wearing in that slot (recommended). Or set a fixed |cffffff00max iLvl|r - 0 means sell every item of that rarity. |cffaaaaaaYour Sell List always sells; your Keep List always keeps.|r"
         )
 
         -- v2.10.0: bind-type filter options shared across all four rarity rows.

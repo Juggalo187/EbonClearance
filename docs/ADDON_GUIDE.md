@@ -1090,13 +1090,13 @@ The opt-in slot-border tint draws an additive ring around bag slot frames whose 
 
 2. **The host bag-UI adapter MUST install at `ADDON_LOADED` for the host addon, not at `PLAYER_LOGIN` plus a delay.** The host builds its slot class during its own load pass; by the time `PLAYER_LOGIN` plus a 2-second delay fires, the host may already have painted its first set of slots without our hook in place, and those slots stay un-decorated until something else triggers an update. Installing at the host's `ADDON_LOADED` puts our hook in BEFORE the host can build any bag-display frames. The `PLAYER_LOGIN`-deferred install path is kept as an idempotent fallback only.
 
-3. **The ring texture sits on `OVERLAY` sublevel 6 with `BlendMode("ADD")`.** This is deliberately above the host bag-UI's own quality border (sublevel 0) so the two compose additively — a Blue/Rare quality border + an EC sell-border tint read as both colours layered, not one fighting the other. Don't drop the sublevel or change the blend mode without considering how the composition will read.
+3. **The ring texture sits on `OVERLAY` sublevel 6 with `BlendMode("ADD")`.** This is deliberately above the host bag-UI's own quality border (sublevel 0) so the two compose additively - a Blue/Rare quality border + an EC sell-border tint read as both colours layered, not one fighting the other. Don't drop the sublevel or change the blend mode without considering how the composition will read.
 
-Anything that mutates the verdict of a bag slot — list adds/removes, allow-list mutations, settings pack imports, colour picks, the master toggle — MUST call `EC_RefreshSellBorders()` after the mutation. The helper is a no-op when the toggle is off, so calling it from a mutation site that isn't gated on the toggle is cheap and correct.
+Anything that mutates the verdict of a bag slot - list adds/removes, allow-list mutations, settings pack imports, colour picks, the master toggle - MUST call `EC_RefreshSellBorders()` after the mutation. The helper is a no-op when the toggle is off, so calling it from a mutation site that isn't gated on the toggle is cheap and correct.
 
 ### Affix description normalisation: case-folds (v2.29.0+)
 
-`EC_compCache.normaliseAffixDesc` strips colour codes, `@affix@` markers, leading/trailing whitespace, trailing sentence punctuation — AND case-folds via `:lower()` at the end. The case-fold is load-bearing: at least one rank-I affix description in Project Ebonhold ships with a lowercase opening letter while rank-II / rank-III ship with a capital, and the comparison would miss otherwise.
+`EC_compCache.normaliseAffixDesc` strips colour codes, `@affix@` markers, leading/trailing whitespace, trailing sentence punctuation - AND case-folds via `:lower()` at the end. The case-fold is load-bearing: at least one rank-I affix description in Project Ebonhold ships with a lowercase opening letter while rank-II / rank-III ship with a capital, and the comparison would miss otherwise.
 
 If you ever remove the `:lower()` you must ALSO revert the one-shot migration in `EnsureAccountDB` that lowercases existing `ADB.allowedAffixes` keys, because the migration assumes the normaliser produces lowercase output. The pair is idempotent on the current normaliser; reverting one side without the other breaks Allow Sell for users who marked affixes under the old (mixed-case) normaliser.
 
@@ -1124,7 +1124,7 @@ Allowed alternatives when integration code genuinely needs to be discussed:
 - "Optional external data backend"
 - "Detected at runtime via the `_G` lookup; ungated when absent"
 
-The runtime detection still calls the specific global (`_G.Bagnon`, `LibStub("AceAddon-3.0"):GetAddon("AdiBags")`, etc.) — that's necessary for the API to work — but the comment explaining what's happening uses neutral framing.
+The runtime detection still calls the specific global (`_G.Bagnon`, `LibStub("AceAddon-3.0"):GetAddon("AdiBags")`, etc.) - that's necessary for the API to work - but the comment explaining what's happening uses neutral framing.
 
 **Existing mentions stay.** Pre-v2.29.0 comments in `EbonClearance.lua` and entries in `NOTICE.md` / older `README.md` changelog stanzas remain untouched. The rule is forward-only.
 
@@ -1638,7 +1638,7 @@ Moved into Minimap:
   middle / right-click bindings: options / Process Bags / toggle;
   hover tooltip showing free bag slots, sellable count, est. value).
 - `EC_CreateTargetMerchantButton` (hidden SecureActionButton dispatched
-  through by the "Target Goblin Merchant" key binding — combat-lockdown safe).
+  through by the "Target Goblin Merchant" key binding - combat-lockdown safe).
 - `EC_CreateLDBLauncher` (LibDataBroker plugin for users running
   Bazooka / ChocolateBar / etc.).
 
@@ -1652,7 +1652,7 @@ Cross-file reach pattern:
   `GetFreeBagSlots`, `PrintNice`, `PrintNicef`, `TARGET_NAME`)
   already on NS from prior stages.
 - `EbonClearance_ToggleSettings` / `ToggleEnabled` / `ForceSell` are
-  WoW globals (Bindings.xml glue) — reachable from any file.
+  WoW globals (Bindings.xml glue) - reachable from any file.
 
 Exposed on NS for the ADDON_LOADED branch in EbonClearance.lua:
 
@@ -1680,12 +1680,12 @@ bag item's tooltip.
 
 Moved into Tooltip:
 
-- `EC_AnnotateTooltip` (per-tooltip body — walks the same decision
+- `EC_AnnotateTooltip` (per-tooltip body - walks the same decision
   chain as `EC_IsSellable` and produces a humane status line;
   mirrors rather than calls `EC_IsSellable` because tooltip output
   needs to know WHY, not just yes/no; see docs/CODE_REVIEW.md
   item 6 for the documented parallel-impl tradeoff).
-- `EC_ClearTooltipFlag` (resets the per-tooltip dedupe flag —
+- `EC_ClearTooltipFlag` (resets the per-tooltip dedupe flag -
   recipe tooltips fire `OnTooltipSetItem` twice).
 - `EC_InstallTooltipHookOnce` (hooks `OnTooltipSetItem` +
   `OnTooltipCleared` on `GameTooltip` + `ItemRefTooltip`).
@@ -1891,7 +1891,7 @@ file-scope upvalue.
 **General rule for split files that load BEFORE EbonClearance.lua**:
 function bodies referencing `NS.*` are fine (lazy lookup at call
 time). Top-level table constructors and other eager code that calls
-`NS.*` are NOT fine — defer them into a function body, or move the
+`NS.*` are NOT fine - defer them into a function body, or move the
 helper into Core.lua so it's available before any of the dependent
 files load. Test 41 includes a load-order-trap regression check
 scanning the file's pre-build-callback region for bare

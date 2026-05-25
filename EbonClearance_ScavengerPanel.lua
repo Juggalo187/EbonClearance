@@ -60,7 +60,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         NS.MakeHeader(content, "Scavenger Settings", -16)
         NS.MakeLabel(
             content,
-            "Controls summoning and muting of |cffff7f7fGreedy Scavenger|r. The auto-loot cycle will continuously loot and sell while your bags fill up.",
+            "Manages your |cffff7f7fGreedy Scavenger|r. Turn on the loot cycle to keep looting and selling automatically while your bags fill up.",
             16,
             -44
         )
@@ -71,7 +71,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         sumCB:SetChecked(DB.summonGreedy)
         local st = _G[sumCB:GetName() .. "Text"]
         if st then
-            st:SetText("Summon |cffff7f7fGreedy Scavenger|r after vendoring")
+            st:SetText("Summon |cffff7f7fGreedy Scavenger|r after selling")
             st:SetWidth(420)
             st:SetJustifyH("LEFT")
         end
@@ -153,7 +153,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         EC_compCache.setPanelWidth(cycleNote, 60)
         cycleNote:SetJustifyH("LEFT")
         cycleNote:SetText(
-            "|cff888888At threshold: Greedy is dismissed and the Goblin Merchant is summoned. Right-click it to sell; Greedy re-summons automatically.|r"
+            "|cff888888When your bags fill up: Greedy goes away, the Goblin Merchant pops up. Right-click the merchant to sell, then Greedy comes back automatically.|r"
         )
 
         local threshSlider = NS.AddSlider(
@@ -198,7 +198,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
         if autoOpenNote.SetWordWrap then
             autoOpenNote:SetWordWrap(true)
         end
-        autoOpenNote:SetText("|cff888888Lockboxes that need a key or lockpick are skipped. Combat-paused.|r")
+        autoOpenNote:SetText("|cff888888Lockboxes that need a key or lockpick are skipped. Paused during combat.|r")
 
         -- v2.16.0: Fast Loot. When on AND Blizzard's auto-loot CVar is
         -- effectively enabled (autoLootDefault XOR'd with the
@@ -238,7 +238,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
             fastLootNote:SetWordWrap(true)
         end
         fastLootNote:SetText(
-            "|cff888888Speeds up manual looting (corpses, fishing, gift bags, dungeon/raid loot, mailbox). Honours Blizzard's |cffffff00Auto Loot|r|cff888888 setting. |cffff7f7fGreedy Scavenger|r|cff888888 looting is already instant and isn't affected.|r"
+            "|cff888888Speeds up looting from corpses, fishing, gift bags, dungeons, and mailboxes. Uses your |cffffff00Auto Loot|r|cff888888 setting. |cffff7f7fGreedy Scavenger|r|cff888888 looting is already instant.|r"
         )
 
         -- v2.10.0: the v2.9.0 editable companion-name input boxes were removed
@@ -263,7 +263,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
             rightClickHint:SetWordWrap(true)
         end
         rightClickHint:SetText(
-            "|cffffb84dTip:|r |cff888888Alt+Right-Click any item in your bags for a quick-action menu (Sell, Keep, Delete, Sell Now).|r"
+            "|cffffb84dTip:|r |cff888888Alt+Right-Click any bag item to Sell, Keep, Delete, or override protection.|r"
         )
 
         -- Size the scroll content to fit the bottom-most widget so the scrollbar

@@ -98,21 +98,20 @@ local function EC_AnnotateTooltip(tooltip)
             -- WHICH rule kept the item. Legacy boolean-true entries from
             -- v2.10.0 / v2.11.0 fall back to the generic label.
             if autoTag == "equipped" then
-                statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected (Worn)|r"
+                statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (equipped)|r"
             elseif autoTag == "upgrade" then
-                statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected (Upgrade)|r"
+                statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (upgrade)|r"
             elseif autoTag == "set" then
                 -- v2.13.0: items from a saved Blizzard Equipment Manager set.
                 -- Most likely an off-set / dual-spec piece sitting in bags
-                -- between swaps; the tag promotes to "(Worn)" the next time
-                -- the user actually equips it (via protectEquipSlot's
-                -- existing tag-refresh branch).
-                statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected (Set)|r"
+                -- between swaps; the tag promotes to "(equipped)" the next
+                -- time the user actually equips it.
+                statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (in gear set)|r"
             else
-                statusLine = "|cff66ccff[EC]|r |cffffb84dAuto-Protected|r"
+                statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (auto)|r"
             end
         else
-            statusLine = "|cff66ccff[EC]|r |cffffb84dProtected|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dKeep|r"
         end
     elseif IsInSet(DB.deleteList, id) and DB.enableDeletion then
         statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete|r"
@@ -125,9 +124,9 @@ local function EC_AnnotateTooltip(tooltip)
         -- of decision instead of wondering why the cycle skipped them.
         local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(id)
         if IsEquippedItem(id) then
-            statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell - Currently Equipped|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell (equipped)|r"
         elseif not (sellPrice and sellPrice > 0) then
-            statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell - No Vendor Price|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dWon't Sell (no value)|r"
         else
             statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell|r"
         end
@@ -141,7 +140,7 @@ local function EC_AnnotateTooltip(tooltip)
         -- Reported by an in-game tester via Discord: "I dont see the Will
         -- Sell - Junk".
         if quality == 0 and sellPrice and sellPrice > 0 then
-            statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell - Junk|r"
+            statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (junk)|r"
         elseif quality and quality >= 1 and quality <= 4 and sellPrice and sellPrice > 0 then
             local rule = DB.qualityRules[quality]
             if rule and rule.enabled then
@@ -172,7 +171,7 @@ local function EC_AnnotateTooltip(tooltip)
                     -- claim "Will Sell" when the merchant cycle will
                     -- silently skip. The whitelist match path above is
                     -- unaffected (whitelist overrides safety net).
-                    statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Quest item|r"
+                    statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (quest item)|r"
                 elseif
                     matchesILvl
                     and EC_compCache.baselineProtectedIDs
@@ -185,7 +184,7 @@ local function EC_AnnotateTooltip(tooltip)
                     -- vetoes; the tooltip should say so. Allow Sell
                     -- override unsets this annotation (the item flows to
                     -- the normal sell path).
-                    statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Profession tool|r"
+                    statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (profession tool)|r"
                 elseif matchesILvl then
                     -- v2.10.0: bind-filter check. EC_IsSellable applies this
                     -- AFTER the iLvl gate; the tooltip annotation has to
@@ -202,22 +201,21 @@ local function EC_AnnotateTooltip(tooltip)
                     if bindRejected then
                         local fLabel = (bindFilter == "boe") and "BoE" or "BoP"
                         statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffffb84dProtected - %s rule wants %s only|r",
+                            "|cff66ccff[EC]|r |cffffb84dKeep (%s rule wants %s only)|r",
                             rarityName,
                             fLabel
                         )
                     elseif matchedAgainstEquipped then
                         statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffb6ffb6Will Sell - %s iLvl %d below equipped|r",
-                            rarityName,
-                            ilvl
+                            "|cff66ccff[EC]|r |cffb6ffb6Will Sell (%s, lower than equipped)|r",
+                            rarityName
                         )
                     elseif cap == 0 then
                         statusLine =
-                            string.format("|cff66ccff[EC]|r |cffb6ffb6Will Sell - %s (no iLvl cap)|r", rarityName)
+                            string.format("|cff66ccff[EC]|r |cffb6ffb6Will Sell (%s)|r", rarityName)
                     else
                         statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffb6ffb6Will Sell - %s iLvl %d (cap %d)|r",
+                            "|cff66ccff[EC]|r |cffb6ffb6Will Sell (%s, iLvl %d, cap %d)|r",
                             rarityName,
                             ilvl,
                             cap
@@ -237,25 +235,23 @@ local function EC_AnnotateTooltip(tooltip)
                     -- "Potential Upgrade" is the user-friendly framing.
                     if not hasVisibleILvl then
                         statusLine =
-                            string.format("|cff66ccff[EC]|r |cffffb84dProtected - %s has no iLvl|r", rarityName)
+                            string.format("|cff66ccff[EC]|r |cffffb84dKeep (%s, no item level)|r", rarityName)
                     else
                         statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffffb84dProtected - %s iLvl %d (Potential Upgrade)|r",
-                            rarityName,
-                            ilvl
+                            "|cff66ccff[EC]|r |cffffb84dKeep (%s, possible upgrade)|r",
+                            rarityName
                         )
                     end
                 elseif not hasVisibleILvl then
                     -- Fixed-cap mode; non-equippable has no visible iLvl.
                     statusLine = string.format(
-                        "|cff66ccff[EC]|r |cffffb84dProtected - %s has no iLvl (cap %d active)|r",
-                        rarityName,
-                        cap
+                        "|cff66ccff[EC]|r |cffffb84dKeep (%s, no item level)|r",
+                        rarityName
                     )
                 else
                     -- Fixed-cap mode; equippable item iLvl above cap.
                     statusLine = string.format(
-                        "|cff66ccff[EC]|r |cffffb84dProtected - %s above max iLvl (%d > %d)|r",
+                        "|cff66ccff[EC]|r |cffffb84dKeep (%s, iLvl %d, cap %d)|r",
                         rarityName,
                         ilvl,
                         cap
@@ -333,65 +329,43 @@ local function EC_AnnotateTooltip(tooltip)
                     or false
                 local autoDupe = DB.affixAllowExactDupes and playerKnows
                 if manualAllow or autoDupe then
-                    -- v2.27.0: list-destination label wins over the
-                    -- auto-dupe info text. The destination tells the
-                    -- user what's going to happen with this item; the
-                    -- auto-dupe info only fills in when no list has
-                    -- claimed it.
+                    -- Destination-list label wins; when the override is
+                    -- active and the item is on a list, just show what
+                    -- happens. When no list claims it, surface "you have
+                    -- this affix" as the reason it will sell.
                     if IsInSet(DB.blacklist, id) then
-                        -- Keep wins; leave the Protected / Auto-
-                        -- Protected label alone.
+                        -- Keep wins; leave the earlier Keep label alone.
                     elseif IsInSet(DB.deleteList, id) and DB.enableDeletion then
-                        statusLine = "|cff66ccff[EC]|r |cffff4444Allowed - Delete|r"
+                        statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete|r"
                     elseif ADB and ADB.whitelist and IsInSet(ADB.whitelist, id) then
-                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Account Sell|r"
+                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Account List)|r"
                     elseif IsInSet(DB.whitelist, id) then
-                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Character Sell|r"
+                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Character List)|r"
                     elseif manualAllow then
-                        -- Allow Sell is on but no list claims the item. If
-                        -- the per-rarity sweep chain above already produced
-                        -- a "Will Sell - <reason>" verdict, the item IS
-                        -- being auto-sold by the rule - rewrite the prefix
-                        -- to "Allowed - <reason>" to match the established
-                        -- "Allowed - Character Sell" / "Allowed - Account
-                        -- Sell" label family. Without this, the user sees
-                        -- "Choose List" while the item is actually being
-                        -- vendored.
+                        -- Allow Sell is on but no list claims the item.
+                        -- If a quality-rule already produced a "Will
+                        -- Sell (...)" verdict, leave it alone - the
+                        -- verdict already tells the truth. Otherwise
+                        -- prompt the user to pick a list.
                         if statusLine and statusLine:find("Will Sell", 1, true) then
-                            statusLine = statusLine:gsub("Will Sell", "Allowed", 1)
+                            -- Existing verdict stands.
                         else
-                            statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                            statusLine = "|cff66ccff[EC]|r |cffffea80Override on - add to a list to sell|r"
                         end
                     else
-                        -- autoDupe only, not on any list. v2.30.x label
-                        -- family rewrite: "Allowed - <name> known"
-                        -- (dropped the "already" word + the explicit
-                        -- "rank N" suffix for brevity per the plan §4.6
-                        -- Issue A). Matches the new
-                        -- "Protected - Affix found" / "Protected - Affix
-                        -- known" / "Allowed - <name> known" trio.
-                        statusLine = string.format(
-                            "|cff66ccff[EC]|r |cffb6ffb6Allowed - %s known|r",
-                            affix.name or "affix"
-                        )
+                        -- autoDupe only, not on any list. The dupe-
+                        -- allow setting is on, the player already has
+                        -- this affix, so future drops can sell.
+                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (you have this affix)|r"
                     end
                 elseif playerKnows then
-                    -- v2.30.x: surface the "you have this affix at this
-                    -- rank, protection still applies because dupe-allow is
-                    -- off" state distinctly. Pre-v2.30 this collapsed into
-                    -- the blanket "Random affix" label and the player
-                    -- couldn't tell at a glance which protected items they
-                    -- could safely manually allow. Users who toggle
-                    -- DB.affixAllowExactDupes ON will see this label flip
-                    -- to "Allowed - <name> known" automatically.
-                    statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Affix known|r"
+                    -- The player has extracted this affix, but the
+                    -- dupe-allow setting is off so protection still
+                    -- holds. Flipping that setting on (Protection
+                    -- Settings) makes drops sell.
+                    statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (affix you have)|r"
                 else
-                    -- v2.30.x: relabel from "Random affix" to "Affix
-                    -- found" per the plan §4.6 Issue A. "Found" reads as
-                    -- "we detected a random affix on this item" which is
-                    -- more accurate than "random affix" (which suggested
-                    -- the affix itself was random, not its presence).
-                    statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Affix found|r"
+                    statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (new affix)|r"
                 end
             end
         end
@@ -439,19 +413,16 @@ local function EC_AnnotateTooltip(tooltip)
         if onExplicit then
             -- Explicit list verdict stands; leave statusLine alone.
         elseif ADB.allowedItems and ADB.allowedItems[id] then
-            -- Marked allowed but no specific list chosen. If the
-            -- per-rarity sweep chain above already produced a
-            -- "Will Sell - <reason>" verdict, the item IS being
-            -- auto-sold by the rule - rewrite the prefix to
-            -- "Allowed - <reason>". When no rule verdict exists, fall
-            -- back to the "pick a list" call to action.
+            -- Allow Sell is on. If a quality-rule already produced a
+            -- "Will Sell (...)" verdict, leave it alone. Otherwise
+            -- prompt the user to pick a list.
             if statusLine and statusLine:find("Will Sell", 1, true) then
-                statusLine = statusLine:gsub("Will Sell", "Allowed", 1)
+                -- Existing verdict stands.
             else
-                statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                statusLine = "|cff66ccff[EC]|r |cffffea80Override on - add to a list to sell|r"
             end
         else
-            statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - Chance on hit|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dKeep (chance-on-hit proc)|r"
         end
     end
 
@@ -478,41 +449,37 @@ local function EC_AnnotateTooltip(tooltip)
         if DB.protectAllTomes then
             tomeProtected = true
             tomeReason = EC_compCache.liveTooltipPlayerKnowsTome(tooltip, id)
-                and (kindLabel .. " (known)")
-                or (kindLabel .. " (unlearned)")
+                and ("(" .. kindLabel .. " you have)")
+                or ("(new " .. kindLabel .. ")")
         elseif DB.protectUnlearnedTomes
             and not EC_compCache.liveTooltipPlayerKnowsTome(tooltip, id)
         then
             tomeProtected = true
-            tomeReason = kindLabel .. " (unlearned)"
+            tomeReason = "(new " .. kindLabel .. ")"
         end
     end
     if tomeProtected then
-        -- Tome protection HARD-VETOES in EC_IsSellable (return false)
-        -- regardless of Sell List membership, so the Protected label
-        -- is the truth - leave the Keep List label alone (it's
-        -- already an "Auto-Protected" or "Protected" prefix that
-        -- shouldn't be downgraded), but otherwise show
-        -- "Protected - Tome (...)" until the user marks Allow Sell.
-        -- The Allow Sell branch relabels destination lists so the
-        -- user sees where the item will go once the gate is lifted.
+        -- Tome protection HARD-VETOES in EC_IsSellable regardless of
+        -- Sell List membership, so the Keep label is the truth. Keep
+        -- List membership stays. Allow Sell override flips to the
+        -- destination-list label.
         if IsInSet(DB.blacklist, id) then
-            -- Kept wins; leave the earlier Auto-Protected /
-            -- Protected label alone.
+            -- Keep List wins; leave the earlier Keep label alone.
         elseif ADB.allowedItems and ADB.allowedItems[id] then
             if IsInSet(DB.deleteList, id) and DB.enableDeletion then
-                statusLine = "|cff66ccff[EC]|r |cffff4444Allowed - Delete|r"
+                statusLine = "|cff66ccff[EC]|r |cffff4444Will Delete|r"
             elseif ADB and ADB.whitelist and IsInSet(ADB.whitelist, id) then
-                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Account Sell|r"
+                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Account List)|r"
             elseif IsInSet(DB.whitelist, id) then
-                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Allowed - Character Sell|r"
+                statusLine = "|cff66ccff[EC]|r |cffb6ffb6Will Sell (your Character List)|r"
             elseif statusLine and statusLine:find("Will Sell", 1, true) then
-                statusLine = statusLine:gsub("Will Sell", "Allowed", 1)
+                -- Existing quality-rule verdict already says "Will
+                -- Sell"; leave it alone.
             else
-                statusLine = "|cff66ccff[EC]|r |cffffea80Allowed - Choose List|r"
+                statusLine = "|cff66ccff[EC]|r |cffffea80Override on - add to a list to sell|r"
             end
         else
-            statusLine = "|cff66ccff[EC]|r |cffffb84dProtected - " .. tomeReason .. "|r"
+            statusLine = "|cff66ccff[EC]|r |cffffb84dKeep " .. tomeReason .. "|r"
         end
     end
 

@@ -55,7 +55,7 @@ local function BuildMainPanel(panel, content, refreshStats)
 
     local welcomeLabel = NS.MakeLabel(
         content,
-        "Welcome to |cffb6ffb6EbonClearance|r! Bag management for Project Ebonhold: vendoring, deletion, looting, protection rules, and profession processing.",
+        "Welcome to |cffb6ffb6EbonClearance|r - bag management for Project Ebonhold.",
         16,
         -52
     )
@@ -68,11 +68,12 @@ local function BuildMainPanel(panel, content, refreshStats)
         descLabel2:SetWordWrap(true)
     end
     descLabel2:SetText(
-        "Greys auto-sell. Whites and greens below your equipped iLvl auto-sell too, and looted upgrades are auto-protected.\n\n"
-            .. "Use |cffb6ffb6Sell List|r (per-character or account-wide) to mark specific items for sale, "
-            .. "|cffb6ffb6Keep List|r to permanently protect items, "
-            .. "|cffb6ffb6Merchant Settings|r to tune the auto-sell rules per rarity, "
-            .. "and |cffb6ffb6Process Bags|r to disenchant, mill, prospect, or pick lock from one button."
+        "Out of the box it sells your junk and old gear when you visit a merchant, keeps your upgrades, and never touches anything important.\n\n"
+            .. "Want more control?\n"
+            .. "  |cffb6ffb6Sell List|r - items you want sold every time.\n"
+            .. "  |cffb6ffb6Keep List|r - items the addon should never touch.\n"
+            .. "  |cffb6ffb6Merchant Settings|r - change what counts as old gear.\n"
+            .. "  |cffb6ffb6Process Bags|r - one button to disenchant, mill, prospect, or pick locks."
     )
     -- Tip on its own line, in grey, so it reads as a hint rather than
     -- another sentence in the main description block.
@@ -84,7 +85,7 @@ local function BuildMainPanel(panel, content, refreshStats)
     if mainTip.SetWordWrap then
         mainTip:SetWordWrap(true)
     end
-    mainTip:SetText("|cff888888Tip: Alt+Right-Click any bag item for a quick-action menu.|r")
+    mainTip:SetText("|cff888888Right-click any bag item with Alt held for quick actions.|r")
 
     -- Stats fontstrings. Stacked vertically; each attaches its ref to `panel`
     -- so RefreshStats can find them across subsequent OnShow calls.
@@ -178,13 +179,12 @@ local function BuildMainPanel(panel, content, refreshStats)
     end
     cmdText:SetText(
         "|cffffff00/ec|r  Open settings\n"
-            .. "|cffffff00/ec profile [list|save|load|delete <name>]|r  Manage saved profiles\n"
-            .. "|cffffff00/ec clean [apply]|r  Find and resolve list conflicts\n"
-            .. "|cffffff00/ec clean upgrades [apply]|r  Clean stale 'Upgrade'-tagged Keep List entries\n"
-            .. "|cffffff00/ec sellinfo [bag slot]|r  Trace why a bag item will/won't sell |cffaaaaaa(or Alt+Shift+Right-Click)|r\n"
-            .. "|cffffff00/ec bugreport|r  Generate a diagnostic report\n"
-            .. "|cffffff00/ec help|r  Print full slash-command reference in chat\n"
-            .. "|cffffff00/ecdebug|r  Show debug info and bag scan"
+            .. "|cffffff00/ec profile [list|save|load|delete <name>]|r  Save and load setting profiles\n"
+            .. "|cffffff00/ec clean [apply]|r  Find items on more than one list and fix them\n"
+            .. "|cffffff00/ec clean upgrades [apply]|r  Remove old 'Upgrade'-tagged items from Keep List\n"
+            .. "|cffffff00/ec sellinfo [bag slot]|r  Explain why an item will or won't sell |cffaaaaaa(or Alt+Shift+Right-Click)|r\n"
+            .. "|cffffff00/ec bugreport|r  Generate a report to share when something's wrong\n"
+            .. "|cffffff00/ec help|r  Show all commands in chat"
     )
 
     -- v2.12.0: size the scroll content to fit the bottom-most widget so

@@ -63,7 +63,7 @@ CharPanel:SetScript("OnShow", function(self)
         -- DB.allowedChars sits dormant in the SV for downgrade safety.
         local bagDesc = NS.MakeLabel(
             self,
-            "Highlight bag items that would sell at the next vendor visit with a coloured border around the slot frame. The icon itself is never modified.",
+            "Coloured borders around bag items so you can see what will sell, what's junk, and what's protected - at a glance. Icons are untouched.",
             16,
             -44
         )
@@ -79,7 +79,7 @@ CharPanel:SetScript("OnShow", function(self)
         -- the checkbox icon already; only the wrap width was the problem.
         local sbText = _G[sbCB:GetName() .. "Text"]
         if sbText then
-            sbText:SetText("Show sell-border tint")
+            sbText:SetText("Show borders")
             sbText:SetJustifyH("LEFT")
         end
 
@@ -101,11 +101,11 @@ CharPanel:SetScript("OnShow", function(self)
         -- priority order: Delete first (highest visibility), then the
         -- two Sell lists, then Junk, then per-rarity rule.
         local SELL_BORDER_CATEGORIES = {
-            { key = "delete", label = "Delete List" },
-            { key = "accountSell", label = "Account Sell List" },
-            { key = "charSell", label = "Character Sell List" },
-            { key = "junk", label = "Junk (grey items)" },
-            { key = "rule", label = "Per-rarity rule match" },
+            { key = "delete", label = "Delete List (red)" },
+            { key = "accountSell", label = "Account Sell List (green)" },
+            { key = "charSell", label = "Character Sell List (cyan)" },
+            { key = "junk", label = "Junk - greys (low-alpha grey)" },
+            { key = "rule", label = "Quality rule match (gold)" },
         }
         local catSwatchUpdaters = {}
 
@@ -268,7 +268,7 @@ CharPanel:SetScript("OnShow", function(self)
         -- so they don't assume a /reload is required.
         local idHint = self:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
         idHint:SetPoint("TOPLEFT", idCB, "BOTTOMLEFT", 4, -2)
-        idHint:SetText("|cff888888Re-hover bag items to refresh open tooltips.|r")
+        idHint:SetText("|cff888888Move your cursor off and back on to refresh open tooltips.|r")
 
         -- Single refresh helper that re-syncs every category's swatch
         -- and checkbox state. Called from the REFRESH branch of

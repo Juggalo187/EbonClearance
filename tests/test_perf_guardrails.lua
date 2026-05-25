@@ -500,25 +500,32 @@ end
 -- states, replaces the v2.25.x single-state label.
 -- ---------------------------------------------------------------------------
 do
-    local hasProtectedLabel = src:find("Protected %- Chance on hit") ~= nil
-    local hasSellLabel = src:find("Allowed %- Choose List") ~= nil
-    local hasAccountSellLabel = src:find("Allowed %- Account Sell") ~= nil
-    local hasCharSellLabel = src:find("Allowed %- Character Sell") ~= nil
-    local hasDeleteLabel = src:find("Allowed %- Delete") ~= nil
-    check("tooltip annotation emits 'Protected - Chance on hit' for unmarked items",
+    -- v2.32.x label simplification: protection labels now read "Keep
+    -- (reason)" instead of "Protected - reason"; override-active
+    -- labels surface the actual destination as "Will Sell (...)" or
+    -- "Will Delete" instead of "Allowed - ...".
+    local hasProtectedLabel = src:find("Keep %(chance%-on%-hit proc%)") ~= nil
+    local hasSellLabel = src:find("Override on") ~= nil
+    local hasAccountSellLabel = src:find("Will Sell %(your Account List%)") ~= nil
+    local hasCharSellLabel = src:find("Will Sell %(your Character List%)") ~= nil
+    -- "Allowed - Delete" collapses to plain "Will Delete" because the
+    -- destination doesn't need an "Allowed" qualifier - the verdict
+    -- is what the player needs to see.
+    local hasDeleteLabel = src:find('"|cff66ccff%[EC%]|r |cffff4444Will Delete|r"') ~= nil
+    check("tooltip annotation emits 'Keep (chance-on-hit proc)' for unmarked items",
           hasProtectedLabel)
-    check("tooltip annotation emits 'Allowed - Choose List' when no list chosen",
+    check("tooltip annotation emits 'Override on ...' when no list chosen",
           hasSellLabel,
-          "v2.26.0: marked items with no list membership get a call-to-action label, not the misleading 'Allowed - Sell'")
-    check("tooltip annotation emits 'Allowed - Account Sell' when on Account Sell List",
+          "marked items with no list membership get a call-to-action label, not a misleading 'will sell'")
+    check("tooltip annotation emits 'Will Sell (your Account List)' when on Account Sell List",
           hasAccountSellLabel,
           "marked + on ADB.whitelist - label must reflect the actual destination")
-    check("tooltip annotation emits 'Allowed - Character Sell' when on Character Sell List",
+    check("tooltip annotation emits 'Will Sell (your Character List)' when on Character Sell List",
           hasCharSellLabel,
           "marked + on DB.whitelist - label must reflect the actual destination")
-    check("tooltip annotation emits 'Allowed - Delete' when on Delete List",
+    check("tooltip annotation emits 'Will Delete' when on Delete List (with or without override)",
           hasDeleteLabel,
-          "marked + on DB.deleteList - label must reflect the actual destination")
+          "marked + on DB.deleteList - delete verdict is the destination, no 'Allowed' qualifier needed")
 end
 
 -- ---------------------------------------------------------------------------
@@ -1458,10 +1465,10 @@ do
         "ADB.allowedItems[itemID] must short-circuit the baseline safety net so per-item Allow Sell still works"
     )
 
-    -- Tooltip annotation emits "Protected - Profession tool" for matched items.
+    -- Tooltip annotation emits "Keep (profession tool)" for matched items.
     check(
-        "tooltip annotation emits 'Protected - Profession tool'",
-        src:find("Protected %- Profession tool") ~= nil,
+        "tooltip annotation emits 'Keep (profession tool)'",
+        src:find("Keep %(profession tool%)") ~= nil,
         "EC_AnnotateTooltip must emit a Profession-tool annotation so users see why the item isn't selling"
     )
 
@@ -2230,59 +2237,64 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- Test 44 (section 4.6 Issue A): affix tooltip label rewrite.
+-- Test 44 (v2.32.x): affix tooltip label scheme.
 -- ---------------------------------------------------------------------------
--- Pre-v2.30.x the random-affix tooltip branch used a blanket "Protected
--- - Random affix" label whenever `affixAllowExactDupes` was OFF, even
--- if the affix was one the player had already extracted at this rank.
--- The auto-dupe branch ON used "Allowed - <name> rank N already known".
--- Both labels are reworded for clarity:
+-- The random-affix tooltip branch distinguishes three states using
+-- plain-English "Keep" / "Will Sell" labels:
 --
---   Player doesn't know affix          -> "Protected - Affix found"
---   Player knows it + setting OFF      -> "Protected - Affix known"
---   Player knows it + setting ON       -> "Allowed - <name> known"
+--   Player doesn't know affix          -> "Keep (new affix)"
+--   Player knows it + setting OFF      -> "Keep (affix you have)"
+--   Player knows it + setting ON       -> "Will Sell (you have this affix)"
 --
--- The "Affix known" branch is new: it surfaces "you have this; could
--- sell if you toggle the setting" without collapsing into the blanket
--- "Random affix" label.
+-- The label scheme avoids "Protected" / "Allowed" verbs (too abstract
+-- for a new player) and avoids the phrase "already known" (could be
+-- confused with Blizzard's red "Already known" line on tomes).
 do
     local tooltipFile = io.open("EbonClearance_Tooltip.lua", "rb")
     if tooltipFile then
         local ttSrc = tooltipFile:read("*a") or ""
         tooltipFile:close()
-        -- Strip Lua line comments before checking - the legacy label
-        -- strings still appear in historical doc comments (documenting
-        -- pre-v2.30 behaviour) and aren't a regression.
+        -- Strip Lua line comments before checking - explanatory
+        -- comments may reference historical strings and aren't a
+        -- regression.
         local ttCode = ttSrc:gsub("%-%-[^\n]*", "")
 
         check(
-            "Tooltip emits 'Protected - Affix found' (new unknown-affix label)",
-            ttCode:find("Protected %- Affix found") ~= nil,
-            "the v2.30.x relabel must replace the legacy 'Random affix' string with 'Protected - Affix found' for the affix-unknown case"
+            "Tooltip emits 'Keep (new affix)' (unknown-affix label)",
+            ttCode:find("Keep %(new affix%)") ~= nil,
+            "the unknown-affix case must use the 'Keep (new affix)' label so a new player reads the verdict + reason without jargon"
         )
         check(
-            "Tooltip emits 'Protected - Affix known' (new known-but-protected label)",
-            ttCode:find("Protected %- Affix known") ~= nil,
-            "the v2.30.x relabel must add a distinct 'Protected - Affix known' label for items whose affix the player has already extracted at this rank but affixAllowExactDupes is off"
+            "Tooltip emits 'Keep (affix you have)' (known + dupe-allow-off label)",
+            ttCode:find("Keep %(affix you have%)") ~= nil,
+            "items whose affix the player has already extracted but with dupe-allow off get the distinct 'affix you have' label"
         )
         check(
-            "Tooltip emits 'Allowed - <name> known' format (new auto-dupe label)",
-            ttCode:find('Allowed %- %%s known') ~= nil,
-            "the auto-dupe label must use the 'Allowed - <name> known' form (drop the 'already' word + the rank suffix per the plan)"
+            "Tooltip emits 'Will Sell (you have this affix)' (auto-dupe label)",
+            ttCode:find("Will Sell %(you have this affix%)") ~= nil,
+            "the auto-dupe label must say 'Will Sell (you have this affix)' so the player sees the destination plus the reason"
         )
 
         -- Legacy strings must NOT appear in the live label-emit paths.
-        -- (Comments documenting the pre-v2.30 behaviour are stripped
-        -- above before this check runs.)
         check(
             "Tooltip no longer emits legacy 'Random affix' label",
             ttCode:find("Random affix") == nil,
-            "the legacy 'Random affix' wording must be removed from EbonClearance_Tooltip.lua label-emit paths; the v2.30.x scheme distinguishes 'found' vs 'known'"
+            "the legacy 'Random affix' wording must be removed from EbonClearance_Tooltip.lua label-emit paths"
         )
         check(
             "Tooltip no longer emits 'already known' label",
             ttCode:find('already known') == nil,
-            "the legacy 'already known' phrasing must be removed; the v2.30.x scheme uses 'known' alone for brevity"
+            "the legacy 'already known' phrasing must be removed - 'Already known' is Blizzard's own tome line so re-using the phrase confused players"
+        )
+        check(
+            "Tooltip no longer emits 'Protected - ' prefix",
+            ttCode:find("Protected %-") == nil,
+            "the v2.32.x label simplification replaced 'Protected - <reason>' with 'Keep (<reason>)' across all branches"
+        )
+        check(
+            "Tooltip no longer emits 'Allowed - ' prefix",
+            ttCode:find("Allowed %-") == nil,
+            "the v2.32.x label simplification replaced 'Allowed - <destination>' with 'Will Sell (<destination>)' or 'Will Delete' across all branches"
         )
 
         -- playerKnows must be computed independently of
@@ -3716,6 +3728,83 @@ do
                 "the cache write is what propagates a live-tooltip-corrected verdict to the merchant cycle's playerKnowsTomeSpell path"
             )
         end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 61 (v2.32.x): tome detection excludes vanity pets + mount scrolls.
+-- ---------------------------------------------------------------------------
+-- Background: the text-scan fallback in itemIsTome / liveTooltipIsTome
+-- matches a "Use: Teaches" tooltip line - too broad. It also catches
+-- vanity pet items ("Use: Teaches you how to summon this companion")
+-- and mount-training scrolls ("Use: Teaches you how to ride...").
+-- User-reported false positive: Disgusting Oozeling labelled
+-- "Protected - Tome (unlearned)" despite being a vanity pet, not a
+-- spell tome.
+--
+-- v2.32.x fix: both helpers return false early when GetItemInfo
+-- reports class="Miscellaneous" with subclass in {"Companion",
+-- "Mount"}. The check sits AFTER the class="Recipe" shortcut so
+-- legitimate tomes / recipes still resolve via the fast path, and
+-- the text-scan path below is preserved for genuinely-tome items
+-- whose class isn't "Recipe" (rare custom PE formats).
+do
+    local protFile = io.open("EbonClearance_Protection.lua", "rb")
+    if protFile then
+        local protSrc = protFile:read("*a") or ""
+        protFile:close()
+
+        local liveStart = protSrc:find("function EC_compCache%.liveTooltipIsTome%(")
+        local liveBody
+        if liveStart then
+            liveBody = protSrc:sub(liveStart, liveStart + 3500)
+            local nextFnIdx = liveBody:find("\nfunction EC_compCache%.", 2)
+            if nextFnIdx then
+                liveBody = liveBody:sub(1, nextFnIdx - 1)
+            end
+        end
+        check(
+            "liveTooltipIsTome excludes Companion + Mount subtypes",
+            liveBody ~= nil
+                and liveBody:find('"Companion"', 1, true) ~= nil
+                and liveBody:find('"Mount"', 1, true) ~= nil
+                and liveBody:find('"Miscellaneous"', 1, true) ~= nil,
+            "vanity pets and mount-training scrolls falsely matched the 'Use: Teaches' text scan; the exclusion gate (class=Miscellaneous + subclass=Companion/Mount) must be present in the tooltip-side helper"
+        )
+        check(
+            "liveTooltipIsTome rejects collectible phrasings inside the text scan",
+            liveBody ~= nil
+                and liveBody:find('"this companion"', 1, true) ~= nil
+                and liveBody:find('"this mount"', 1, true) ~= nil
+                and liveBody:find('"how to ride"', 1, true) ~= nil,
+            "GetItemInfo subclass is unreliable in 3.3.5a (pets often file under \"Junk\"); the tooltip-text reject is the second-line defence that catches the case based on actual Use-line phrasing"
+        )
+
+        local bagStart = protSrc:find("function EC_compCache%.itemIsTome%(")
+        local bagBody
+        if bagStart then
+            bagBody = protSrc:sub(bagStart, bagStart + 3500)
+            local nextFnIdx = bagBody:find("\nfunction EC_compCache%.", 2)
+            if nextFnIdx then
+                bagBody = bagBody:sub(1, nextFnIdx - 1)
+            end
+        end
+        check(
+            "itemIsTome excludes Companion + Mount subtypes",
+            bagBody ~= nil
+                and bagBody:find('"Companion"', 1, true) ~= nil
+                and bagBody:find('"Mount"', 1, true) ~= nil
+                and bagBody:find('"Miscellaneous"', 1, true) ~= nil,
+            "the bag-item variant (used by EC_IsSellable in the merchant cycle) must mirror the live-tooltip exclusion so pets/mounts don't get caught as tomes during the auto-sell decision either"
+        )
+        check(
+            "itemIsTome rejects collectible phrasings inside the text scan",
+            bagBody ~= nil
+                and bagBody:find('"this companion"', 1, true) ~= nil
+                and bagBody:find('"this mount"', 1, true) ~= nil
+                and bagBody:find('"how to ride"', 1, true) ~= nil,
+            "same belt-and-braces text-content reject as liveTooltipIsTome; protects against pets that file under \"Junk\" in 3.3.5a where the subclass-based gate misses"
+        )
     end
 end
 

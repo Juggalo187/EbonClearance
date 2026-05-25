@@ -465,8 +465,12 @@ local function EnsureDB()
     if type(DB.protectChanceOnHitItems) ~= "boolean" then
         DB.protectChanceOnHitItems = true
     end
-    -- Tome protection (per-character because alts vary in what they
-    -- have or want to keep). Two independent toggles:
+    -- Tome protection. Project Ebonhold stores learned tome / recipe
+    -- state account-wide, so all alts share the same "already known"
+    -- set - the per-character flag here lets the user pick a different
+    -- protection BEHAVIOUR per alt (e.g. main vendors freely, banker
+    -- alt hoards) without affecting the shared learn-state. Two
+    -- independent toggles:
     --   * protectUnlearnedTomes - items that teach a spell the
     --     character does NOT yet know are HARD-vetoed by EC_IsSellable
     --     even when on the Sell List. The user must explicitly mark
@@ -1762,7 +1766,7 @@ local function EC_HandleBagFullForCycle()
     end
     EC_compCache.bagFullSince = nil
     EC_compCache.lootCycleState = STATE.WAITING_MERCHANT
-    PrintNicef("|cffffff00%d free bag slots remaining. Summoning Goblin Merchant...|r", free)
+    PrintNicef("|cffffff00%d free bag slots left. Summoning Goblin Merchant...|r", free)
     if DismissCompanion then
         DismissCompanion("CRITTER")
     end
@@ -2609,9 +2613,9 @@ function EC_compCache.syncEquipped()
         end
     end
     if added > 0 then
-        PrintNicef("|cffb6ffb6Auto-protected %d currently equipped item%s.|r", added, added == 1 and "" or "s")
+        PrintNicef("|cffb6ffb6Added %d equipped item%s to your Keep List.|r", added, added == 1 and "" or "s")
     else
-        PrintNice("|cffaaaaaaNo new equipped items to auto-protect; current gear was already on the keep list.|r")
+        PrintNice("|cffaaaaaaYour equipped gear is already on the Keep List.|r")
     end
 end
 
@@ -2867,7 +2871,7 @@ function EC_compCache.checkBagsForUpgrades()
                                 -- v2.12.0: origin tag for tooltip fork.
                                 DB.blacklistAuto[itemID] = "upgrade"
                                 local name = GetItemInfo(itemID) or ("Item:" .. itemID)
-                                PrintNicef("|cffb6ffb6Auto-protected upgrade %s (added to Keep list).|r", name)
+                                PrintNicef("|cffb6ffb6Kept %s (looks like an upgrade).|r", name)
                             end
                         end
                     end
@@ -2991,7 +2995,7 @@ local function EC_TickMerchantReminder(elapsed)
     if EC_merchantReminderTimer <= 0 then
         EC_merchantReminderPending = false
         if EC_compCache.lootCycleState == STATE.WAITING_MERCHANT then
-            PrintNice("|cffffff00Reminder: right-click the Goblin Merchant to open the vendor window.|r")
+            PrintNice("|cffffff00Right-click the Goblin Merchant to open the vendor window.|r")
         end
     end
     return false
@@ -3766,7 +3770,7 @@ local function BuildQueue(junkOnly)
         for i = #queue, cap + 1, -1 do
             queue[i] = nil
         end
-        PrintNicef("|cffffff00Capped at %d items this run (%d skipped). Visit again to sell the rest.|r", cap, removed)
+        PrintNicef("|cffffff00Sold %d items this trip (%d more left). Talk to the merchant again to sell the rest.|r", cap, removed)
     end
 end
 
@@ -3781,7 +3785,7 @@ local function FinishRun()
 
     -- Check if merchant is still open - delay re-scan so server can process sold items
     if MerchantFrame and MerchantFrame:IsShown() then
-        PrintNicef("Batch sold |cffffff00%d|r items. Checking for more...", EC_batchTotalSold)
+        PrintNicef("Sold |cffffff00%d|r items so far. Checking for more...", EC_batchTotalSold)
         EC_Delay(1.0, function()
             if not MerchantFrame or not MerchantFrame:IsShown() then
                 return
@@ -4032,7 +4036,7 @@ local function StartRun()
     BuildQueue(not merchantAllowed)
 
     if #queue == 0 then
-        PrintNice("Found nothing to sell.")
+        PrintNice("Nothing to sell.")
         EC_compCache.vendorRunning = false
         if UnitExists("target") and UnitName("target") == TARGET_NAME and MerchantFrame and MerchantFrame:IsShown() then
             EC_SummonGreedyWithDelay()
@@ -4227,14 +4231,13 @@ StaticPopupDialogs["EC_CONFIRM_CLEAN_UPGRADES"] = {
 -- the slash command's "open settings" fallback at the bottom of the file.
 StaticPopupDialogs["EC_WELCOME"] = {
     text = "Welcome to EbonClearance!\n\n"
-        .. "Greys auto-sell. Whites and greens below your equipped iLvl also auto-sell. "
-        .. "Items you equip and looted upgrades are auto-protected from auto-sell.\n\n"
-        .. "Click |cffffff00Open Settings|r to review, or |cffffff00Keep Defaults|r "
+        .. "Out of the box: junk sells, old gear sells, and your upgrades are kept.\n\n"
+        .. "Click |cffffff00Open Settings|r to look around, or |cffffff00Keep Defaults|r "
         .. "to start farming.",
     button1 = "Keep Defaults",
     button2 = "Open Settings",
     OnAccept = function()
-        PrintNice("|cffb6ffb6Defaults kept.|r Type |cffffff00/ec|r any time to customise.")
+        PrintNice("|cffb6ffb6Defaults kept.|r Type |cffffff00/ec|r any time to change settings.")
     end,
     OnCancel = function()
         local mainPanel = _G["EbonClearanceOptionsMain"]
@@ -4743,24 +4746,24 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
         -- Full reference; the Main panel only shows a 4-line summary so it
         -- fits the default Interface Options sub-panel height. Chat has no
         -- height constraint, so the long list lives here instead.
-        PrintNice("|cffffff00=== EbonClearance Slash Commands ===|r")
+        PrintNice("|cffffff00=== EbonClearance Commands ===|r")
         PrintNice("|cffffff00/ec|r  Open settings")
-        PrintNice("|cffffff00/ec profile list|r  Show all saved profiles")
-        PrintNice("|cffffff00/ec profile save <name>|r  Save current Sell List as a profile")
+        PrintNice("|cffffff00/ec profile list|r  Show your saved profiles")
+        PrintNice("|cffffff00/ec profile save <name>|r  Save your current Sell List as a profile")
         PrintNice("|cffffff00/ec profile load <name>|r  Load a saved profile")
         PrintNice("|cffffff00/ec profile delete <name>|r  Delete a profile")
-        PrintNice("|cffffff00/ec clean|r  Report items present in more than one list")
-        PrintNice("|cffffff00/ec clean apply|r  Auto-resolve conflicts (Keep List > Delete List > Sell List)")
+        PrintNice("|cffffff00/ec clean|r  Find items that appear on more than one list")
+        PrintNice("|cffffff00/ec clean apply|r  Fix list conflicts automatically (Keep > Delete > Sell)")
         PrintNice(
-            "|cffffff00/ec clean upgrades|r  Report stale 'Upgrade'-tagged Keep List entries no longer above equipped"
+            "|cffffff00/ec clean upgrades|r  Find old 'Upgrade'-tagged Keep List items that aren't upgrades any more"
         )
-        PrintNice("|cffffff00/ec clean upgrades apply|r  Remove the stale 'Upgrade' entries (with confirmation)")
-        PrintNice("|cffffff00/ec bugreport|r  Generate a diagnostic report for bug reports")
+        PrintNice("|cffffff00/ec clean upgrades apply|r  Remove those old 'Upgrade' items (with confirmation)")
+        PrintNice("|cffffff00/ec bugreport|r  Generate a report to share when something's wrong")
         PrintNice(
-            "|cffffff00/ec sellinfo [bag slot]|r  Trace why a bag item will/won't sell (defaults to first non-empty slot)"
+            "|cffffff00/ec sellinfo [bag slot]|r  Explain why an item will or won't sell (defaults to first non-empty slot)"
         )
-        PrintNice("|cffaaaaaaTip: Alt+Shift+Right-Click a bag item for the same trace.|r")
-        PrintNice("|cffffff00/ecdebug|r  Show debug info and bag scan")
+        PrintNice("|cffaaaaaaTip: Alt+Shift+Right-Click a bag item for the same explanation.|r")
+        PrintNice("|cffffff00/ecdebug|r  Show debug info and a bag scan")
         return
     end
 

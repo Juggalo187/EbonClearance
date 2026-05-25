@@ -94,7 +94,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         NS.MakeHeader(content, "Protection Settings", -16)
         local desc = NS.MakeLabel(
             content,
-            "Automatic protection rules. Items matched by any rule below are added to your Keep List automatically and excluded from auto-sell.",
+            "Rules that keep specific items safe from selling. You can override any of them on a single item with Alt+Right-Click - Allow Sell.",
             16,
             -44
         )
@@ -117,7 +117,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoEquipCB:SetChecked(DB.autoAddEquipped)
         local aeText = _G[autoEquipCB:GetName() .. "Text"]
         if aeText then
-            aeText:SetText("Auto-protect equipped gear")
+            aeText:SetText("Keep gear you're wearing")
             EC_compCache.setPanelWidth(aeText, 60)
             aeText:SetJustifyH("LEFT")
         end
@@ -141,7 +141,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             autoEquipNote:SetWordWrap(true)
         end
         autoEquipNote:SetText(
-            "|cff888888Adds your equipped gear to the Keep List, and anything you equip later. Alt+Right-Click an item to remove it.|r"
+            "|cff888888Anything you wear is kept automatically. Alt+Right-Click to remove an item from the Keep List.|r"
         )
 
         -- v2.11.0 auto-protect upgrades. The companion to v2.10.0's auto-
@@ -161,7 +161,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoUpgradeCB:SetChecked(DB.autoProtectUpgrades)
         local auText = _G[autoUpgradeCB:GetName() .. "Text"]
         if auText then
-            auText:SetText("Auto-protect upgraded gear in bags")
+            auText:SetText("Keep upgrades found in bags")
             EC_compCache.setPanelWidth(auText, 60)
             auText:SetJustifyH("LEFT")
         end
@@ -185,7 +185,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             autoUpgradeNote:SetWordWrap(true)
         end
         autoUpgradeNote:SetText(
-            "|cff888888Auto-Keeps bag items with a higher iLvl than your current gear in the same slot.|r"
+            "|cff888888Items with a higher item level than what you're wearing get kept.|r"
         )
 
         -- v2.13.0 Equipment Manager protection. Catches the dual-spec /
@@ -199,7 +199,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoSetCB:SetChecked(DB.autoProtectEquipmentSets)
         local asText = _G[autoSetCB:GetName() .. "Text"]
         if asText then
-            asText:SetText("Auto-protect items in Blizzard equipment sets")
+            asText:SetText("Keep items in your saved equipment sets")
             EC_compCache.setPanelWidth(asText, 60)
             asText:SetJustifyH("LEFT")
         end
@@ -223,7 +223,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             autoSetNote:SetWordWrap(true)
         end
         autoSetNote:SetText(
-            "|cff888888Auto-Keeps every item in your saved equipment-manager sets. Removing a set doesn't drop its items from the Keep List - Alt+Right-Click to remove them.|r"
+            "|cff888888Every item in your saved gear sets is kept. Removing a set doesn't unkeep its items - Alt+Right-Click to remove them.|r"
         )
 
         -- v2.19.0 PE roguelite affix protection. The base itemID of an
@@ -245,7 +245,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         autoAffixCB:SetChecked(DB.protectAffixedRareItems)
         local aaText = _G[autoAffixCB:GetName() .. "Text"]
         if aaText then
-            aaText:SetText("Protect rare/epic items with random affixes")
+            aaText:SetText("Keep blue/purple items with affixes")
             EC_compCache.setPanelWidth(aaText, 60)
             aaText:SetJustifyH("LEFT")
         end
@@ -275,7 +275,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             autoAffixNote:SetWordWrap(true)
         end
         autoAffixNote:SetText(
-            "|cff888888Blue/Purple items with a random affix (e.g. |cffffb84d'of Fortified by Pain IV'|r|cff888888) are never sold or deleted, even when their itemID is listed.|r"
+            "|cff888888Items like |cffffb84d'of Fortified by Pain IV'|r|cff888888 are never sold or deleted, even if they're on a list.|r"
         )
 
         -- v2.23.0 child toggle: exact-rank duplicate gate on the affix
@@ -297,7 +297,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         dupeAffixCB:SetChecked(DB.affixAllowExactDupes)
         local daText = _G[dupeAffixCB:GetName() .. "Text"]
         if daText then
-            daText:SetText("Allow exact-rank duplicates to be sold / disenchanted")
+            daText:SetText("Allow selling affixes you already have")
             EC_compCache.setPanelWidth(daText, 86)
             daText:SetJustifyH("LEFT")
         end
@@ -337,7 +337,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
                     daText:SetTextColor(1, 1, 1)
                 end
                 dupeAffixNote:SetText(
-                    "|cff888888Drops you already have at the same rank fall through to your sell rules. Different ranks of the same affix stay protected so you can still collect them all.|r"
+                    "|cff888888If you already have the affix at this rank, drops follow your normal sell rules. Different ranks stay protected so you can still collect them all.|r"
                 )
             else
                 dupeAffixCB:Disable()
@@ -346,10 +346,10 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
                 end
                 if not peOn then
                     dupeAffixNote:SetText(
-                        "|cff888888Project Ebonhold addon not detected. This feature needs PE's perk service to know which affixes you have.|r"
+                        "|cff888888Project Ebonhold addon not detected. This option needs PE to know which affixes you have.|r"
                     )
                 else
-                    dupeAffixNote:SetText("|cff888888Enable the affix protection above to use this option.|r")
+                    dupeAffixNote:SetText("|cff888888Turn on the affix protection above to use this option.|r")
                 end
             end
         end
@@ -395,7 +395,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         procCB:SetChecked(DB.protectChanceOnHitItems)
         local pcText = _G[procCB:GetName() .. "Text"]
         if pcText then
-            pcText:SetText("Protect items with Chance on hit: effects")
+            pcText:SetText("Keep items with chance-on-hit procs")
             EC_compCache.setPanelWidth(pcText, 60)
             pcText:SetJustifyH("LEFT")
         end
@@ -409,7 +409,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             procNote:SetWordWrap(true)
         end
         procNote:SetText(
-            "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 proc are skipped by the quality-threshold sweep. Explicitly listing them on the Sell or Delete List still works.|r"
+            "|cff888888Items with a |cffffb84d'Chance on hit:'|r|cff888888 effect are kept unless you add them to a list yourself.|r"
         )
 
         -- v2.26.0 child toggle: exact-proc duplicate gate on the chance-
@@ -452,7 +452,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         unlearnedTomeCB:SetChecked(DB.protectUnlearnedTomes)
         local utText = _G[unlearnedTomeCB:GetName() .. "Text"]
         if utText then
-            utText:SetText("Protect tomes and recipes")
+            utText:SetText("Keep unlearned tomes and recipes")
             EC_compCache.setPanelWidth(utText, 60)
             utText:SetJustifyH("LEFT")
         end
@@ -466,7 +466,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             unlearnedTomeNote:SetWordWrap(true)
         end
         unlearnedTomeNote:SetText(
-            "|cff888888Spell-teaching items the character does not yet know are protected. Alt+Right-Click |cffffb84d-> Allow Sell|r|cff888888 is required to vendor a protected item; Sell List membership alone does not bypass the protection.|r"
+            "|cff888888Tomes and recipes you don't know yet are kept. To sell one anyway, Alt+Right-Click |cffffb84d-> Allow Sell|r|cff888888. Adding it to the Sell List alone won't override the protection.|r"
         )
 
         -- Child toggle: extends protection to already-known items.
@@ -483,7 +483,7 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         allTomeCB:SetChecked(DB.protectAllTomes)
         local atText = _G[allTomeCB:GetName() .. "Text"]
         if atText then
-            atText:SetText("Even when already known")
+            atText:SetText("Keep them even after you learn them")
             EC_compCache.setPanelWidth(atText, 86)
             atText:SetJustifyH("LEFT")
         end
@@ -517,14 +517,14 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
                     atText:SetTextColor(1, 1, 1)
                 end
                 allTomeNote:SetText(
-                    "|cff888888Extends the protection to items the character has already learned. Useful for hoarding spare recipes / plans for alts or selling later.|r"
+                    "|cff888888Useful if you'd rather sell duplicates at the auction house yourself instead of vendoring them.|r"
                 )
             else
                 allTomeCB:Disable()
                 if atText then
                     atText:SetTextColor(0.5, 0.5, 0.5)
                 end
-                allTomeNote:SetText("|cff888888Enable the protection above to use this option.|r")
+                allTomeNote:SetText("|cff888888Turn on the protection above to use this option.|r")
             end
         end
         self.UpdateAllTomeEnabled = UpdateAllTomeEnabled
