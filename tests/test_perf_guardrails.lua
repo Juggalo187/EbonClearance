@@ -4014,6 +4014,195 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 66 (v2.34.x): per-character partition of EbonClearanceDB.
+-- ---------------------------------------------------------------------------
+-- Background. The .toc declares `## SavedVariables: EbonClearanceDB` which
+-- makes the table account-wide. The documented intent (and the user
+-- mental model) is that the lists, profiles, and per-mode preferences are
+-- per-character. The mismatch surfaced in-game as the auto-Keep-equipped
+-- tag leaking onto a freshly-logged alt that had never worn the item.
+--
+-- v2.34.x partitions inside EbonClearanceDB: top-level stays as the legacy
+-- snapshot (downgrade safety + migration seed); each character's live
+-- data lives at EbonClearanceDB.chars[charKey]. DB is a metatable proxy
+-- so existing call sites stay unchanged. This test locks the structural
+-- invariants:
+--   * The PER_CHAR_FIELDS table is declared with the documented field
+--     set (so a future contributor adding a new per-character field
+--     remembers to include it here).
+--   * EnsureDB walks PER_CHAR_FIELDS at migration time.
+--   * EnsureDB initialises EbonClearanceDB.chars and seeds the per-
+--     character namespace from the snapshot.
+--   * DB is built via the proxy (setmetatable with __index + __newindex
+--     branching on PER_CHAR_FIELDS).
+--   * The PLAYER_LOGOUT branch no longer reassigns
+--     `EbonClearanceDB = DB` (which would clobber the SV with the proxy).
+do
+    local expectedFields = {
+        "blacklist",
+        "blacklistAuto",
+        "whitelist",
+        "deleteList",
+        "whitelistProfiles",
+        "blacklistProfiles",
+        "activeProfileName",
+        "processIgnored",
+        "processCollapsedModes",
+    }
+
+    check(
+        "PER_CHAR_FIELDS table declared",
+        src:find("local%s+PER_CHAR_FIELDS%s*=") ~= nil,
+        "the per-character field set must live as a file-local table in EbonClearance_Events.lua so the proxy and the migration walk reference the same canonical list"
+    )
+
+    for _, name in ipairs(expectedFields) do
+        check(
+            "PER_CHAR_FIELDS includes " .. name,
+            src:find(name .. "%s*=%s*true") ~= nil,
+            "missing per-character field would route the field through the account-wide top-level (defeats the migration)"
+        )
+    end
+
+    check(
+        "EnsureDB initialises EbonClearanceDB.chars",
+        src:find("EbonClearanceDB%.chars%s*==%s*nil") ~= nil,
+        "EnsureDB must initialise the chars namespace on first load with the new schema"
+    )
+
+    check(
+        "EnsureDB seeds per-character namespace from snapshot via deep copy",
+        src:find("EC_DBDeepCopy%(EbonClearanceDB%[k%]%)") ~= nil,
+        "each character's first load must deep-copy the legacy top-level snapshot into chars[charKey] so the pre-migration baseline survives and is consistent across characters"
+    )
+
+    check(
+        "DB is built via EC_DBBuildProxy",
+        src:find("DB%s*=%s*EC_DBBuildProxy%(") ~= nil,
+        "DB must be the metatable proxy so per-char vs account-wide routing happens automatically at every call site"
+    )
+
+    check(
+        "DB proxy uses metatable __index branching on PER_CHAR_FIELDS",
+        src:find("__index%s*=%s*function") ~= nil and src:find("PER_CHAR_FIELDS%[k%]") ~= nil,
+        "the proxy __index must branch on PER_CHAR_FIELDS membership; routing every read through PER_CHAR_FIELDS preserves the existing `DB.foo` call-site shape"
+    )
+
+    check(
+        "DB proxy uses metatable __newindex branching on PER_CHAR_FIELDS",
+        src:find("__newindex%s*=%s*function") ~= nil,
+        "the proxy __newindex must route writes by PER_CHAR_FIELDS membership so per-character mutations don't leak to the account-wide top level"
+    )
+
+    -- Strip line + block comments so docstrings that mention the banned
+    -- pattern in their explanation don't false-positive (matches the
+    -- approach in Test 65). Only the executable assignment is forbidden.
+    local srcCode = src:gsub("%-%-[^\n]*", ""):gsub("%-%-%[%[.-%]%]", "")
+    check(
+        "PLAYER_LOGOUT does NOT reassign EbonClearanceDB to DB",
+        srcCode:find("EbonClearanceDB%s*=%s*DB[^%w_]") == nil
+            and not srcCode:match("EbonClearanceDB%s*=%s*DB$"),
+        "with DB as a proxy, the assignment that used to live in PLAYER_LOGOUT would overwrite the SavedVariable with an empty proxy table and wipe the user's data on next logout. The PLAYER_LOGOUT branch must not contain this assignment."
+    )
+
+    -- v2.34.x cross-character cleanup. Locks that the initial migration's
+    -- merged-blacklist leak is repaired and gated by a one-shot per-char
+    -- flag so it can't re-fire and clobber live data on each /reload.
+    check(
+        "EnsureDB cleanup gates on per-char _migratedV2 flag",
+        srcCode:find("charNS%._migratedV2") ~= nil
+            and srcCode:find("charNS%._migratedV2%s*=%s*true") ~= nil,
+        "the cleanup must run exactly once per character. Without the gate, every /reload would re-drop blacklist entries the live auto-protect paths just re-added under this character's authoritative login."
+    )
+
+    check(
+        "EnsureDB cleanup drops blacklist entries flagged in the legacy snapshot",
+        srcCode:find("legacyAuto%s*=%s*EbonClearanceDB%.blacklistAuto") ~= nil
+            and srcCode:find("charNS%.blacklist%[id%]%s*=%s*nil") ~= nil,
+        "items present in the legacy snapshot's blacklistAuto were auto-added pre-migration (potentially by a DIFFERENT character) and must be dropped from this character's Keep list. Manual entries (no blacklistAuto tag) stay because they were explicit user intent."
+    )
+
+    check(
+        "EnsureDB cleanup also clears matching entries from chars[k].blacklistAuto",
+        srcCode:find("charNS%.blacklistAuto%[id%]%s*=%s*nil") ~= nil,
+        "the per-character blacklistAuto map was deep-copied from the legacy snapshot at v2.34.0 migration time; the cleanup must clear the same set of legacy IDs from it too, so live auto-protect paths can repopulate authentically."
+    )
+
+    check(
+        "EnsureDB cleanup arms pendingFreshInstallSync so live equip path repopulates",
+        srcCode:find("EC_compCache%.pendingFreshInstallSync%s*=%s*true") ~= nil,
+        "after dropping legacy auto entries, the live equipment sync must re-add the gear this character is currently wearing under their own login. The pendingFreshInstallSync flag is consumed by the PLAYER_LOGIN handler with a 2 s settle delay."
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 67 (v2.34.x): bagSlotAffixData cache-poison guard.
+-- ---------------------------------------------------------------------------
+-- Background. A user reported that an Epic Rare/affixed item kept getting
+-- vendored despite EC_AnnotateTooltip correctly displaying the
+-- "Keep (new affix)" protection label. EC_IsSellable's affix gate calls
+-- EC_compCache.bagSlotAffixData(bag, slot); the live-tooltip path that
+-- the tooltip annotation uses doesn't share that helper. The divergence
+-- traced to bagSlotAffixData's per-itemString cache: the original
+-- implementation cached `false` unconditionally whenever parseAffixFromTitle
+-- returned nil. Fresh affixed drops sometimes hit bagSlotAffixData BEFORE
+-- the link's suffix-DBC field had been fully resolved client-side, so the
+-- tooltip's TextLeft1 hadn't yet been populated with the affix-suffixed
+-- name. The cold-cache scan failed to parse, cached `false`, and the
+-- entry never got re-scanned for the rest of the session - while the
+-- live tooltip (no cache) kept reading the now-populated title and
+-- correctly identifying the affix.
+--
+-- Fix: only cache `false` when the title positively identifies the item
+-- as not a PE roguelite affix - title is non-empty AND doesn't end with
+-- a trailing roman-numeral rank suffix. Empty / cold titles are NOT
+-- cached so the next call retries after the link loads.
+--
+-- This test locks the guard so a future regression that drops the
+-- stability check would fail loudly in CI.
+do
+    -- Pull the bagSlotAffixData body out of the concatenated source.
+    -- The function ends at the first `^end$` after the function header.
+    local fnStart = src:find("function EC_compCache%.bagSlotAffixData%(")
+    local body
+    if fnStart then
+        local searchFrom = fnStart
+        local headerEnd = src:find("\n", searchFrom)
+        if headerEnd then
+            -- Find the matching end by scanning for the next line that is
+            -- exactly `end` after our function start.
+            local endPos = src:find("\nend\n", headerEnd, true)
+            if endPos then
+                body = src:sub(fnStart, endPos + 4)
+            end
+        end
+    end
+
+    check(
+        "bagSlotAffixData function located",
+        body ~= nil,
+        "the cache-poison guard test cannot run without the function body; check Protection.lua hasn't been refactored away from a top-level `function EC_compCache.bagSlotAffixData(` definition"
+    )
+
+    if body then
+        check(
+            "bagSlotAffixData does not cache `false` unconditionally on parse failure",
+            body:find("EC_compCache%.affixDataCache%[itemString%]%s*=%s*false") ~= nil
+                and body:find("stableNoAffix") ~= nil,
+            "the cache must be gated by a positive non-affix discriminator (title without a trailing roman-numeral rank suffix). Caching `false` unconditionally on parseAffixFromTitle returning nil reproduces the cold-tooltip cache-poison bug: a fresh affixed drop scanned before its title fully populated would be permanently masked, and EC_IsSellable would vendor the item despite EC_AnnotateTooltip correctly protecting it."
+        )
+
+        check(
+            "bagSlotAffixData inspects the title text for the roman-suffix discriminator",
+            body:find("titleText:match%(\" %[IVXLCDM%]%+\\?%$\"%)") ~= nil
+                or body:find("titleText:match%(\" %[IVXLCDM%]\\?%+%\\?%$\"%)") ~= nil
+                or body:find("%[IVXLCDM%]%+\\?%$") ~= nil,
+            "the no-affix-cache guard depends on a roman-suffix absence check against the live title text - if the discriminator is changed or removed, the cold-tooltip cache-poison regression reappears"
+        )
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Result.
 -- ---------------------------------------------------------------------------
 print()

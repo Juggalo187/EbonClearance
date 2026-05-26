@@ -209,6 +209,81 @@ NS.PET_NAME = PET_NAME
 NS.TARGET_NAME = TARGET_NAME
 NS.PET_NAME_LC = PET_NAME_LC
 
+-- ===========================================================================
+-- Per-character partition (v2.34.x migration).
+-- ---------------------------------------------------------------------------
+-- The .toc declares `## SavedVariables: EbonClearanceDB, EbonClearanceAccountDB`
+-- which makes BOTH tables account-wide. Prior to this migration the
+-- documented "per-character" semantics for the lists / profiles / per-mode
+-- preferences were silently account-wide; every character on the account
+-- shared the same Keep List, Sell List, Delete List, profile catalogue,
+-- and the Process Bags ignore / collapsed-section state. Reported in-game
+-- as the auto-Keep-equipped tag leaking onto a freshly-logged alt that
+-- had never worn the item.
+--
+-- Fix without a .toc-directive change (which would risk cross-character
+-- data loss because WoW serializes per-saved-variable-name): partition
+-- inside the existing account-wide table.
+--
+--   * Top-level `EbonClearanceDB.<field>` stays as the legacy snapshot.
+--     Reads / writes from current code never go here (the proxy routes
+--     PER_CHAR_FIELDS to the per-character namespace). The snapshot is
+--     the seed for newly-migrated characters AND the downgrade safety
+--     net: a v2.33.x-or-earlier client looking for `DB.blacklist` etc.
+--     still finds its pre-migration baseline at the top level.
+--   * `EbonClearanceDB.chars[charKey]` holds each character's live data.
+--     Each character gets a deep-copy of the snapshot on first load with
+--     the new schema, then diverges from there.
+--   * `DB` is a metatable proxy: PER_CHAR_FIELDS route to
+--     `chars[charKey]`, everything else routes to the top level.
+--
+-- Test 66 in tests/test_perf_guardrails.lua locks the structural
+-- invariants of this partition.
+local PER_CHAR_FIELDS = {
+    blacklist = true,
+    blacklistAuto = true,
+    whitelist = true,
+    deleteList = true,
+    whitelistProfiles = true,
+    blacklistProfiles = true,
+    activeProfileName = true,
+    processIgnored = true,
+    processCollapsedModes = true,
+}
+
+local function EC_DBCharKey()
+    return (UnitName("player") or "Unknown") .. "-" .. (GetRealmName() or "Unknown")
+end
+
+local function EC_DBDeepCopy(t)
+    if type(t) ~= "table" then
+        return t
+    end
+    local c = {}
+    for k, v in pairs(t) do
+        c[k] = EC_DBDeepCopy(v)
+    end
+    return c
+end
+
+local function EC_DBBuildProxy(charNamespace)
+    return setmetatable({}, {
+        __index = function(_, k)
+            if PER_CHAR_FIELDS[k] then
+                return charNamespace[k]
+            end
+            return rawget(EbonClearanceDB, k)
+        end,
+        __newindex = function(_, k, v)
+            if PER_CHAR_FIELDS[k] then
+                charNamespace[k] = v
+            else
+                rawset(EbonClearanceDB, k, v)
+            end
+        end,
+    })
+end
+
 local DB
 -- Account-wide SavedVariable. Holds a single `whitelist` table that unions with
 -- the per-character whitelist at sell time. Bootstrapped by EnsureAccountDB().
@@ -337,10 +412,81 @@ local function EnsureDB()
     if EbonClearanceDB == nil then
         EbonClearanceDB = {}
     end
-    DB = EbonClearanceDB
+
+    -- Per-character partition (v2.34.x). See the PER_CHAR_FIELDS block at
+    -- the top of the file for the rationale. Top-level fields remain as
+    -- the legacy snapshot (downgrade safety + migration seed); each
+    -- character's live data lives at EbonClearanceDB.chars[charKey].
+    if EbonClearanceDB.chars == nil then
+        EbonClearanceDB.chars = {}
+    end
+    local charKey = EC_DBCharKey()
+    if not EbonClearanceDB.chars[charKey] then
+        local charNS = {}
+        for k in pairs(PER_CHAR_FIELDS) do
+            if EbonClearanceDB[k] ~= nil then
+                charNS[k] = EC_DBDeepCopy(EbonClearanceDB[k])
+            end
+        end
+        EbonClearanceDB.chars[charKey] = charNS
+    end
+
+    -- v2.34.x cleanup pass for the cross-character auto-Keep leak.
+    -- ----------------------------------------------------------------
+    -- The initial per-character migration above deep-copies the entire
+    -- legacy snapshot into every newly-migrated character's namespace.
+    -- That preserves manual user adds (Sell / Keep / Delete lists)
+    -- correctly, but it also carries forward AUTO-added entries that
+    -- were stamped by some OTHER character during the pre-migration
+    -- account-wide period: equipped gear, upgrade detections, equipment-
+    -- set items. Symptom in-game: the main character picks up an item
+    -- only the alt has ever worn and the tooltip still says
+    -- "Keep (equipped)" because the legacy auto-tag is on this
+    -- character's namespace too.
+    --
+    -- Fix: drop blacklist + blacklistAuto entries that appear in the
+    -- LEGACY snapshot's blacklistAuto map (top-level, frozen). Those
+    -- are by definition auto-added pre-migration. Manual blacklist
+    -- entries (no blacklistAuto tag) are preserved.
+    --
+    -- The live auto-protect paths (PLAYER_EQUIPMENT_CHANGED ->
+    -- protectEquipSlot, checkBagsForUpgrades, EQUIPMENT_SETS_CHANGED)
+    -- will repopulate this character's tags authentically under their
+    -- own login. To make that immediate for currently-equipped gear,
+    -- arm pendingFreshInstallSync so PLAYER_LOGIN runs syncEquipped
+    -- after a 2 s settle.
+    --
+    -- Gate via `_migratedV2` so the cleanup runs exactly once per
+    -- character; otherwise a subsequent /reload would re-drop entries
+    -- the live paths just re-added.
+    local charNS = EbonClearanceDB.chars[charKey]
+    if not charNS._migratedV2 then
+        local legacyAuto = EbonClearanceDB.blacklistAuto
+        if type(legacyAuto) == "table" then
+            if type(charNS.blacklist) == "table" then
+                for id in pairs(legacyAuto) do
+                    charNS.blacklist[id] = nil
+                end
+            end
+            if type(charNS.blacklistAuto) == "table" then
+                for id in pairs(legacyAuto) do
+                    charNS.blacklistAuto[id] = nil
+                end
+            end
+        end
+        charNS._migratedV2 = true
+        if EbonClearanceDB.autoAddEquipped then
+            EC_compCache.pendingFreshInstallSync = true
+        end
+    end
+
+    -- DB is a metatable proxy so existing call sites (`DB.foo`) keep
+    -- working unchanged. Per-character fields route to chars[charKey];
+    -- everything else stays on the top-level (account-wide) table.
+    DB = EC_DBBuildProxy(EbonClearanceDB.chars[charKey])
     -- Mirror the live DB binding onto the namespace so split files can
-    -- read NS.DB inline at call time. Same table; both names alias the
-    -- same memory. EnsureAccountDB() below does the same for ADB. See
+    -- read NS.DB inline at call time. Same proxy; both names alias it.
+    -- EnsureAccountDB() below does the same for ADB. See
     -- docs/CODE_REVIEW.md item 4.
     NS.DB = DB
     EnsureAccountDB()
@@ -5133,9 +5279,13 @@ f:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "PLAYER_LOGOUT" then
-        if DB then
-            EbonClearanceDB = DB
-        end
+        -- No-op. The previous body (`EbonClearanceDB = DB`) was a defensive
+        -- mirror back to the saved-variable when DB == EbonClearanceDB.
+        -- After the v2.34.x per-character partition, DB is a metatable
+        -- proxy, NOT the saved table itself; reassigning EbonClearanceDB
+        -- to the proxy would replace the SV with an empty table and
+        -- wipe the user's data on next logout. WoW serialises whatever
+        -- EbonClearanceDB points to natively; we don't need to nudge it.
     elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         EnsureDB()
         if NS.InstallGreedyMuteOnce then

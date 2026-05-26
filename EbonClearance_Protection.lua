@@ -310,9 +310,30 @@ function EC_compCache.bagSlotAffixData(bag, slot)
     if not titleFS or not titleFS.GetText then
         return nil
     end
-    local data = EC_compCache.parseAffixFromTitle(titleFS:GetText(), baseName)
+    local titleText = titleFS:GetText() or ""
+    local data = EC_compCache.parseAffixFromTitle(titleText, baseName)
     if not data then
-        if itemString then
+        -- Cache-poison guard. A fresh affixed drop sometimes hits this
+        -- function before its tooltip's TextLeft1 has fully resolved
+        -- (the link's suffix-DBC field needs a client-side load pass).
+        -- The earlier implementation cached `false` unconditionally, so
+        -- a cold-tooltip scan permanently masked the affix for the rest
+        -- of the session - EC_IsSellable then saw "no affix" and the
+        -- item vendored / DE'd despite EC_AnnotateTooltip (which reads
+        -- the live tooltip with no cache) correctly showing the Keep
+        -- protection label.
+        --
+        -- Fix: only cache `false` when we can positively identify the
+        -- item as not a PE roguelite affix. The stable discriminator is
+        -- the trailing roman-numeral rank suffix; its absence in a
+        -- non-empty title is conclusive (standard ItemRandomSuffix.dbc
+        -- entries like "of the Bear" also fall into this bucket and
+        -- get cached cheaply). Empty / unparseable titles, AND titles
+        -- that DO have a roman suffix but failed parseAffixFromTitle
+        -- for some other reason, are NOT cached so the next call
+        -- retries cleanly after the client finishes loading the link.
+        local stableNoAffix = titleText ~= "" and titleText:match(" [IVXLCDM]+$") == nil
+        if itemString and stableNoAffix then
             EC_compCache.affixDataCache[itemString] = false
         end
         return nil

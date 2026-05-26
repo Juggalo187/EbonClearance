@@ -66,12 +66,45 @@ EbonClearance.lua
 Bindings.xml
 ```
 
-`EbonClearanceDB` is per-character (default for `## SavedVariables`);
-`EbonClearanceAccountDB` is account-wide and stores the shared
-whitelist that gets unioned at sell time. If you ever add a
-character-scoped var that should *not* persist across characters in
-this account, use `## SavedVariablesPerCharacter`. We do not use
-`Dependencies`, `OptionalDeps`, `LoadOnDemand`, or `LoadManagers`.
+Both `EbonClearanceDB` and `EbonClearanceAccountDB` are declared with
+`## SavedVariables`, which is **account-wide** in WoW's saved-variable
+model. (Earlier revisions of this guide claimed `EbonClearanceDB` was
+per-character "by default" - that was wrong; `## SavedVariables` has
+always been account-wide and the per-character variant is the explicit
+`## SavedVariablesPerCharacter` directive.)
+
+Per-character semantics for the lists, profiles, and per-mode
+preferences are restored via an **in-table partition** introduced in
+v2.34.x (see the `PER_CHAR_FIELDS` block near the top of
+[`EbonClearance_Events.lua`](../EbonClearance_Events.lua)):
+
+- `EbonClearanceDB.chars[<character>-<realm>]` holds each character's
+  live per-character data (Keep / Sell / Delete lists, profiles, plus
+  Process Bags ignore + collapsed sections).
+- Top-level `EbonClearanceDB.<field>` is the **legacy snapshot** -
+  frozen at migration time. It serves two roles: the seed each newly
+  migrated character deep-copies on first load, and the downgrade
+  safety net (a v2.33.x-or-earlier client looking for `DB.blacklist`
+  etc. still finds its pre-migration baseline at the top level).
+- `EbonClearanceAccountDB` is account-wide and stores the shared sell
+  whitelist that gets unioned at sell time, plus the v2.26.0+
+  Allow Sell override tables.
+
+Inside Lua, `DB` is a metatable proxy. Reads / writes for fields
+listed in `PER_CHAR_FIELDS` route to `chars[charKey]`; everything else
+routes to the top-level table. Call sites use the existing `DB.foo`
+shape unchanged. The PLAYER_LOGOUT branch deliberately does **not**
+reassign `EbonClearanceDB = DB` - that would overwrite the
+SavedVariable with the empty proxy table on serialization.
+
+Adding a new per-character field means adding the field name to the
+`PER_CHAR_FIELDS` table; the proxy routes both reads and writes
+automatically. Test 66 in
+[`tests/test_perf_guardrails.lua`](../tests/test_perf_guardrails.lua)
+locks the partition's structural invariants.
+
+We do not use `Dependencies`, `OptionalDeps`, `LoadOnDemand`, or
+`LoadManagers`.
 
 `Bindings.xml` declares the three bindable actions and is loaded
 straight after the Lua. Do not move bindings into Lua - WoW expects
