@@ -256,7 +256,7 @@ MerchantPanel:SetScript("OnShow", function(self)
             fastModeNote:SetWordWrap(true)
         end
         fastModeNote:SetText(
-            "|cff888888Sells faster. May cause disconnects on unstable connections - turn off if it does.|r"
+            "|cff888888May cause disconnects on unstable connections - turn off if it does.|r"
         )
 
         -- Quality threshold (v2.4.0+): three per-rarity rows, each independently
@@ -265,17 +265,7 @@ MerchantPanel:SetScript("OnShow", function(self)
         local thresholdHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
         thresholdHeader:SetPoint("TOPLEFT", fastModeNote, "BOTTOMLEFT", -26, -24)
         thresholdHeader:SetText("Quality Threshold")
-
-        local thresholdDesc = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        thresholdDesc:SetPoint("TOPLEFT", thresholdHeader, "BOTTOMLEFT", 0, -4)
-        EC_compCache.setPanelWidth(thresholdDesc, 16)
-        thresholdDesc:SetJustifyH("LEFT")
-        if thresholdDesc.SetWordWrap then
-            thresholdDesc:SetWordWrap(true)
-        end
-        thresholdDesc:SetText(
-            "Sell rules for each rarity. Tick the box to turn a rule on. Tick |cffffff00Use equipped iLvl|r to compare against what you're wearing in that slot (recommended). Or set a fixed |cffffff00max iLvl|r - 0 means sell every item of that rarity. |cffaaaaaaYour Sell List always sells; your Keep List always keeps.|r"
-        )
+        NS.AddHelpIcon(content, thresholdHeader, "LEFT", "RIGHT", 6, 0, "gate-quality-rules")
 
         -- v2.10.0: bind-type filter options shared across all four rarity rows.
         -- "any" = today's behaviour (rule applies regardless of bind type);
@@ -508,10 +498,18 @@ MerchantPanel:SetScript("OnShow", function(self)
             UIDropDownMenu_SetText(bindDD, EC_BindFilterText(DB.qualityRules[qualityIdx].bindFilter))
             UIDropDownMenu_Initialize(bindDD, BindFilterInit)
 
+            -- Per-row help icon deep-linking into the Help entry that
+            -- explains the Fixed-iLvl-cap vs. Use-equipped-iLvl decision.
+            -- Placed after the bind dropdown on the row's second line so
+            -- the icon has horizontal breathing room without colliding
+            -- with the row's first-line widgets (rarity label / useEq /
+            -- maxILvl input).
+            NS.AddHelpIcon(content, bindDD, "LEFT", "RIGHT", 4, 2, "gate-fixed-vs-equipped-ilvl")
+
             return cb, input, bindDD, useEqCB
         end
 
-        -- All four rarity rows anchor their checkbox to the threshold description,
+        -- All four rarity rows anchor their checkbox to the threshold header,
         -- not to the previous row's dropdown. The dropdown's left edge is offset
         -- by the UIDropDownMenuTemplate's internal padding (~16 px), and chaining
         -- row N to row N-1's dropdown made each successive row staircase right.
@@ -521,15 +519,17 @@ MerchantPanel:SetScript("OnShow", function(self)
         -- Per-row vertical budget: ~28 px (checkbox + label) + ~6 px gap + ~30 px
         -- dropdown frame + ~10 px gap to next row = ~74 px. -78 leaves a small
         -- breathing margin between rows without overlapping the dropdown's
-        -- bottom shadow.
+        -- bottom shadow. The first row sits -16 below the header (was -10 below
+        -- a multi-line description block before Task 16 stripped it - the [?]
+        -- icon next to the header now carries the explanation).
         local row1CB, row1Input, row1DD, row1UseEq =
-            MakeQualityRow(thresholdDesc, 1, EC_WHITELIST_QUALITIES[1].text, -10)
+            MakeQualityRow(thresholdHeader, 1, EC_WHITELIST_QUALITIES[1].text, -16)
         local row2CB, row2Input, row2DD, row2UseEq =
-            MakeQualityRow(thresholdDesc, 2, EC_WHITELIST_QUALITIES[2].text, -88)
+            MakeQualityRow(thresholdHeader, 2, EC_WHITELIST_QUALITIES[2].text, -94)
         local row3CB, row3Input, row3DD, row3UseEq =
-            MakeQualityRow(thresholdDesc, 3, EC_WHITELIST_QUALITIES[3].text, -166)
+            MakeQualityRow(thresholdHeader, 3, EC_WHITELIST_QUALITIES[3].text, -172)
         local row4CB, row4Input, row4DD, row4UseEq =
-            MakeQualityRow(thresholdDesc, 4, EC_WHITELIST_QUALITIES[4].text, -244)
+            MakeQualityRow(thresholdHeader, 4, EC_WHITELIST_QUALITIES[4].text, -250)
 
         self.qualityRow1CB, self.qualityRow1Input, self.qualityRow1DD, self.qualityRow1UseEq =
             row1CB, row1Input, row1DD, row1UseEq
