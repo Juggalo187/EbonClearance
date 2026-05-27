@@ -4543,10 +4543,6 @@ StaticPopupDialogs["EC_WELCOME"] = {
 
 
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsMain"])
--- v2.36.x: Stats sub-panel registered here so its sort position (between
--- Main and Merchant) is controlled in one place. The Stats panel file
--- itself does not call InterfaceOptions_AddCategory.
-InterfaceOptions_AddCategory(_G["EbonClearanceOptionsStats"])
 
 
 -- CreateListUI, the 5 list-row factories, and EC_AddScanByQualityRow live in
@@ -4563,6 +4559,13 @@ InterfaceOptions_AddCategory(_G["EbonClearanceOptionsMerchant"]) -- Merchant Set
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsBlacklistSettings"]) -- Protection Settings
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsScavenger"]) -- Scavenger Settings
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsCharacter"]) -- Item Highlighting
+-- v2.36.x: Stats sub-panel registered between the main settings group
+-- (Merchant / Protection / Scavenger / Highlighting) and the list group
+-- (Sell / Account Sell / Keep / Delete) so the player sees configuration
+-- panels first, then their stats dashboard, then the curated lists. The
+-- Stats panel file itself does not call InterfaceOptions_AddCategory; the
+-- sort position is controlled at one place here.
+InterfaceOptions_AddCategory(_G["EbonClearanceOptionsStats"]) -- Stats
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsWhitelist"]) -- Sell List
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsAccountWhitelist"]) -- Account Sell List
 InterfaceOptions_AddCategory(_G["EbonClearanceOptionsBlacklist"]) -- Keep List
