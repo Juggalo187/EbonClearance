@@ -689,10 +689,14 @@ do
     else
         local fnEnd = src:find("\nend", fnStart)
         local body = fnEnd and src:sub(fnStart, fnEnd) or src:sub(fnStart, fnStart + 2000)
-        -- Look for an assignment of "none" to processCache inside the
-        -- function body. The exact form is:
-        --     EC_compCache.processCache[itemID] = "none"
-        local writesNone = body:find('processCache%[itemID%]%s*=%s*"none"') ~= nil
+        -- v2.36.x: the negative-cache sentinel is still written, but the
+        -- write goes through a `result` local that defaults to "none" and
+        -- is set to "Mill" or "Prospect" on a hit. So accept either the
+        -- legacy direct-write form OR the new local-default form.
+        local legacyDirectWrite = body:find('processCache%[itemID%]%s*=%s*"none"') ~= nil
+        local newDefaultThenAssign = body:find('local result = "none"') ~= nil
+            and body:find('processCache%[itemID%]%s*=%s*result') ~= nil
+        local writesNone = legacyDirectWrite or newDefaultThenAssign
         check("processTooltipHasLine writes the 'none' negative-cache sentinel",
               writesNone,
               "without this, canMill/canProspect rescan every non-eligible item on each BAG_UPDATE-driven rearm")
@@ -4598,6 +4602,50 @@ do
             mainSrc:find('panel%.statsMoney = money') == nil
                 and mainSrc:find("statsMoney = content:CreateFontString") == nil,
             "After v2.36.x split, MainPanel must not attach statsMoney; that lives on the new Stats panel"
+        )
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Tests 84-85: Mill / Prospect tooltip-scan robustness.
+-- ---------------------------------------------------------------------------
+-- Two distinct bugs hid the PROSPECT section from Process Bags:
+--
+--   1) Color-code wrapping: the byte-exact `txt == marker` compare failed
+--      against `|cFFFFFF00Prospectable|r`. Fixed by normaliseTooltipLine
+--      (strips |c...|r and trims). Test 84 pins it.
+--
+--   2) Cache poisoning: canMill and canProspect shared one processCache
+--      with a "none" sentinel meaning "scanned, no match found", but
+--      ambiguous about WHICH marker was searched. With both Inscription
+--      and Jewelcrafting trained, canMill ran first for every item; ore
+--      missed the Millable marker, got cached as "none", and canProspect
+--      then returned false without ever scanning. v2.36.x unifies the
+--      scan: one pass per itemID checks BOTH markers and caches the
+--      classification (Mill / Prospect / none). Test 85 pins it.
+do
+    local f = io.open("EbonClearance_Process.lua", "rb")
+    if f then
+        local src = f:read("*a") or ""
+        f:close()
+        check(
+            "Test 84: processTooltipHasLine strips color codes before marker compare",
+            src:find("normaliseTooltipLine") ~= nil
+                and src:find("|c%%x%%x%%x%%x%%x%%x%%x%%x") ~= nil
+                and src:find("local txt = normaliseTooltipLine%(line:GetText%(%)%)") ~= nil
+                and src:find("if txt == millMarker") ~= nil
+                and src:find("txt == prospectMarker") ~= nil,
+            "EbonClearance_Process.lua must define normaliseTooltipLine (color-strip + trim) and use it inside processTooltipHasLine's loop to normalise each tooltip line before comparing against the Mill / Prospect markers. The byte-exact `txt == marker` compare against the raw color-wrapped line silently broke Mill / Prospect detection."
+        )
+
+        check(
+            "Test 85: processTooltipHasLine scans both Mill + Prospect markers in one pass",
+            src:find("local millMarker = ITEM_MILLABLE") ~= nil
+                and src:find("local prospectMarker = ITEM_PROSPECTABLE") ~= nil
+                and src:find('result = "Mill"') ~= nil
+                and src:find('result = "Prospect"') ~= nil
+                and src:find("function EC_compCache%.processTooltipHasLine%(bag, slot, itemID%)") ~= nil,
+            "processTooltipHasLine must scan for BOTH markers in one tooltip pass and cache the resulting classification. The previous single-marker API let canMill poison the cache with 'none' before canProspect could scan, hiding the PROSPECT section for any player with both professions trained."
         )
     end
 end

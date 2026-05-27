@@ -114,33 +114,68 @@ function EC_compCache.canDisenchant(itemID)
     return quality >= 2 and quality <= 4
 end
 
--- Tooltip-scan helper shared by canMill / canProspect. Caches the
--- result per itemID via processCache. Returns true if the item's
--- tooltip contains the given marker string (ITEM_MILLABLE or
--- ITEM_PROSPECTABLE).
-function EC_compCache.processTooltipHasLine(bag, slot, itemID, marker, modeName)
-    if not bag or not slot or not itemID or not marker then
-        return false
+-- Strip WoW color codes (|cFFRRGGBBxxx|r) and trim outer whitespace
+-- from a tooltip line so a bare-equality compare against a marker
+-- ("Millable" / "Prospectable") matches even when the client renders
+-- the line yellow via inline color codes. The original byte-exact
+-- compare silently broke Mill / Prospect detection on Project Ebonhold
+-- because the live tooltip line is `|cFFFFFF00Prospectable|r`, not
+-- bare `Prospectable`. itemHasChanceOnHit (EbonClearance_Protection.lua)
+-- uses a similar pattern-tolerant approach via lineLooksLikeChanceProc.
+local function normaliseTooltipLine(s)
+    if not s then
+        return ""
+    end
+    s = s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    return s:match("^%s*(.-)%s*$") or s
+end
+
+-- Unified Mill / Prospect classifier. Scans the item's tooltip ONCE
+-- for both ITEM_MILLABLE and ITEM_PROSPECTABLE markers and caches the
+-- classification per itemID. Returns one of "Mill" / "Prospect" / "none".
+--
+-- v2.36.x fix for the cache-poisoning bug that hid Prospect detection:
+-- the previous design had canMill and canProspect call a single-marker
+-- scan helper that wrote `processCache[itemID] = "none"` on miss. For
+-- a player with both Inscription and Jewelcrafting, the bag walk hit
+-- canMill FIRST for every item; ore failed the Millable check and got
+-- cached as "none"; canProspect saw "none" and returned false without
+-- ever scanning for Prospectable. Items in the bag like Mageroyal
+-- worked (Millable matched on canMill) but Copper Ore was invisible
+-- to the Prospect section.
+--
+-- An item can only carry one of the two markers in 3.3.5a (Inscription
+-- mills herbs; Jewelcrafting prospects ore; there is no item type that
+-- carries both), so a tri-state cache value is sufficient.
+function EC_compCache.processTooltipHasLine(bag, slot, itemID)
+    if not bag or not slot or not itemID then
+        return "none"
+    end
+    local cached = EC_compCache.processCache[itemID]
+    if cached then
+        return cached
     end
     NS.scanTooltip:ClearLines()
     NS.scanTooltip:SetBagItem(bag, slot)
+    local millMarker = ITEM_MILLABLE or "Millable"
+    local prospectMarker = ITEM_PROSPECTABLE or "Prospectable"
+    local result = "none"
     for i = 1, 30 do
         local line = _G["EbonClearanceScanTooltipTextLeft" .. i]
         if not line then
             break
         end
-        local txt = line:GetText()
-        if txt and txt == marker then
-            EC_compCache.processCache[itemID] = modeName
-            return true
+        local txt = normaliseTooltipLine(line:GetText())
+        if txt == millMarker then
+            result = "Mill"
+            break
+        elseif txt == prospectMarker then
+            result = "Prospect"
+            break
         end
     end
-    -- Negative cache. canMill / canProspect both early-return on
-    -- `cached == "none"`; without writing the sentinel here every
-    -- non-millable / non-prospectable item gets a fresh 30-line
-    -- tooltip scan on each BAG_UPDATE debounce-frame rearm.
-    EC_compCache.processCache[itemID] = "none"
-    return false
+    EC_compCache.processCache[itemID] = result
+    return result
 end
 
 function EC_compCache.canMill(bag, slot, itemID)
@@ -150,16 +185,7 @@ function EC_compCache.canMill(bag, slot, itemID)
     if not itemID then
         return false
     end
-    local cached = EC_compCache.processCache[itemID]
-    if cached == "Mill" then
-        return true
-    end
-    if cached == "Disenchant" or cached == "Prospect" or cached == "none" then
-        return false
-    end
-    -- Not yet scanned: check the tooltip for ITEM_MILLABLE marker.
-    local marker = ITEM_MILLABLE or "Millable"
-    return EC_compCache.processTooltipHasLine(bag, slot, itemID, marker, "Mill")
+    return EC_compCache.processTooltipHasLine(bag, slot, itemID) == "Mill"
 end
 
 function EC_compCache.canProspect(bag, slot, itemID)
@@ -169,15 +195,7 @@ function EC_compCache.canProspect(bag, slot, itemID)
     if not itemID then
         return false
     end
-    local cached = EC_compCache.processCache[itemID]
-    if cached == "Prospect" then
-        return true
-    end
-    if cached == "Disenchant" or cached == "Mill" or cached == "none" then
-        return false
-    end
-    local marker = ITEM_PROSPECTABLE or "Prospectable"
-    return EC_compCache.processTooltipHasLine(bag, slot, itemID, marker, "Prospect")
+    return EC_compCache.processTooltipHasLine(bag, slot, itemID) == "Prospect"
 end
 
 -- v2.25.0: lockpick eligibility. Unlike Mill/Prospect/DE eligibility,
