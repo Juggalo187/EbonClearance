@@ -595,20 +595,42 @@ function NS.OpenHelpEntry(entryId)
     -- sweet spot for both responsiveness and correctness.
     NS.Delay(0.7, doScroll)
 
-    -- Flash: yellow tint pulse for ~0.5s, then restore. Fires once at
-    -- +0.7s when the user first sees the target land.
+    -- Flash: visually highlight the target entry's question text so the
+    -- player's eye lands on it after the scroll. The q FontString's text
+    -- is wrapped in inline |cffffff00...|r color codes, which override
+    -- SetTextColor's vertex color - so the previous SetTextColor flash
+    -- had no visible effect. Swap the inline yellow color for a brighter
+    -- cyan tag for ~0.6s, then restore the original text. Pulses the
+    -- entire q line visibly without disturbing the layout.
     NS.Delay(0.7, function()
         if HelpPanel._scrollGeneration ~= gen then
             return
         end
         local widget = findEntryWidget(entryId)
-        if not widget or not widget.SetTextColor then
+        if not widget or not widget.SetText or not widget.GetText then
             return
         end
-        widget:SetTextColor(1, 1, 0.4)
-        NS.Delay(0.5, function()
-            if HelpPanel._scrollGeneration == gen and widget.SetTextColor then
-                widget:SetTextColor(1, 1, 1)
+        local originalText = widget:GetText()
+        if not originalText then
+            return
+        end
+        -- Replace the inline yellow tag with bright cyan; if the entry's
+        -- q text uses a different color escape than |cffffff00, the
+        -- replacement is a no-op and the flash is silently skipped
+        -- rather than rendering with a mangled color.
+        local flashText, replacements = originalText:gsub("|cffffff00", "|cff00ffff")
+        if replacements == 0 then
+            return
+        end
+        widget:SetText(flashText)
+        NS.Delay(0.6, function()
+            -- Restore even if a newer click has come in - we don't want
+            -- the cyan text lingering. But only restore if the widget
+            -- still holds OUR flash text; otherwise a newer flash on
+            -- the same widget would have set its own text and our
+            -- restore would clobber it.
+            if widget.GetText and widget:GetText() == flashText and widget.SetText then
+                widget:SetText(originalText)
             end
         end)
     end)

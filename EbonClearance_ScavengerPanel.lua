@@ -87,7 +87,14 @@ ScavengerPanel:SetScript("OnShow", function(self)
         end)
         self.sumCB = sumCB
         if st then
-            NS.AddHelpIcon(content, st, "LEFT", "RIGHT", 6, 0, "tshoot-goblin-not-summoning")
+            -- AddCheckbox sets the text FontString frame width to 420px so
+            -- long labels can wrap. For short labels like this one
+            -- (~170px), anchoring [?] to text:RIGHT puts the icon past the
+            -- visible text and off the right of the panel. Anchor LEFT-to-
+            -- LEFT using GetStringWidth (the actual rendered text width)
+            -- so the icon sits right after the visible label, clickable.
+            local strW = (st.GetStringWidth and st:GetStringWidth()) or 0
+            NS.AddHelpIcon(content, st, "LEFT", "LEFT", strW + 6, 0, "tshoot-goblin-not-summoning")
         end
 
         local combatOnlyCB = NS.AddCheckbox(
@@ -152,7 +159,11 @@ ScavengerPanel:SetScript("OnShow", function(self)
         self.cycleCB = cycleCB
         local cycleCBText = _G[cycleCB:GetName() .. "Text"]
         if cycleCBText then
-            NS.AddHelpIcon(content, cycleCBText, "LEFT", "RIGHT", 6, 0, "tshoot-goblin-not-summoning")
+            -- See the matching AddHelpIcon for sumCB above: AddCheckbox's
+            -- 420px text-frame width makes text:RIGHT unreachable for short
+            -- labels. Anchor LEFT-to-LEFT past GetStringWidth instead.
+            local strW = (cycleCBText.GetStringWidth and cycleCBText:GetStringWidth()) or 0
+            NS.AddHelpIcon(content, cycleCBText, "LEFT", "LEFT", strW + 6, 0, "tshoot-goblin-not-summoning")
         end
 
         -- threshSlider used to anchor to a multi-line cycleNote FontString

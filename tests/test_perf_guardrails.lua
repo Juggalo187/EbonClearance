@@ -4688,10 +4688,10 @@ do
         check(
             "Test 83a: OpenHelpEntry schedules SetVerticalScroll + flash with generation guard",
             src:find("SetVerticalScroll") ~= nil
-                and src:find("SetTextColor") ~= nil
+                and src:find('|cff00ffff') ~= nil
                 and src:find("NS%.Delay") ~= nil
                 and src:find("HelpPanel%._scrollGeneration ~= gen") ~= nil,
-            "OpenHelpEntry must schedule a delayed scroll (SetVerticalScroll on the outer scroll frame) and flash (SetTextColor on the q widget), both gated by a generation check so a superseded click's tasks no-op."
+            "OpenHelpEntry must schedule a delayed scroll (SetVerticalScroll on the outer scroll frame) and a visible flash (swap inline |cffffff00 for |cff00ffff on the q FontString, then restore), both gated by a generation check so a superseded click's tasks no-op."
         )
     end
 end
