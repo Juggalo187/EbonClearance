@@ -4663,6 +4663,40 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 83: NS.OpenHelpEntry deep-link API + scroll-to-entry + flash.
+-- ---------------------------------------------------------------------------
+-- Settings panels call NS.AddHelpIcon (PanelWidgets.lua), which on click
+-- invokes NS.OpenHelpEntry(entryId). That function lives in HelpPanel.lua
+-- and must: (a) stash the pending entry id on HelpPanel, (b) auto-expand
+-- the owning section via DB.helpSectionsCollapsed, (c) open the Help
+-- panel via InterfaceOptionsFrame_OpenToCategory (called twice for the
+-- 3.3.5a workaround). The refreshLayout pass then consumes the pending
+-- target: scrolls the entry to the top of the viewport, flashes briefly.
+do
+    local f = io.open("EbonClearance_HelpPanel.lua", "rb")
+    if f then
+        local src = f:read("*a") or ""
+        f:close()
+        check(
+            "Test 83: NS.OpenHelpEntry exists with required wiring",
+            src:find("function NS%.OpenHelpEntry") ~= nil
+                and src:find("_pendingScrollEntryId") ~= nil
+                and src:find("InterfaceOptionsFrame_OpenToCategory") ~= nil
+                and src:find("helpSectionsCollapsed") ~= nil,
+            "HelpPanel.lua must define NS.OpenHelpEntry that stashes _pendingScrollEntryId, expands the owning section via DB.helpSectionsCollapsed, and calls InterfaceOptionsFrame_OpenToCategory."
+        )
+        check(
+            "Test 83a: refreshLayout consumes _pendingScrollEntryId with SetVerticalScroll + flash",
+            src:find("_pendingScrollEntryId") ~= nil
+                and src:find("SetVerticalScroll") ~= nil
+                and src:find("SetTextColor") ~= nil
+                and src:find("NS%.Delay") ~= nil,
+            "refreshLayout must read _pendingScrollEntryId, call SetVerticalScroll on the outer scroll frame to position the target, and use NS.Delay + SetTextColor for the flash effect."
+        )
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Tests 84-85: Mill / Prospect tooltip-scan robustness.
 -- ---------------------------------------------------------------------------
 -- Two distinct bugs hid the PROSPECT section from Process Bags:

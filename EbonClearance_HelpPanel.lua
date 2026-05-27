@@ -447,6 +447,53 @@ local HelpPanel = CreateFrame("Frame", "EbonClearanceOptionsHelp", InterfaceOpti
 HelpPanel.name = "Help"
 HelpPanel.parent = "EbonClearance"
 
+-- NS.OpenHelpEntry(entryId): deep-link from a settings panel into the
+-- Help panel at a specific entry. Settings panels register [?] icons
+-- via NS.AddHelpIcon (EbonClearance_PanelWidgets.lua); the icon's
+-- OnClick calls this function with the entry's stable id.
+--
+-- Behaviour:
+--   1. Find the section that owns this entry (walk EC_HELP_ENTRIES).
+--   2. Set DB.helpSectionsCollapsed[ownerSection] = false so the section
+--      auto-expands when the panel renders.
+--   3. Stash HelpPanel._pendingScrollEntryId so refreshLayout's
+--      post-pass scrolls the entry into view + flashes it.
+--   4. Call InterfaceOptionsFrame_OpenToCategory(HelpPanel) twice
+--      (the standard 3.3.5a workaround for the open-to-sub-panel bug
+--      where the first call sometimes lands on the parent category).
+--
+-- If entryId is nil or no matching entry exists, the panel still opens
+-- (no expand / scroll / flash). Safe failure mode for typos and stale
+-- ids during development.
+function NS.OpenHelpEntry(entryId)
+    local target = _G["EbonClearanceOptionsHelp"]
+    if not target or not InterfaceOptionsFrame_OpenToCategory then
+        return
+    end
+
+    if entryId then
+        -- Find the owning section by walking EC_HELP_ENTRIES.
+        local ownerSection = nil
+        for _, entry in ipairs(EC_HELP_ENTRIES) do
+            if entry.section then
+                ownerSection = entry.section
+            elseif entry.id == entryId then
+                break
+            end
+        end
+
+        if ownerSection and NS.DB then
+            NS.DB.helpSectionsCollapsed = NS.DB.helpSectionsCollapsed or {}
+            NS.DB.helpSectionsCollapsed[ownerSection] = false
+        end
+
+        HelpPanel._pendingScrollEntryId = entryId
+    end
+
+    InterfaceOptionsFrame_OpenToCategory(target)
+    InterfaceOptionsFrame_OpenToCategory(target)
+end
+
 -- StaticPopup for copyable URLs (3.3.5a has no clickable browser links
 -- in chat; the convention is to pop up a pre-selected EditBox so the
 -- player presses Ctrl+C and pastes into a browser themselves). Reusable
@@ -630,6 +677,89 @@ HelpPanel:SetScript("OnShow", function(self)
         end
         if prevFull and NS.FitScrollContent then
             NS.FitScrollContent(chrome:GetParent(), prevFull)
+        end
+
+        -- Consume any pending deep-link target from NS.OpenHelpEntry.
+        -- Scrolls the target entry to the top of the outer scroll viewport
+        -- and briefly flashes its q FontString. NS.Delay's two-pass pattern
+        -- (matching FitScrollContent) waits for FontString heights to settle.
+        if panel._pendingScrollEntryId then
+            local targetId = panel._pendingScrollEntryId
+            panel._pendingScrollEntryId = nil
+
+            -- Locate the renderItem whose entry has this id. renderItems is
+            -- built from EC_HELP_ENTRIES in order: section markers, then
+            -- per-entry { q, a, button?, sep } tuples. We need the q widget
+            -- of the matching entry, so walk EC_HELP_ENTRIES (content
+            -- entries only, in order) to find which content-index this id
+            -- corresponds to, then find the Nth q in renderItems.
+            local contentIdx = 0
+            local targetIdx = nil
+            for _, entry in ipairs(EC_HELP_ENTRIES) do
+                if not entry.section then
+                    contentIdx = contentIdx + 1
+                    if entry.id == targetId then
+                        targetIdx = contentIdx
+                        break
+                    end
+                end
+            end
+
+            local targetWidget = nil
+            if targetIdx then
+                local qSeen = 0
+                for _, item in ipairs(items) do
+                    if item.kind == "q" then
+                        qSeen = qSeen + 1
+                        if qSeen == targetIdx then
+                            targetWidget = item.widget
+                            break
+                        end
+                    end
+                end
+            end
+
+            if targetWidget then
+                local scrollName = (panel:GetName() or "EbonClearanceOptionsHelp") .. "Scroll"
+                local scrollFrame = _G[scrollName]
+                if scrollFrame and scrollFrame.SetVerticalScroll then
+                    local function doScroll()
+                        if not targetWidget.GetTop or not scrollFrame.GetTop then
+                            return
+                        end
+                        local widgetTop = targetWidget:GetTop()
+                        local scrollTop = scrollFrame:GetTop()
+                        if not widgetTop or not scrollTop then
+                            return
+                        end
+                        local offset = scrollTop - widgetTop
+                        if offset < 0 then
+                            offset = 0
+                        end
+                        local range = scrollFrame.GetVerticalScrollRange and scrollFrame:GetVerticalScrollRange() or 0
+                        if offset > range then
+                            offset = range
+                        end
+                        scrollFrame:SetVerticalScroll(offset)
+                    end
+                    if NS.Delay then
+                        NS.Delay(0.1, doScroll)
+                        NS.Delay(0.5, doScroll)
+                    else
+                        doScroll()
+                    end
+                end
+
+                -- Flash: yellow tint pulse for ~0.5s, then restore.
+                if targetWidget.SetTextColor and NS.Delay then
+                    targetWidget:SetTextColor(1, 1, 0.4)
+                    NS.Delay(0.5, function()
+                        if targetWidget and targetWidget.SetTextColor then
+                            targetWidget:SetTextColor(1, 1, 1)
+                        end
+                    end)
+                end
+            end
         end
     end
 
