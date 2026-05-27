@@ -465,14 +465,51 @@ HelpPanel.parent = "EbonClearance"
 -- If entryId is nil or no matching entry exists, the panel still opens
 -- (no expand / scroll / flash). Safe failure mode for typos and stale
 -- ids during development.
+-- Locate the q FontString for a given entry id by walking
+-- EC_HELP_ENTRIES (content entries only, in order) and matching
+-- against the Nth "q" widget in HelpPanel._helpRenderItems.
+-- Returns nil if the panel hasn't been built yet OR the id is unknown.
+local function findEntryWidget(entryId)
+    if not entryId then
+        return nil
+    end
+    local items = HelpPanel._helpRenderItems
+    if not items then
+        return nil
+    end
+    local contentIdx, targetIdx = 0, nil
+    for _, entry in ipairs(EC_HELP_ENTRIES) do
+        if not entry.section then
+            contentIdx = contentIdx + 1
+            if entry.id == entryId then
+                targetIdx = contentIdx
+                break
+            end
+        end
+    end
+    if not targetIdx then
+        return nil
+    end
+    local qSeen = 0
+    for _, item in ipairs(items) do
+        if item.kind == "q" then
+            qSeen = qSeen + 1
+            if qSeen == targetIdx then
+                return item.widget
+            end
+        end
+    end
+    return nil
+end
+
 function NS.OpenHelpEntry(entryId)
     local target = _G["EbonClearanceOptionsHelp"]
     if not target or not InterfaceOptionsFrame_OpenToCategory then
         return
     end
 
-    if entryId then
-        -- Find the owning section by walking EC_HELP_ENTRIES.
+    -- Find the owning section so it's expanded BEFORE the panel renders.
+    if entryId and NS.DB then
         local ownerSection = nil
         for _, entry in ipairs(EC_HELP_ENTRIES) do
             if entry.section then
@@ -481,17 +518,81 @@ function NS.OpenHelpEntry(entryId)
                 break
             end
         end
-
-        if ownerSection and NS.DB then
+        if ownerSection then
             NS.DB.helpSectionsCollapsed = NS.DB.helpSectionsCollapsed or {}
             NS.DB.helpSectionsCollapsed[ownerSection] = false
         end
-
-        HelpPanel._pendingScrollEntryId = entryId
     end
 
+    -- Open the panel (double-call for the 3.3.5a workaround). This fires
+    -- OnShow on HelpPanel, which runs refreshLayout - positions widgets,
+    -- fits the chrome + outer scroll content. refreshLayout no longer
+    -- handles deep-link scrolling; that all lives here so a single click
+    -- produces a single deterministic scroll regardless of how many
+    -- OnShow events the double-call triggers.
     InterfaceOptionsFrame_OpenToCategory(target)
     InterfaceOptionsFrame_OpenToCategory(target)
+
+    if not entryId or not NS.Delay then
+        return
+    end
+
+    -- Generation counter: a subsequent OpenHelpEntry call supersedes
+    -- any in-flight scroll from earlier clicks. Each delayed task
+    -- checks its captured generation against the current one and
+    -- no-ops if it has been superseded. Prevents rapid-click whiplash
+    -- (old click's scroll firing AFTER new click's scroll) and stale
+    -- scrolls when the user spam-clicks [?] icons.
+    HelpPanel._scrollGeneration = (HelpPanel._scrollGeneration or 0) + 1
+    local gen = HelpPanel._scrollGeneration
+
+    -- Single deferred scroll + flash. By 0.7s, refreshLayout has run
+    -- (immediately on OnShow), both FitScrollContent passes have fired
+    -- (0.1s + 0.5s), and the outer scroll content's range is settled.
+    -- Earlier scroll attempts (the previous 0.2s/0.6s/0.9s triple-fire
+    -- approach) caused visible whiplash because the scroll fired BEFORE
+    -- FitScrollContent's later pass resized the content, snapping the
+    -- scrollbar back to 0.
+    NS.Delay(0.7, function()
+        if HelpPanel._scrollGeneration ~= gen then
+            return
+        end
+        local widget = findEntryWidget(entryId)
+        if not widget then
+            return
+        end
+        local scrollFrame = _G["EbonClearanceOptionsHelpScroll"]
+        if not scrollFrame or not scrollFrame.SetVerticalScroll then
+            return
+        end
+        if not widget.GetTop or not scrollFrame.GetTop then
+            return
+        end
+        local widgetTop = widget:GetTop()
+        local scrollTop = scrollFrame:GetTop()
+        if not widgetTop or not scrollTop then
+            return
+        end
+        local offset = scrollTop - widgetTop
+        if offset < 0 then
+            offset = 0
+        end
+        local range = scrollFrame.GetVerticalScrollRange and scrollFrame:GetVerticalScrollRange() or 0
+        if offset > range then
+            offset = range
+        end
+        scrollFrame:SetVerticalScroll(offset)
+
+        -- Flash: yellow tint pulse for ~0.5s, then restore.
+        if widget.SetTextColor then
+            widget:SetTextColor(1, 1, 0.4)
+            NS.Delay(0.5, function()
+                if HelpPanel._scrollGeneration == gen and widget.SetTextColor then
+                    widget:SetTextColor(1, 1, 1)
+                end
+            end)
+        end
+    end)
 end
 
 -- StaticPopup for copyable URLs (3.3.5a has no clickable browser links
@@ -691,119 +792,10 @@ HelpPanel:SetScript("OnShow", function(self)
                 NS.FitScrollContent(scrollContent, chromeOuter)
             end
         end
-
-        -- Pending deep-link target from NS.OpenHelpEntry. The id is NOT
-        -- consumed here - InterfaceOptionsFrame_OpenToCategory's
-        -- double-call workaround fires OnShow twice in rapid succession,
-        -- and if the first refreshLayout cleared the id, the second
-        -- refreshLayout (which runs AFTER the scroll-content height has
-        -- settled enough to make SetVerticalScroll work) would have
-        -- nothing to scroll to. Instead we leave the id in place; each
-        -- refreshLayout re-schedules the (idempotent) scroll, and a
-        -- single delayed cleanup task clears the id ~1s after the first
-        -- pass so a future fresh open starts clean.
-        if panel._pendingScrollEntryId then
-            local targetId = panel._pendingScrollEntryId
-
-            -- Locate the renderItem whose entry has this id. renderItems is
-            -- built from EC_HELP_ENTRIES in order: section markers, then
-            -- per-entry { q, a, button?, sep } tuples. We need the q widget
-            -- of the matching entry, so walk EC_HELP_ENTRIES (content
-            -- entries only, in order) to find which content-index this id
-            -- corresponds to, then find the Nth q in renderItems.
-            local contentIdx = 0
-            local targetIdx = nil
-            for _, entry in ipairs(EC_HELP_ENTRIES) do
-                if not entry.section then
-                    contentIdx = contentIdx + 1
-                    if entry.id == targetId then
-                        targetIdx = contentIdx
-                        break
-                    end
-                end
-            end
-
-            local targetWidget = nil
-            if targetIdx then
-                local qSeen = 0
-                for _, item in ipairs(items) do
-                    if item.kind == "q" then
-                        qSeen = qSeen + 1
-                        if qSeen == targetIdx then
-                            targetWidget = item.widget
-                            break
-                        end
-                    end
-                end
-            end
-
-            if targetWidget then
-                local scrollName = (panel:GetName() or "EbonClearanceOptionsHelp") .. "Scroll"
-                local scrollFrame = _G[scrollName]
-                if scrollFrame and scrollFrame.SetVerticalScroll then
-                    local function doScroll()
-                        if not targetWidget.GetTop or not scrollFrame.GetTop then
-                            return
-                        end
-                        local widgetTop = targetWidget:GetTop()
-                        local scrollTop = scrollFrame:GetTop()
-                        if not widgetTop or not scrollTop then
-                            return
-                        end
-                        local offset = scrollTop - widgetTop
-                        if offset < 0 then
-                            offset = 0
-                        end
-                        local range = scrollFrame.GetVerticalScrollRange and scrollFrame:GetVerticalScrollRange() or 0
-                        if offset > range then
-                            offset = range
-                        end
-                        scrollFrame:SetVerticalScroll(offset)
-                    end
-                    if NS.Delay then
-                        -- Three passes: the first two (0.2s + 0.6s) cover
-                        -- both FitScrollContent ticks (which fire at 0.1s +
-                        -- 0.5s) so the scrollRange is settled before we
-                        -- read it. The third pass at 0.9s catches the case
-                        -- where a second OnShow re-fired between the
-                        -- earlier passes and reset things.
-                        NS.Delay(0.2, doScroll)
-                        NS.Delay(0.6, doScroll)
-                        NS.Delay(0.9, doScroll)
-                    else
-                        doScroll()
-                    end
-                end
-
-                -- Flash: yellow tint pulse for ~0.5s, then restore.
-                if targetWidget.SetTextColor and NS.Delay then
-                    targetWidget:SetTextColor(1, 1, 0.4)
-                    NS.Delay(0.5, function()
-                        if targetWidget and targetWidget.SetTextColor then
-                            targetWidget:SetTextColor(1, 1, 1)
-                        end
-                    end)
-                end
-            end
-
-            -- Schedule cleanup ONCE (subsequent refreshLayouts during the
-            -- same deep-link won't re-schedule). The id is cleared ~1s
-            -- after the first refreshLayout that saw it, well after the
-            -- scroll passes have fired. Without this, a fresh future
-            -- deep-link with no entryId (the defensive fall-through in
-            -- NS.OpenHelpEntry) would re-trigger the same scroll.
-            if not panel._pendingScrollCleanupScheduled then
-                panel._pendingScrollCleanupScheduled = true
-                if NS.Delay then
-                    NS.Delay(1.0, function()
-                        if panel._pendingScrollEntryId == targetId then
-                            panel._pendingScrollEntryId = nil
-                        end
-                        panel._pendingScrollCleanupScheduled = false
-                    end)
-                end
-            end
-        end
+        -- Deep-link scroll-to-entry + flash all live in NS.OpenHelpEntry
+        -- now, gated by a generation counter so rapid [?] clicks supersede
+        -- cleanly. refreshLayout is intentionally responsible only for
+        -- positioning + sizing, not for consuming any pending-scroll state.
     end
 
     EC_compCache.initPanel(self, function()

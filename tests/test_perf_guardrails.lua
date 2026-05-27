@@ -4680,18 +4680,18 @@ do
         check(
             "Test 83: NS.OpenHelpEntry exists with required wiring",
             src:find("function NS%.OpenHelpEntry") ~= nil
-                and src:find("_pendingScrollEntryId") ~= nil
                 and src:find("InterfaceOptionsFrame_OpenToCategory") ~= nil
-                and src:find("helpSectionsCollapsed") ~= nil,
-            "HelpPanel.lua must define NS.OpenHelpEntry that stashes _pendingScrollEntryId, expands the owning section via DB.helpSectionsCollapsed, and calls InterfaceOptionsFrame_OpenToCategory."
+                and src:find("helpSectionsCollapsed") ~= nil
+                and src:find("_scrollGeneration") ~= nil,
+            "HelpPanel.lua must define NS.OpenHelpEntry that expands the owning section via DB.helpSectionsCollapsed, opens the panel via InterfaceOptionsFrame_OpenToCategory, and uses a _scrollGeneration counter so rapid clicks supersede cleanly."
         )
         check(
-            "Test 83a: refreshLayout consumes _pendingScrollEntryId with SetVerticalScroll + flash",
-            src:find("_pendingScrollEntryId") ~= nil
-                and src:find("SetVerticalScroll") ~= nil
+            "Test 83a: OpenHelpEntry schedules SetVerticalScroll + flash with generation guard",
+            src:find("SetVerticalScroll") ~= nil
                 and src:find("SetTextColor") ~= nil
-                and src:find("NS%.Delay") ~= nil,
-            "refreshLayout must read _pendingScrollEntryId, call SetVerticalScroll on the outer scroll frame to position the target, and use NS.Delay + SetTextColor for the flash effect."
+                and src:find("NS%.Delay") ~= nil
+                and src:find("HelpPanel%._scrollGeneration ~= gen") ~= nil,
+            "OpenHelpEntry must schedule a delayed scroll (SetVerticalScroll on the outer scroll frame) and flash (SetTextColor on the q widget), both gated by a generation check so a superseded click's tasks no-op."
         )
     end
 end
