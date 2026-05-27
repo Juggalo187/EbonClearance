@@ -4697,6 +4697,60 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- Test 78: every NS.AddHelpIcon entryId references a real Help entry.
+-- ---------------------------------------------------------------------------
+-- Settings panels deep-link into Help via NS.AddHelpIcon(..., "entryId").
+-- This test scans every panel source file for those calls, extracts the
+-- referenced entry id (the last quoted string arg before the closing
+-- paren), and asserts each id exists as `id = "..."` in EC_HELP_ENTRIES
+-- (EbonClearance_HelpPanel.lua). Catches drift when a Help entry is
+-- removed or renamed without updating the panels that link to it.
+do
+    local helpFile = io.open("EbonClearance_HelpPanel.lua", "rb")
+    if helpFile then
+        local helpSrc = helpFile:read("*a") or ""
+        helpFile:close()
+        local definedIds = {}
+        for id in helpSrc:gmatch('id = "([^"]+)"') do
+            definedIds[id] = true
+        end
+
+        local panelFiles = {
+            "EbonClearance_ProtectionPanel.lua",
+            "EbonClearance_MerchantPanel.lua",
+            "EbonClearance_ScavengerPanel.lua",
+            "EbonClearance_ItemHighlightingPanel.lua",
+            "EbonClearance_ProcessBagsPanel.lua",
+            "EbonClearance_SellListPanels.lua",
+            "EbonClearance_KeepDeletePanels.lua",
+            "EbonClearance_ProfilesPanel.lua",
+            "EbonClearance_MainPanel.lua",
+            "EbonClearance_StatsPanel.lua",
+        }
+        local missing = {}
+        for _, fname in ipairs(panelFiles) do
+            local pf = io.open(fname, "rb")
+            if pf then
+                local psrc = pf:read("*a") or ""
+                pf:close()
+                -- Match NS.AddHelpIcon(parent, anchor, p1, p2, x, y, "entryId")
+                -- Pattern: capture the last quoted string before the ")".
+                for id in psrc:gmatch('AddHelpIcon%([^)]-"([^"]+)"%s*%)') do
+                    if not definedIds[id] then
+                        missing[#missing + 1] = fname .. " -> " .. id
+                    end
+                end
+            end
+        end
+        check(
+            "Test 78: every NS.AddHelpIcon entryId exists in EC_HELP_ENTRIES",
+            #missing == 0,
+            "Settings panels reference these missing help ids: " .. table.concat(missing, "; ")
+        )
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- Tests 84-85: Mill / Prospect tooltip-scan robustness.
 -- ---------------------------------------------------------------------------
 -- Two distinct bugs hid the PROSPECT section from Process Bags:
