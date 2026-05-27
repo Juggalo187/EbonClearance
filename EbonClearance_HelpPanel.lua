@@ -561,7 +561,17 @@ function NS.OpenHelpEntry(entryId)
         if not widgetTop or not scrollTop then
             return
         end
-        local offset = scrollTop - widgetTop
+        -- widget:GetTop() reflects the widget's CURRENT screen position,
+        -- which already accounts for the scroll frame's current vertical
+        -- scroll. So the target offset is:
+        --   newScroll = currentScroll + (scrollTop - widgetTop)
+        -- A naive `scrollTop - widgetTop` works only when currentScroll
+        -- is 0, and breaks on the second-pass scroll (after the first
+        -- pass already moved the scroll) - the widget is now AT scrollTop
+        -- so the difference is 0 and SetVerticalScroll(0) sends the
+        -- panel back to the top.
+        local currentScroll = scrollFrame.GetVerticalScroll and scrollFrame:GetVerticalScroll() or 0
+        local offset = currentScroll + (scrollTop - widgetTop)
         if offset < 0 then
             offset = 0
         end
