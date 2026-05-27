@@ -507,13 +507,22 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         tip:ClearAllPoints()
         tip:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -8)
 
+        local keepTip = NS.MakeLabel(
+            content,
+            "|cff888888Items on your Keep List are hidden here - the Keep List wins over Process Bags. Remove an item from the Keep List to make it processable.|r",
+            16,
+            -44
+        )
+        keepTip:ClearAllPoints()
+        keepTip:SetPoint("TOPLEFT", tip, "BOTTOMLEFT", 0, -4)
+
         local sbCB = CreateFrame(
             "CheckButton",
             "EbonClearanceProcessIncludeSoulboundCB",
             content,
             "InterfaceOptionsCheckButtonTemplate"
         )
-        sbCB:SetPoint("TOPLEFT", tip, "BOTTOMLEFT", 0, -10)
+        sbCB:SetPoint("TOPLEFT", keepTip, "BOTTOMLEFT", 0, -10)
         sbCB:SetChecked(DB.processIncludeSoulbound)
         local sbText = _G[sbCB:GetName() .. "Text"]
         if sbText then

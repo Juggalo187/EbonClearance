@@ -117,6 +117,11 @@ local EC_HELP_ENTRIES = {
         a = "Alt+Shift+Right-Click the item, or type /ec sellinfo. EbonClearance prints the full step-by-step decision in chat.",
         panel = nil,
     },
+    {
+        q = "My herbs / ore aren't showing in Process Bags.",
+        a = "Items on the Keep List are intentionally hidden from Process Bags' Disenchant / Mill / Prospect / Pick Locks lists - the Keep List wins over everything, including bulk processing. If you've added a herb or ore to the Keep List (manually or by auto-protect rules), it won't appear here. Open the panel below to remove items from the Keep List and they'll show up in Process Bags again.",
+        panel = "EbonClearanceOptionsBlacklist",
+    },
 
     -- ===================================================================
     -- Section 3: Sell decision gates
