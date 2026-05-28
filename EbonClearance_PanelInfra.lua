@@ -294,56 +294,42 @@ NS.FitScrollContent = EC_FitScrollContent
 function EC_compCache.initPanel(self, refresh, build, wrapScroll)
     NS.EnsureDB()
     EC_UpdatePanelWidth()
-    -- v2.37.3: belt-and-braces fade for the Process Bags panel when
-    -- switching AWAY from it. The framework's Hide() on the Process
-    -- Bags panel is BLOCKED during combat lockdown because the panel
-    -- contains a SecureActionButton ("Process Next") - the call
-    -- silently no-ops, the framework's hide propagation never fires,
-    -- and the panel's widgets stay visible behind whichever panel
-    -- shows next.
+    -- v2.37.3: opaque backdrop on non-Process-Bags EC panels so
+    -- bleed-through from Process Bags' stuck-visible widgets is
+    -- COVERED rather than fought. The Process Bags panel contains a
+    -- SecureActionButton ("Process Next"); during combat lockdown
+    -- WoW protects the entire panel chain - Hide(), SetAlpha(),
+    -- SetPoint(), every operation that would visually suppress it -
+    -- so the panel and its children keep rendering even after the
+    -- framework's OpenToCategory call to switch to a sibling panel.
+    -- Attempting to override from Process Bags' side (Hide on
+    -- scrollBg, SetAlpha on individual children) silently no-ops in
+    -- this state.
     --
-    -- Strategy: hide every non-secure child + region of the panel
-    -- directly. SetAlpha on the panel itself might be protected
-    -- (3.3.5a's secure-frame protection is broader than just Show/
-    -- Hide); SetAlpha on individual non-secure descendants is safe.
-    -- We also SetAlpha(0) the secure castBtn's siblings + Hide() the
-    -- non-secure ones for full coverage. The matching restore inside
-    -- Process Bags' OnShow handler walks the same children and brings
-    -- them back.
+    -- Workaround: give every OTHER EC panel an opaque backdrop
+    -- texture covering its full extent at BACKGROUND layer. Those
+    -- panels are NOT secure-tainted so we can manipulate them
+    -- freely. When the framework Shows one of them on top of the
+    -- stuck-visible Process Bags, the opaque texture covers the
+    -- bleed-through from below. The texture is created once per
+    -- panel (idempotent guard via self.ec_opaqueBackdrop) and stays
+    -- on the panel for the rest of the session.
     --
-    -- Triggered from the OTHER side: whenever any non-Process-Bags
-    -- EC panel's OnShow runs through initPanel, fade out Process
-    -- Bags. Runs every panel switch regardless of combat state.
-    local pbp = _G["EbonClearanceOptionsProcessBags"]
-    if pbp and pbp ~= self then
-        pbp:SetAlpha(0)
-        -- Walk children; hide / alpha-zero every one that isn't the
-        -- secure cast button (which is protected and Hide() / SetAlpha
-        -- may be blocked on it during combat). The cast button alone
-        -- would still be visible at panel coordinates - but it's a
-        -- single small widget and the rows / labels / buttons that
-        -- were the bulk of the visual bleed-through are gone.
-        local kids = { pbp:GetChildren() }
-        for _, child in ipairs(kids) do
-            local isSecureMacro = child.GetAttribute and child:GetAttribute("type") == "macro"
-            if not isSecureMacro then
-                if child.SetAlpha then
-                    child:SetAlpha(0)
-                end
-                if child.Hide then
-                    pcall(child.Hide, child)
-                end
-            end
-        end
-        local regions = { pbp:GetRegions() }
-        for _, region in ipairs(regions) do
-            if region.SetAlpha then
-                region:SetAlpha(0)
-            end
-            if region.Hide then
-                pcall(region.Hide, region)
-            end
-        end
+    -- Process Bags itself does NOT get this backdrop - applying a
+    -- texture to a secure-tainted panel might itself be protected,
+    -- and there's no need anyway (nothing renders behind it that
+    -- needs covering).
+    if self ~= _G["EbonClearanceOptionsProcessBags"]
+        and self.CreateTexture
+        and not self.ec_opaqueBackdrop
+    then
+        local bg = self:CreateTexture(nil, "BACKGROUND", nil, -8)
+        bg:SetAllPoints(self)
+        -- Solid dark colour; matches Interface Options' general
+        -- darker chrome without picking up parchment artwork. Alpha
+        -- 1.0 - fully opaque - is the whole point of the fix.
+        bg:SetTexture(0.05, 0.05, 0.07, 1)
+        self.ec_opaqueBackdrop = bg
     end
     if self.inited then
         if refresh then
