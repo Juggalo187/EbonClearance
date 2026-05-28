@@ -553,9 +553,11 @@ ProcessBagsPanel:SetScript("OnShow", function(self)
         EC_armCombatExitRetry(self)
         return
     end
-    -- v2.37.3: re-show the scroll content that OnHide explicitly
-    -- hid above. Without this, returning to Process Bags after a
-    -- panel switch would leave the rows hidden.
+    -- v2.37.3: matching alpha restore for the SetAlpha(0) that
+    -- initPanel applies when switching AWAY from Process Bags. Belt-
+    -- and-braces Show() on the scroll content in case the framework's
+    -- earlier Hide() on this panel did succeed and propagated through.
+    self:SetAlpha(1)
     if self.processScrollBg then
         self.processScrollBg:Show()
     end

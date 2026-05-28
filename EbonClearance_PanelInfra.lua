@@ -294,24 +294,30 @@ NS.FitScrollContent = EC_FitScrollContent
 function EC_compCache.initPanel(self, refresh, build, wrapScroll)
     NS.EnsureDB()
     EC_UpdatePanelWidth()
-    -- v2.37.3: belt-and-braces hide for the Process Bags panel's
-    -- scroll content. When the player is in combat AND switches FROM
-    -- Process Bags TO another EC sub-panel, the framework's Hide() on
-    -- the Process Bags panel is blocked because it contains a
-    -- SecureActionButton ("Process Next"). The block silences the
-    -- panel-level Hide() entirely, so neither the framework's hide
-    -- propagation NOR our OnHide handler fires - the scroll content
-    -- stays visible and the rows bleed through behind whichever panel
-    -- shows next. Detection from the OTHER side: whenever any non-
-    -- Process-Bags EC panel's OnShow runs through initPanel, walk
-    -- across to Process Bags and Hide() its scroll background frame
-    -- (which is NOT a secure descendant - just a regular Frame holding
-    -- the row ScrollFrame, so the Hide() is unblocked even in combat).
-    -- The matching Show() inside Process Bags' OnShow handler restores
+    -- v2.37.3: belt-and-braces fade for the Process Bags panel when
+    -- the player switches AWAY from it. The framework's Hide() on the
+    -- Process Bags panel is BLOCKED during combat lockdown because the
+    -- panel contains a SecureActionButton ("Process Next") - the call
+    -- silently no-ops, neither the framework's hide propagation nor
+    -- our OnHide handler fires, and the panel's widgets (rows, "Next:"
+    -- label, the cast button, the refresh button) all stay visible
+    -- behind whichever panel shows next.
+    --
+    -- SetAlpha() is NOT in the protected-call set the way Show/Hide
+    -- is, so it works even when the panel is secure-tainted. Children
+    -- inherit the parent's alpha multiplicatively, so a single
+    -- SetAlpha(0) on the panel makes every descendant visually
+    -- disappear without touching their Shown state. The matching
+    -- SetAlpha(1) inside Process Bags' OnShow handler restores
     -- visibility when the player returns to that panel.
+    --
+    -- Triggered from the OTHER side: whenever any non-Process-Bags
+    -- EC panel's OnShow runs through initPanel, fade out Process
+    -- Bags. This runs every panel switch regardless of combat state;
+    -- the cost is one SetAlpha call.
     local pbp = _G["EbonClearanceOptionsProcessBags"]
-    if pbp and pbp ~= self and pbp.processScrollBg then
-        pbp.processScrollBg:Hide()
+    if pbp and pbp ~= self then
+        pbp:SetAlpha(0)
     end
     if self.inited then
         if refresh then
