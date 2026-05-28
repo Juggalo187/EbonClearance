@@ -65,7 +65,7 @@ local ADDON_URL = NS.ADDON_URL
 -- (.github/workflows/release.yml). The rule was retargeted from
 -- EbonClearance.lua to EbonClearance_Events.lua during Stage 9 of the
 -- file split.
-local ADDON_VERSION = "v2.37.1"
+local ADDON_VERSION = "v2.37.2"
 local function EC_GetVersion()
     if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
         return ADDON_VERSION
