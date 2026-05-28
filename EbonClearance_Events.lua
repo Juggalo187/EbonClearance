@@ -575,6 +575,13 @@ local function EnsureDB()
     if type(DB.soldCopperByQuality) ~= "table" then
         DB.soldCopperByQuality = {}
     end
+    -- v2.37.x: per-quality breakdown of lifetime deletions. Mirrors
+    -- soldItemsByQuality but keyed by item rarity. Stamped at the
+    -- worker delete-action site (Delete-List auto-deletions). No
+    -- copper field - deletion produces no money.
+    if type(DB.deletedItemsByQuality) ~= "table" then
+        DB.deletedItemsByQuality = {}
+    end
     -- v2.37.0: Process Bags lifetime cast counters. Keyed by the
     -- localised spell name UNIT_SPELLCAST_SUCCEEDED emits ("Disenchant",
     -- "Milling", "Prospecting", "Pick Lock"). Counts EVERY successful
@@ -4148,6 +4155,7 @@ local function BuildQueue(junkOnly)
                                 slot = slot,
                                 itemID = id,
                                 count = count,
+                                quality = quality,
                             }
                             queuedDelete = true
                         end
@@ -4322,6 +4330,10 @@ local function DoNextAction()
             DB.deletedItemCounts = DB.deletedItemCounts or {}
             if action.itemID then
                 DB.deletedItemCounts[action.itemID] = (DB.deletedItemCounts[action.itemID] or 0) + (action.count or 1)
+            end
+            if action.quality then
+                DB.deletedItemsByQuality = DB.deletedItemsByQuality or {}
+                DB.deletedItemsByQuality[action.quality] = (DB.deletedItemsByQuality[action.quality] or 0) + (action.count or 1)
             end
         else
             ClearCursor()

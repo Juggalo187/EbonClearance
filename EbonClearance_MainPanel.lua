@@ -287,8 +287,12 @@ function NS.RefreshStats()
             local cnt = items[q]
             if cnt and cnt > 0 then
                 any = true
+                -- v2.37.x: x-prefixed grey count + " - " separator
+                -- between count and money so two adjacent number groups
+                -- don't read as a single long number. Matches the Top 5
+                -- row format ("name  x42") for visual consistency.
                 rows[#rows + 1] = string.format(
-                    "  |cff%s%s|r: %d  %s",
+                    "  |cff%s%s|r: |cff888888x%d|r  |cff888888-|r  %s",
                     QUALITY_HEX[q] or "ffffff",
                     QUALITY_NAMES[q] or ("Quality " .. q),
                     cnt,
@@ -300,6 +304,28 @@ function NS.RefreshStats()
             rows[#rows + 1] = "  |cff888888None yet|r"
         end
         panel.statsQualityBreakdown:SetText(table.concat(rows, "\n"))
+    end
+
+    if panel.statsDeletedByQuality then
+        local items = DB.deletedItemsByQuality or {}
+        local rows = { "|cffffd200Deleted by Quality|r" }
+        local any = false
+        for q = 0, 7 do
+            local cnt = items[q]
+            if cnt and cnt > 0 then
+                any = true
+                rows[#rows + 1] = string.format(
+                    "  |cff%s%s|r: |cff888888x%d|r",
+                    QUALITY_HEX[q] or "ffffff",
+                    QUALITY_NAMES[q] or ("Quality " .. q),
+                    cnt
+                )
+            end
+        end
+        if not any then
+            rows[#rows + 1] = "  |cff888888None yet|r"
+        end
+        panel.statsDeletedByQuality:SetText(table.concat(rows, "\n"))
     end
 
     if panel.statsMostSold then
@@ -317,6 +343,24 @@ function NS.RefreshStats()
                 )
             end
             panel.statsMostSold:SetText(table.concat(rows, "\n"))
+        end
+    end
+
+    if panel.statsMostDeleted then
+        local top = GetTopNItems(DB.deletedItemCounts, 5)
+        if #top == 0 then
+            panel.statsMostDeleted:SetText("|cffffd200Top 5 Most Deleted|r\n  |cff888888None yet|r")
+        else
+            local rows = { "|cffffd200Top 5 Most Deleted|r" }
+            for i = 1, #top do
+                rows[#rows + 1] = string.format(
+                    "  %d. %s  |cff888888x%d|r",
+                    i,
+                    ItemLabel(top[i].id),
+                    top[i].count
+                )
+            end
+            panel.statsMostDeleted:SetText(table.concat(rows, "\n"))
         end
     end
 
@@ -397,6 +441,9 @@ function NS.ResetLifetimeStats()
     end
     if DB.soldCopperByQuality then
         wipe(DB.soldCopperByQuality)
+    end
+    if DB.deletedItemsByQuality then
+        wipe(DB.deletedItemsByQuality)
     end
     if DB.processCastCounts then
         wipe(DB.processCastCounts)

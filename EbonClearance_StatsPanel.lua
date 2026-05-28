@@ -86,6 +86,16 @@ StatsPanel:SetScript("OnShow", function(self)
         qualityBreakdown:SetJustifyH("LEFT")
         qualityBreakdown:SetJustifyV("TOP")
         panel.statsQualityBreakdown = qualityBreakdown
+        -- v2.37.x: "Deleted by Quality" mirrors "Sold by Quality" -
+        -- per-rarity counts only (no copper, deletion produces no
+        -- money). Rendered when DB.deletedItemsByQuality has any
+        -- non-zero entry; reads "None yet" otherwise.
+        local deletedByQuality = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        deletedByQuality:SetPoint("TOPLEFT", qualityBreakdown, "BOTTOMLEFT", 0, -10)
+        EC_compCache.setPanelWidth(deletedByQuality, 16)
+        deletedByQuality:SetJustifyH("LEFT")
+        deletedByQuality:SetJustifyV("TOP")
+        panel.statsDeletedByQuality = deletedByQuality
         -- v2.37.0: panel.statsMostSold is now a multi-line "Top 5 Most
         -- Sold" widget. The name is preserved because Test 80 docs
         -- reference it as a contract surface; the format changed from
@@ -93,17 +103,25 @@ StatsPanel:SetScript("OnShow", function(self)
         -- ranked rows. RefreshStats writes the full block via
         -- table.concat with "\n" so it grows row by row.
         local mostSold = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        mostSold:SetPoint("TOPLEFT", qualityBreakdown, "BOTTOMLEFT", 0, -10)
+        mostSold:SetPoint("TOPLEFT", deletedByQuality, "BOTTOMLEFT", 0, -10)
         EC_compCache.setPanelWidth(mostSold, 16)
         mostSold:SetJustifyH("LEFT")
         mostSold:SetJustifyV("TOP")
         panel.statsMostSold = mostSold
+        -- v2.37.x: Top 5 Most Deleted mirrors Top 5 Most Sold.
+        -- Reuses GetTopNItems over DB.deletedItemCounts.
+        local mostDeleted = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        mostDeleted:SetPoint("TOPLEFT", mostSold, "BOTTOMLEFT", 0, -10)
+        EC_compCache.setPanelWidth(mostDeleted, 16)
+        mostDeleted:SetJustifyH("LEFT")
+        mostDeleted:SetJustifyV("TOP")
+        panel.statsMostDeleted = mostDeleted
 
         -- v2.37.0: Process Bags lifetime totals (Disenchant / Mill /
         -- Prospect / Pick Lock). Multi-line; RefreshStats emits a
         -- header plus one row per nonzero counter.
         local processTotals = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        processTotals:SetPoint("TOPLEFT", mostSold, "BOTTOMLEFT", 0, -10)
+        processTotals:SetPoint("TOPLEFT", mostDeleted, "BOTTOMLEFT", 0, -10)
         EC_compCache.setPanelWidth(processTotals, 16)
         processTotals:SetJustifyH("LEFT")
         processTotals:SetJustifyV("TOP")
