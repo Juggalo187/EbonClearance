@@ -828,6 +828,54 @@ local EC_PAPERDOLL_SLOTS = {
     "MainHandSlot", "SecondaryHandSlot", "RangedSlot",
 }
 
+-- v2.37.0 polish: per-button repaint helper for the bags surface.
+-- Used by NS.RefreshItemLevelOverlay to re-paint every bag slot in the
+-- registry without relying on the host bag-UI's broad-repaint method
+-- fanning out to every slot's Update. Some host bag UIs redraw the
+-- frame layout on a broad-repaint call but do not re-fire the per-slot
+-- Update method on slots whose inventory data hasn't changed, so a
+-- master-toggle OFF -> ON cycle could leave the FontStrings hidden
+-- until the slots got their next live update (which only fires on
+-- bag-content change, not on a settings toggle). Direct re-derive
+-- sidesteps that.
+local function EC_repaintBagButton(button)
+    if not button then
+        return
+    end
+    local bag, slot
+    if button.GetBag and button.GetID then
+        -- Host bag-UI slot class: the slot resolves its own identity
+        -- via methods on the slot object. Standard ContainerFrame slot
+        -- buttons have GetID but no GetBag, so this branch is for
+        -- third-party bag-UI replacements only.
+        local ok, b = pcall(button.GetBag, button)
+        if ok then
+            bag = b
+        end
+        local ok2, s = pcall(button.GetID, button)
+        if ok2 then
+            slot = s
+        end
+    end
+    if not bag then
+        -- Standard ContainerFrame slot: button:GetID() is the slot
+        -- index; parent:GetID() is the bag index. Reverse the slot
+        -- index because ContainerFrame numbers buttons right-to-left.
+        local parent = button.GetParent and button:GetParent()
+        local parentBag = parent and parent.GetID and parent:GetID()
+        local rawSlot = button.GetID and button:GetID()
+        if parentBag and rawSlot then
+            bag = parentBag
+            slot = rawSlot
+        end
+    end
+    if bag and slot then
+        local link = GetContainerItemLink(bag, slot)
+        local _, _, _, q = GetContainerItemInfo(bag, slot)
+        EC_compCache.applyItemLevelOverlay(button, link, q, "bags")
+    end
+end
+
 -- v2.37.0 (Borrow C): repaint every registered button. Called from the
 -- Item Highlighting panel toggles so changes take effect immediately
 -- without waiting for the next BAG_UPDATE / paperdoll event. Iterates
@@ -848,6 +896,8 @@ NS.RefreshItemLevelOverlay = function()
         end
     end
     if EC_itemLevelSurfaceEnabled("bags") then
+        -- Walk the standard ContainerFrame stack first (covers slots
+        -- visible under the default Blizzard bag UI).
         for i = 1, (NUM_CONTAINER_FRAMES or 13) do
             local frame = _G["ContainerFrame" .. i]
             if frame and frame:IsShown() then
@@ -855,6 +905,15 @@ NS.RefreshItemLevelOverlay = function()
             end
         end
         EC_applyBankItemLevel()
+        -- Then re-paint every registered bag-surface button directly.
+        -- This catches host-bag-UI slots that were painted earlier
+        -- whose host doesn't re-fire its per-slot Update on a settings
+        -- toggle (broad-repaint methods skip slots with unchanged data).
+        for button in pairs(EC_compCache.itemLevelTexts) do
+            if button._ec_iLvlSurface == "bags" then
+                EC_repaintBagButton(button)
+            end
+        end
     end
     if EC_itemLevelSurfaceEnabled("paperdoll") then
         if CharacterFrame and CharacterFrame:IsShown() then
