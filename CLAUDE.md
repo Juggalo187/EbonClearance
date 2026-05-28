@@ -12,7 +12,7 @@ If you're an AI agent or a new contributor, **read [docs/ADDON_GUIDE.md](docs/AD
 
 ## The short version
 
-- This is a WoW 3.3.5a addon for Project Ebonhold. After the file split (docs/CODE_REVIEW.md item 4) the addon ships as 23 `.lua` files; the event hub + slash commands + Bindings.xml glue live in [EbonClearance_Events.lua](EbonClearance_Events.lua) (renamed from the original monolith `EbonClearance.lua` in Stage 9). The [.toc](EbonClearance.toc) lists every file in load order.
+- This is a WoW 3.3.5a addon for Project Ebonhold. After the file split (docs/CODE_REVIEW.md item 4) plus the v2.36.0 Help / Stats sub-panel extractions the addon ships as 25 `.lua` files; the event hub + slash commands + Bindings.xml glue live in [EbonClearance_Events.lua](EbonClearance_Events.lua) (renamed from the original monolith `EbonClearance.lua` in Stage 9). The [.toc](EbonClearance.toc) lists every file in load order.
 - No external libraries. All Blizzard APIs.
 - Run `stylua *.lua && luacheck *.lua` before committing. Luacheck sits at **0 warnings** (cleaned post-v2.6.0); keep it at zero. If a new warning appears, fix the cause or extend [`.luacheckrc`](.luacheckrc) - do not silence with blanket directives.
 - Run all three invariant tests before committing:
@@ -35,8 +35,44 @@ If you're an AI agent or a new contributor, **read [docs/ADDON_GUIDE.md](docs/AD
 
 ## Release process
 
-- Bump version by pushing a `v*` tag; the GitHub workflow rewrites the `.toc` and `EbonClearance_Events.lua` (ADDON_VERSION constant) from the tag automatically
-- Manual version-bumps to the `.toc` are not needed
-- Release artifacts include every `EbonClearance*.lua` file, `EbonClearance.toc`, `Bindings.xml`, and `LICENSE`
+The release is driven by [.github/workflows/release.yml](.github/workflows/release.yml). It triggers on any `v*` tag push (and via `workflow_dispatch` for recovery). The workflow:
+
+1. Rewrites `EbonClearance.toc` (Title colored badge + `## Version:` field) and `EbonClearance_Events.lua`'s `ADDON_VERSION` constant from the tag name. **Manual version-bumps to those files are not needed.**
+2. Packages every `EbonClearance*.lua` file, `EbonClearance.toc`, `Bindings.xml`, and `LICENSE` into `EbonClearance.zip`.
+3. Commits the version bump back to `origin/master` as a `Update version to vX.Y.Z [skip ci]` bot commit. **After the workflow runs, your local branch will be 1 commit behind origin; run `git pull --rebase` to catch up before the next commit.**
+4. Extracts the `### vX.Y.Z` stanza from [CHANGELOG.md](CHANGELOG.md) and uses it as the body of the GitHub Release at `https://github.com/powerfulqa/EbonClearance/releases/tag/vX.Y.Z`. If no stanza exists, the workflow falls back to a generic stub: `Patch release. See the previous minor version for the feature description.` The auto-generated `**Full Changelog**: ...compare/...` footer is appended automatically.
+
+### The correct order
+
+**Always add the CHANGELOG stanza BEFORE you tag.** The recommended sequence:
+
+1. Make code changes; verify with the three invariant tests.
+2. Add the `### vX.Y.Z` stanza to `CHANGELOG.md` describing what's in the release.
+3. Commit code + CHANGELOG together (or in two commits if the diff is large: features first, then docs).
+4. Push to `origin/master`.
+5. Tag the release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+6. The workflow runs (~1-2 min). The version-bump bot commit lands on `origin/master`; `git pull --rebase` locally to sync.
+
+If you tag without a CHANGELOG stanza (e.g. a fast patch where the commit message was the only record), the release page ships with the fallback stub and players reading the release notes see no detail. The recovery path:
+
+- Add the stanza to CHANGELOG.md retroactively + commit + push.
+- Extract the stanza and update the existing release body:
+  ```
+  awk -v target="### vX.Y.Z" '$0 == target { f=1; print; next } f && /^### v/ { f=0 } f { print }' CHANGELOG.md > /tmp/notes.md
+  printf "\n\n**Full Changelog**: https://github.com/powerfulqa/EbonClearance/compare/vPREV...vX.Y.Z\n" >> /tmp/notes.md
+  gh release edit vX.Y.Z --notes-file /tmp/notes.md
+  ```
+  The `gh release edit` REPLACES the body, so re-append the compare-link footer manually (the workflow's `generate_release_notes: true` adds it on first creation but doesn't preserve it on edits).
+
+### Discord patch note
+
+After each tag, the user expects a copy-paste Discord post in chat-summary style. The format matches the CHANGELOG stanza tone but compresses heavily (Discord's 2000-char limit). Lead with the headline change in **bold**, then a short feature list, then a `**Full Changelog**:` link. No emojis (the project rule applies). Patch releases get tighter posts than minor releases.
+
+### Version numbering
+
+- **Minor (`vX.Y.0`)**: new features, schema additions, sizeable changes. Earns a long-form CHANGELOG stanza with the headline-bullet format the v2.37.0 entry uses.
+- **Patch (`vX.Y.Z` where Z > 0)**: fixes only, no new features, no schema-breaking changes. Shorter CHANGELOG stanza. Always safe-overwrite from the previous minor.
+
+Schema additions are allowed in patch releases as long as they're additive and gated by `EnsureDB`'s nil-default pattern (existing saves auto-migrate, downgrade-safe). Schema *removals* require a minor bump.
 
 For everything else, [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md) is authoritative.
