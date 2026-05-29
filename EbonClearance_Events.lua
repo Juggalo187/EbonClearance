@@ -61,7 +61,7 @@ local ADDON_URL = NS.ADDON_URL
 -- DO NOT move this constant out of EbonClearance_Events.lua without first
 -- updating the CI workflow's sed rule that targets this file by name
 -- (.github/workflows/release.yml).
-local ADDON_VERSION = "v2.37.5"
+local ADDON_VERSION = "v2.37.6"
 local function EC_GetVersion()
     if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
         return ADDON_VERSION
