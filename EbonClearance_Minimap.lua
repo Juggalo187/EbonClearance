@@ -132,22 +132,14 @@ local function EC_CreateMinimapButton()
                 NS.PrintNice("|cffffb84dSettings will open when combat ends.|r")
                 return
             end
-            InterfaceOptionsFrame_OpenToCategory(_G["EbonClearanceOptionsMain"])
-            InterfaceOptionsFrame_OpenToCategory(_G["EbonClearanceOptionsMain"])
+            NS.OpenOptionsPanel("EbonClearanceOptionsMain")
         elseif button == "MiddleButton" then
-            local pbp = _G["EbonClearanceOptionsProcessBags"]
-            if pbp and InterfaceOptionsFrame_OpenToCategory then
-                if InCombatLockdown and InCombatLockdown() then
-                    EC_compCache.pendingOpenAfterCombat = "process"
-                    NS.PrintNice("|cffffb84dProcess Bags will open when combat ends.|r")
-                    return
-                end
-                -- Double-call is the 3.3.5a workaround for the first
-                -- OpenToCategory landing on the parent's main panel
-                -- instead of the requested sub-panel.
-                InterfaceOptionsFrame_OpenToCategory(pbp)
-                InterfaceOptionsFrame_OpenToCategory(pbp)
+            if InCombatLockdown and InCombatLockdown() then
+                EC_compCache.pendingOpenAfterCombat = "process"
+                NS.PrintNice("|cffffb84dProcess Bags will open when combat ends.|r")
+                return
             end
+            NS.OpenOptionsPanel("EbonClearanceOptionsProcessBags")
         elseif button == "RightButton" then
             if not DB then
                 return
@@ -234,8 +226,7 @@ local function EC_CreateLDBLauncher()
                 DB.enabled = not DB.enabled
                 NS.PrintNice("Addon " .. (DB.enabled and "|cff00ff00Enabled|r" or "|cffff4444Disabled|r"))
             else
-                InterfaceOptionsFrame_OpenToCategory(_G["EbonClearanceOptionsMain"])
-                InterfaceOptionsFrame_OpenToCategory(_G["EbonClearanceOptionsMain"])
+                NS.OpenOptionsPanel("EbonClearanceOptionsMain")
             end
         end,
         OnTooltipShow = function(tt)

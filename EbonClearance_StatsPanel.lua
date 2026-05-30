@@ -76,15 +76,18 @@ StatsPanel:SetScript("OnShow", function(self)
         -- row height grows with the number of quality buckets that have
         -- nonzero counts (RefreshStats emits 1-8 indented rows). Width
         -- is registered via setPanelWidth so live panel-resize keeps
-        -- the text flush. SetWordWrap stays at the default TRUE so the
-        -- \n line breaks RefreshStats emits actually render as multiple
-        -- lines (SetWordWrap(false) would collapse them to a single
-        -- truncated line ending in "...").
+        -- the text flush. Word-wrap is set TRUE explicitly (the same
+        -- guard every other panel uses for multi-line content) so a long
+        -- row wraps instead of truncating; the \n breaks RefreshStats
+        -- emits render as separate lines either way.
         local qualityBreakdown = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         qualityBreakdown:SetPoint("TOPLEFT", avgWorth, "BOTTOMLEFT", 0, -10)
         EC_compCache.setPanelWidth(qualityBreakdown, 16)
         qualityBreakdown:SetJustifyH("LEFT")
         qualityBreakdown:SetJustifyV("TOP")
+        if qualityBreakdown.SetWordWrap then
+            qualityBreakdown:SetWordWrap(true)
+        end
         panel.statsQualityBreakdown = qualityBreakdown
         -- v2.37.x: "Deleted by Quality" mirrors "Sold by Quality" -
         -- per-rarity counts only (no copper, deletion produces no
@@ -95,6 +98,9 @@ StatsPanel:SetScript("OnShow", function(self)
         EC_compCache.setPanelWidth(deletedByQuality, 16)
         deletedByQuality:SetJustifyH("LEFT")
         deletedByQuality:SetJustifyV("TOP")
+        if deletedByQuality.SetWordWrap then
+            deletedByQuality:SetWordWrap(true)
+        end
         panel.statsDeletedByQuality = deletedByQuality
         -- v2.37.0: panel.statsMostSold is now a multi-line "Top 5 Most
         -- Sold" widget. The name is preserved because Test 80 docs
@@ -107,6 +113,9 @@ StatsPanel:SetScript("OnShow", function(self)
         EC_compCache.setPanelWidth(mostSold, 16)
         mostSold:SetJustifyH("LEFT")
         mostSold:SetJustifyV("TOP")
+        if mostSold.SetWordWrap then
+            mostSold:SetWordWrap(true)
+        end
         panel.statsMostSold = mostSold
         -- v2.37.x: Top 5 Most Deleted mirrors Top 5 Most Sold.
         -- Reuses GetTopNItems over DB.deletedItemCounts.
@@ -115,6 +124,9 @@ StatsPanel:SetScript("OnShow", function(self)
         EC_compCache.setPanelWidth(mostDeleted, 16)
         mostDeleted:SetJustifyH("LEFT")
         mostDeleted:SetJustifyV("TOP")
+        if mostDeleted.SetWordWrap then
+            mostDeleted:SetWordWrap(true)
+        end
         panel.statsMostDeleted = mostDeleted
 
         -- v2.37.0: Process Bags lifetime totals (Disenchant / Mill /
@@ -125,6 +137,9 @@ StatsPanel:SetScript("OnShow", function(self)
         EC_compCache.setPanelWidth(processTotals, 16)
         processTotals:SetJustifyH("LEFT")
         processTotals:SetJustifyV("TOP")
+        if processTotals.SetWordWrap then
+            processTotals:SetWordWrap(true)
+        end
         panel.statsProcessTotals = processTotals
 
         -- v2.37.0: Top zones by lifetime gold earned. RefreshStats emits
@@ -135,6 +150,9 @@ StatsPanel:SetScript("OnShow", function(self)
         EC_compCache.setPanelWidth(topZones, 16)
         topZones:SetJustifyH("LEFT")
         topZones:SetJustifyV("TOP")
+        if topZones.SetWordWrap then
+            topZones:SetWordWrap(true)
+        end
         panel.statsTopZones = topZones
 
         -- Footnote about buyback exclusion.

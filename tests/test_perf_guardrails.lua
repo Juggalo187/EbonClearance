@@ -5072,6 +5072,27 @@ do
             )
         end
 
+        -- v2.37.7: Turbo Mode batch-vendor. EnsureDB seeds DB.turboMode
+        -- false. EC_EffectiveBatchSize returns the batch count gated on
+        -- DB.turboMode. Worker OnUpdate uses the batch count in a loop
+        -- so the v2.0.11 single-item invariant still holds when Turbo is
+        -- off (batch=1) but multiple items pop per fire when on.
+        local merf = io.open("EbonClearance_MerchantPanel.lua", "rb")
+        if merf then
+            local merSrc = merf:read("*a") or ""
+            merf:close()
+            check(
+                "Test 88l: Turbo Mode batch-vendor wired",
+                evSrc:find("DB%.turboMode%s*=%s*false") ~= nil
+                    and evSrc:find("local function EC_EffectiveBatchSize") ~= nil
+                    and evSrc:find("local batch = EC_EffectiveBatchSize%(%)") ~= nil
+                    and evSrc:find("for _ = 1, batch do") ~= nil
+                    and merSrc:find("EbonClearanceTurboModeCB") ~= nil
+                    and merSrc:find("Time between sells") ~= nil,
+                "EnsureDB seeds turboMode=false; EC_EffectiveBatchSize gates on DB.turboMode; worker loops the batch; Merchant panel renders the Turbo checkbox + relabelled slider."
+            )
+        end
+
         -- v2.37.6: /ec perf self-diagnostic. The command must exist
         -- in the slash dispatch, list cache sizes for the major
         -- per-itemID caches, and be discoverable from the Main panel

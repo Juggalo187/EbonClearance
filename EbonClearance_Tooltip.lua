@@ -355,7 +355,7 @@ local function EC_AnnotateTooltip(tooltip)
                     end
                 end
                 local affixKey = affix.description and EC_compCache.normaliseAffixDesc(affix.description)
-                local manualAllow = affixKey and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
+                local manualAllow = affixKey and ADB and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
                 -- v2.30.x: compute "does the player know this affix at
                 -- this rank" INDEPENDENTLY of affixAllowExactDupes so the
                 -- "Protected - Affix known" branch can fire even when the

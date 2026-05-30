@@ -76,6 +76,12 @@ MerchantPanel:SetScript("OnShow", function(self)
         if self.fastModeCB then
             self.fastModeCB:SetChecked(DB.fastMode)
         end
+        if self.turboModeCB then
+            self.turboModeCB:SetChecked(DB.turboMode)
+        end
+        if self.refreshSpeedReadout then
+            self.refreshSpeedReadout()
+        end
         if self.RefreshMerchantModeDropDown then
             self:RefreshMerchantModeDropDown()
         end
@@ -229,11 +235,19 @@ MerchantPanel:SetScript("OnShow", function(self)
             NS.AddHelpIcon(content, kbt, "LEFT", "LEFT", strW + 6, 0, "gate-keep-bags-open")
         end
 
+        -- v2.37.7: slider label changed from "Vendoring Speed" to
+        -- "Time between sells" because the value semantic is INTERVAL
+        -- (lower = faster). The old "Speed" label invited players to
+        -- drag the slider to its maximum value thinking they were
+        -- selecting maximum speed; they were actually selecting maximum
+        -- delay between sells. A live readout below the slider now
+        -- translates the interval into items/second so the practical
+        -- effect is visible.
         local speedSlider = NS.AddSlider(
             content,
             "EbonClearanceVendoringSpeedSlider",
             keepBagsCB,
-            "Vendoring Speed",
+            "Time between sells",
             0.05,
             0.500,
             0.01,
@@ -248,18 +262,73 @@ MerchantPanel:SetScript("OnShow", function(self)
         self.speedSlider = speedSlider
         speedSlider:SetWidth(200)
 
+        -- v2.37.7: live items/sec readout. Updated whenever the slider
+        -- moves OR when Fast Mode / Turbo Mode toggles flip the
+        -- effective rate. Format matches: "About 10 sells per second"
+        -- with a parenthesised note when Fast Mode is overriding the
+        -- slider value so the user knows what's actually in effect.
+        local speedReadout = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        -- Anchor below the slider's Low label rather than the track's
+        -- BOTTOMLEFT so the readout doesn't overlap the slider's
+        -- "0.050s" min/max labels (OptionsSliderTemplate positions Low /
+        -- High BELOW the track, so slider:BOTTOMLEFT is above them).
+        local lowLabel = _G[speedSlider:GetName() .. "Low"]
+        if lowLabel then
+            speedReadout:SetPoint("TOPLEFT", lowLabel, "BOTTOMLEFT", 0, -8)
+        else
+            speedReadout:SetPoint("TOPLEFT", speedSlider, "BOTTOMLEFT", 0, -20)
+        end
+        EC_compCache.setPanelWidth(speedReadout, 60)
+        speedReadout:SetJustifyH("LEFT")
+        if speedReadout.SetWordWrap then
+            speedReadout:SetWordWrap(true)
+        end
+        self.speedReadout = speedReadout
+
+        -- The readout shows the SLIDER's interpretation as the primary
+        -- number so dragging the slider always changes the visible
+        -- value, even with Fast Mode on. When Fast Mode overrides the
+        -- slider value, a secondary "(Fast Mode active: N/sec)" note
+        -- surfaces what's actually going to happen at the vendor.
+        local function refreshSpeedReadout()
+            local sliderValue = DB.vendorInterval or 0.1
+            if sliderValue < 0.05 then
+                sliderValue = 0.05
+            end
+            local batch = DB.turboMode and 4 or 1
+            local sliderRate = batch / sliderValue
+            local effectiveInterval = DB.fastMode and 0.05 or sliderValue
+            local effectiveRate = batch / effectiveInterval
+            local mainText = string.format("About %.0f sells per second.", sliderRate)
+            local noteText = ""
+            if DB.fastMode and math.abs(sliderRate - effectiveRate) > 0.5 then
+                noteText = string.format("  |cffaaaaaa(Fast Mode active: %.0f/sec)|r", effectiveRate)
+            elseif DB.fastMode and DB.turboMode then
+                noteText = "  |cffaaaaaa(Fast + Turbo)|r"
+            elseif DB.fastMode then
+                noteText = "  |cffaaaaaa(Fast Mode)|r"
+            elseif DB.turboMode then
+                noteText = "  |cffaaaaaa(Turbo Mode)|r"
+            end
+            speedReadout:SetText(mainText .. noteText)
+        end
+        refreshSpeedReadout()
+        speedSlider:HookScript("OnValueChanged", refreshSpeedReadout)
+        self.refreshSpeedReadout = refreshSpeedReadout
+
         local fastModeCB = NS.AddCheckbox(
             content,
             "EbonClearanceFastModeCB",
-            speedSlider,
+            speedReadout,
             "Fast Mode (0.05 s interval, 160-item cap)",
             function()
                 return DB.fastMode
             end,
             function(v)
                 DB.fastMode = v
+                refreshSpeedReadout()
             end,
-            -16
+            -10
         )
         self.fastModeCB = fastModeCB
         do
@@ -281,11 +350,56 @@ MerchantPanel:SetScript("OnShow", function(self)
             "|cff888888May cause disconnects on unstable connections - turn off if it does.|r"
         )
 
+        -- v2.37.7: Turbo Mode - pops multiple items per worker fire.
+        -- Stacks with Fast Mode; the live readout reflects whichever
+        -- combination is in effect. AddCheckbox anchors the new
+        -- checkbox at the previous anchor's X, but our anchor here is
+        -- fastModeNote which is indented +26 px to sit under the
+        -- fastModeCB text. Without an override the Turbo checkbox would
+        -- inherit that indent and cascade the indent to every widget
+        -- below it (Quality Threshold etc.). ClearAllPoints + manual
+        -- SetPoint snaps it back to fastModeCB's left column.
+        local turboModeCB = NS.AddCheckbox(
+            content,
+            "EbonClearanceTurboModeCB",
+            fastModeNote,
+            "Turbo Mode (4 items per cycle - bag-clear in seconds)",
+            function()
+                return DB.turboMode
+            end,
+            function(v)
+                DB.turboMode = v
+                refreshSpeedReadout()
+            end,
+            -10
+        )
+        turboModeCB:ClearAllPoints()
+        turboModeCB:SetPoint("TOPLEFT", fastModeNote, "BOTTOMLEFT", -26, -10)
+        self.turboModeCB = turboModeCB
+        do
+            local tmt = _G[turboModeCB:GetName() .. "Text"]
+            if tmt then
+                local strW = (tmt.GetStringWidth and tmt:GetStringWidth()) or 0
+                NS.AddHelpIcon(content, tmt, "LEFT", "LEFT", strW + 6, 0, "gate-turbo-mode")
+            end
+        end
+
+        local turboModeNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        turboModeNote:SetPoint("TOPLEFT", turboModeCB, "BOTTOMLEFT", 26, -2)
+        EC_compCache.setPanelWidth(turboModeNote, 60)
+        turboModeNote:SetJustifyH("LEFT")
+        if turboModeNote.SetWordWrap then
+            turboModeNote:SetWordWrap(true)
+        end
+        turboModeNote:SetText(
+            "|cff888888Combine with Fast Mode for the fastest cycle. Turn off if you see disconnects.|r"
+        )
+
         -- Quality threshold (v2.4.0+): three per-rarity rows, each independently
         -- togglable with its own optional max iLvl. Replaces the old single-dropdown
         -- "sell up to quality X" model. Default all off; opt-in per rarity.
         local thresholdHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-        thresholdHeader:SetPoint("TOPLEFT", fastModeNote, "BOTTOMLEFT", -26, -24)
+        thresholdHeader:SetPoint("TOPLEFT", turboModeNote, "BOTTOMLEFT", -26, -24)
         thresholdHeader:SetText("Quality Threshold")
         NS.AddHelpIcon(content, thresholdHeader, "LEFT", "RIGHT", 6, 0, "gate-quality-rules")
 

@@ -319,8 +319,10 @@ function EC_compCache.buildProcessSummary()
                 end
                 if not skip then
                     local mode, spellName, perCast
+                    -- One GetItemInfo read for quality, reused by the
+                    -- Disenchant gate and the result row below.
+                    local _, _, quality = GetItemInfo(itemID)
                     if EC_compCache.canDisenchant(itemID) then
-                        local _, _, quality = GetItemInfo(itemID)
                         -- v2.23.0: same dupe gate as the sell / delete
                         -- chain. v2.27.0: also honour the unified
                         -- ADB.allowedItems override so a user-marked
@@ -367,7 +369,6 @@ function EC_compCache.buildProcessSummary()
                         perCast = 1
                     end
                     if mode then
-                        local _, _, quality = GetItemInfo(itemID)
                         results[#results + 1] = {
                             bag = bag,
                             slot = slot,

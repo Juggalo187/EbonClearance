@@ -101,6 +101,7 @@ local function EC_BuildBugReport()
     add("Vendor Interval: " .. tostring(DB.vendorInterval))
     add("Max Items Per Run: " .. tostring(DB.maxItemsPerRun))
     add("Fast Mode: " .. tostring(DB.fastMode))
+    add("Turbo Mode: " .. tostring(DB.turboMode))
     -- v2.10.0 / v2.11.0 / v2.13.0 auto-protect family - omitting these
     -- left a blind spot in earlier reports for "why is X being kept?"
     -- diagnostics where the auto-protect path was the answer.

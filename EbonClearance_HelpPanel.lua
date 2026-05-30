@@ -229,6 +229,12 @@ local EC_HELP_ENTRIES = {
         panel = "EbonClearanceOptionsMerchant",
     },
     {
+        id = "gate-turbo-mode",
+        q = "Turbo Mode",
+        a = "Pops 4 items off the queue per cycle instead of 1, so a full bag empties in seconds. Combine with Fast Mode (0.05s interval) for the fastest possible clear - bag-clear in under two seconds with full bags. Default off. Like Fast Mode, the faster cycle can disconnect on laggy realms; turn it off if you see disconnects. The 'About N sells per second' readout under the slider always reflects what the current combination will do.",
+        panel = "EbonClearanceOptionsMerchant",
+    },
+    {
         id = "gate-equipped-never-sells",
         q = "Currently-equipped items never sell",
         a = "Even when on the Sell List, EbonClearance won't vendor anything you're currently wearing. Unequip first if you want it sold. Turn on 'Keep gear sets' if you also want gear from Blizzard's Equipment Manager protected.",

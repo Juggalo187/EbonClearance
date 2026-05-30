@@ -63,10 +63,19 @@ local ADDON_URL = NS.ADDON_URL
 -- (.github/workflows/release.yml).
 local ADDON_VERSION = "v2.37.6"
 local function EC_GetVersion()
-    if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
-        return ADDON_VERSION
+    -- Cached on the shared cache (not a new file-scope local) to respect
+    -- the 200-locals cap on this chunk. Reached via NS.compCache because
+    -- the local EC_compCache alias is declared further down the file.
+    -- Version is fixed for the session.
+    local cache = NS.compCache
+    if not cache.cachedVersion then
+        if ADDON_VERSION:match("^v%d+%.%d+%.%d+") then
+            cache.cachedVersion = ADDON_VERSION
+        else
+            cache.cachedVersion = GetAddOnMetadata("EbonClearance", "Version") or "unknown"
+        end
     end
-    return GetAddOnMetadata("EbonClearance", "Version") or "unknown"
+    return cache.cachedVersion
 end
 -- Exposed to split files (the bug-report builder in Stage 8 reads this).
 NS.GetVersion = EC_GetVersion
@@ -131,6 +140,24 @@ local STATE = {
 -- same memory. Comments documenting individual fields (scav, lastSummonAt,
 -- bindCache, etc.) live next to the declaration in Core.
 local EC_compCache = NS.compCache
+
+-- Open the named Interface Options sub-panel. The double
+-- InterfaceOptionsFrame_OpenToCategory call is the 3.3.5a quirk fix: the
+-- first call only registers the category, the second actually focuses it.
+-- Centralised here (on NS, so the minimap / LDB launcher reach it too)
+-- rather than copy-pasted at every open site. Callers pass the global
+-- frame name, e.g. "EbonClearanceOptionsMain".
+function NS.OpenOptionsPanel(frameName)
+    if not InterfaceOptionsFrame_OpenToCategory then
+        return
+    end
+    local panel = _G[frameName]
+    if not panel then
+        return
+    end
+    InterfaceOptionsFrame_OpenToCategory(panel)
+    InterfaceOptionsFrame_OpenToCategory(panel)
+end
 -- Player time-spent-moving (seconds) accumulated while the Scavenger is out.
 -- Drives the stuck-detection heuristic in EC_HandleScavengerOut. Resets on
 -- every Scavenger out<->in transition and after a stuck-dismiss fires.
@@ -370,7 +397,13 @@ local function EnsureAccountDB()
             if type(k) == "string" then
                 local lk = k:lower()
                 if lk ~= k then
-                    remapped[lk] = v
+                    -- Keep-first on a case collision: don't clobber an entry
+                    -- that already exists under the lowercase key (values are
+                    -- membership flags, so the surviving key preserves the mark
+                    -- either way). The mixed-case key is dropped regardless.
+                    if remapped[lk] == nil and ADB.allowedAffixes[lk] == nil then
+                        remapped[lk] = v
+                    end
                     ADB.allowedAffixes[k] = nil
                     migrated = true
                 end
@@ -631,6 +664,15 @@ local function EnsureDB()
     end
     if type(DB.fastMode) ~= "boolean" then
         DB.fastMode = false
+    end
+    -- v2.37.7: batch-vendor opt-in. When on, the worker pops multiple
+    -- sells per fire instead of one, so a bag-clear finishes in a fraction
+    -- of the time. Default OFF (existing setups unchanged on upgrade).
+    -- Reported by a player on Discord ("2.1") that the existing fastest
+    -- setting still felt slow when trying to dodge environment hazards
+    -- while bag-clearing; this is the follow-up pacing pass.
+    if type(DB.turboMode) ~= "boolean" then
+        DB.turboMode = false
     end
     if type(DB.autoLootCycle) ~= "boolean" then
         -- v2.12.0: fresh installs default ON. The auto-loot cycle is the
@@ -1943,6 +1985,24 @@ local function EC_EffectiveMaxItemsPerRun()
     return (DB and DB.maxItemsPerRun) or 80
 end
 
+-- v2.37.7: Turbo Mode pops multiple items off the queue per worker fire
+-- so a bag clear finishes in a fraction of the time. Stacks with Fast
+-- Mode: with both on the effective rate is 4 / 0.05 = 80 items/sec.
+-- Standalone Turbo with default 0.1 s interval = 40 items/sec. The
+-- batch size is deliberately small (4) so the per-frame UseContainerItem
+-- burst stays well inside what server-side rate limiting will accept;
+-- the per-run cap still applies. Surfaced in the Merchant panel; the
+-- effective items/sec readout under the slider reflects the current
+-- combination.
+local TURBO_BATCH_SIZE = 4
+
+local function EC_EffectiveBatchSize()
+    if DB and DB.turboMode then
+        return TURBO_BATCH_SIZE
+    end
+    return 1
+end
+
 -- Pet-cycle timer/flag locals. MUST be declared before EC_HandleBagFullForCycle:
 -- that function (BAG_UPDATE handler) writes EC_summonGoblinPending /
 -- EC_summonGoblinTimer, and Lua resolves writes to whatever is in scope at the
@@ -2638,12 +2698,7 @@ function EC_compCache.openPanelToList(setName)
     if not panelName then
         return
     end
-    local panel = _G[panelName]
-    if not panel then
-        return
-    end
-    InterfaceOptionsFrame_OpenToCategory(panel)
-    InterfaceOptionsFrame_OpenToCategory(panel)
+    NS.OpenOptionsPanel(panelName)
 end
 
 -- v2.13.0 ElvUI bag buttons. Three small icon buttons attached to the
@@ -3097,6 +3152,22 @@ function EC_compCache.getEquippedILvl(slotID)
     return iLvl or 0
 end
 
+-- Lowest equipped iLvl across the given candidate slots, skipping empty
+-- ones; nil when none are filled. Shared by the upgrade sweep (cleanup +
+-- new-item) and the stale-upgrade report. NOTE: isDowngradeVsEquipped does
+-- NOT use this - it treats an empty candidate slot as "don't auto-sell"
+-- (returns early), which is a different rule.
+function EC_compCache.getLowestEquippedILvl(slots)
+    local lowest = nil
+    for _, sid in ipairs(slots) do
+        local eq = EC_compCache.getEquippedILvl(sid)
+        if eq > 0 and (lowest == nil or eq < lowest) then
+            lowest = eq
+        end
+    end
+    return lowest
+end
+
 -- v2.12.0 mirror of checkBagsForUpgrades' iLvl-vs-equipped comparison,
 -- inverted: returns true iff a looted item's iLvl is strictly LESS than
 -- the lowest populated equipped iLvl across the item's candidate slots.
@@ -3201,13 +3272,7 @@ function EC_compCache.checkBagsForUpgrades()
                 local _, _, _, iLvl, _, _, _, _, equipLoc = GetItemInfo(itemID)
                 local slots = equipLoc and EC_compCache.INVTYPE_SLOTS[equipLoc]
                 if iLvl and iLvl > 0 and slots then
-                    local lowestEquipped = nil
-                    for _, sid in ipairs(slots) do
-                        local eq = EC_compCache.getEquippedILvl(sid)
-                        if eq > 0 and (lowestEquipped == nil or eq < lowestEquipped) then
-                            lowestEquipped = eq
-                        end
-                    end
+                    local lowestEquipped = EC_compCache.getLowestEquippedILvl(slots)
                     -- Remove only when a slot is actually populated and
                     -- the item's iLvl is at or below it. If every
                     -- candidate slot is empty, be conservative and keep
@@ -3245,13 +3310,7 @@ function EC_compCache.checkBagsForUpgrades()
                         -- are ignored - otherwise an empty ring-2 slot
                         -- (iLvl 0) would suppress upgrade detection
                         -- against an iLvl-250 ring-1.
-                        local lowestEquipped = nil
-                        for _, sid in ipairs(slots) do
-                            local eq = EC_compCache.getEquippedILvl(sid)
-                            if eq > 0 and (lowestEquipped == nil or eq < lowestEquipped) then
-                                lowestEquipped = eq
-                            end
-                        end
+                        local lowestEquipped = EC_compCache.getLowestEquippedILvl(slots)
                         -- v2.12.0: require at least one populated slot to
                         -- give us a real baseline. The pre-fix behaviour
                         -- fell back to threshold = 0 when every candidate
@@ -3747,6 +3806,19 @@ end)
 -- a synchronous read inside the hook can't see what was sold. All three
 -- helpers hang off EC_manualSell to keep main-chunk local count down (Lua
 -- 5.1 caps that at 200).
+-- v2.37.0: add a sell's copper to the current zone's lifetime total
+-- (or "Unknown" when the zone text isn't ready, e.g. mid-load). Shared by
+-- the manual UseContainerItem hook and the worker-cycle FinishRun so the
+-- Stats panel's "Top Zones" rollup matches the wallet totals.
+function EC_compCache.attributeCopperToZone(copper)
+    local zone = GetRealZoneText and GetRealZoneText() or nil
+    if not zone or zone == "" then
+        zone = "Unknown"
+    end
+    DB.copperByZone = DB.copperByZone or {}
+    DB.copperByZone[zone] = (DB.copperByZone[zone] or 0) + copper
+end
+
 function EC_manualSell.snapshotBags()
     wipe(EC_manualSell.snapshot)
     for bag = 0, 4 do
@@ -3827,12 +3899,7 @@ function EC_manualSell.installHookOnce()
                         DB.soldCopperByQuality[quality] = (DB.soldCopperByQuality[quality] or 0) + copper
                     end
                     -- v2.37.0: attribute the sell to the current zone.
-                    local zone = GetRealZoneText and GetRealZoneText() or nil
-                    if not zone or zone == "" then
-                        zone = "Unknown"
-                    end
-                    DB.copperByZone = DB.copperByZone or {}
-                    DB.copperByZone[zone] = (DB.copperByZone[zone] or 0) + copper
+                    EC_compCache.attributeCopperToZone(copper)
                 end
                 EC_session.copper = EC_session.copper + copper
                 EC_session.sold = EC_session.sold + 1
@@ -4262,12 +4329,7 @@ local function FinishRun()
     -- v2.37.0: attribute the auto-cycle haul to the current zone so the
     -- Stats panel's "Top Zones" rollup tracks worker sells too.
     if (goldThisVendoring or 0) > 0 then
-        local zone = GetRealZoneText and GetRealZoneText() or nil
-        if not zone or zone == "" then
-            zone = "Unknown"
-        end
-        DB.copperByZone = DB.copperByZone or {}
-        DB.copperByZone[zone] = (DB.copperByZone[zone] or 0) + goldThisVendoring
+        EC_compCache.attributeCopperToZone(goldThisVendoring)
     end
 
     -- Check if merchant is still open - delay re-scan so server can process sold items
@@ -4401,12 +4463,19 @@ end
 -- tuning choice. Faster per-item pacing floods the server with UseContainerItem
 -- packets and trips a server-side rate limit that boots the client. See
 -- docs/ADDON_GUIDE.md "Performance rules" and v2.0.11 in the README changelog.
+-- v2.37.7: Turbo Mode pops EC_EffectiveBatchSize() items per fire. The
+-- default batch (1) preserves the v2.0.11 invariant exactly; the opt-in
+-- larger batch is gated on DB.turboMode and capped so the per-frame
+-- packet count stays bounded.
 worker:SetScript("OnUpdate", function(self, elapsed)
     self.t = (self.t or 0) + elapsed
     local interval = EC_EffectiveVendorInterval()
     if self.t >= interval then
         self.t = 0
-        DoNextAction()
+        local batch = EC_EffectiveBatchSize()
+        for _ = 1, batch do
+            DoNextAction()
+        end
     end
 end)
 
@@ -4738,11 +4807,7 @@ StaticPopupDialogs["EC_WELCOME"] = {
         PrintNice("|cffb6ffb6Defaults kept.|r Type |cffffff00/ec|r any time to change settings.")
     end,
     OnCancel = function()
-        local mainPanel = _G["EbonClearanceOptionsMain"]
-        if InterfaceOptionsFrame_OpenToCategory and mainPanel then
-            InterfaceOptionsFrame_OpenToCategory(mainPanel)
-            InterfaceOptionsFrame_OpenToCategory(mainPanel)
-        end
+        NS.OpenOptionsPanel("EbonClearanceOptionsMain")
     end,
     timeout = 0,
     whileDead = true,
@@ -4974,13 +5039,7 @@ function EC_compCache.buildStaleUpgradeReport()
                 if not slots then
                     skipped[#skipped + 1] = { id = id, name = name }
                 else
-                    local lowestEquipped = nil
-                    for _, sid in ipairs(slots) do
-                        local eq = EC_compCache.getEquippedILvl(sid)
-                        if eq > 0 and (lowestEquipped == nil or eq < lowestEquipped) then
-                            lowestEquipped = eq
-                        end
-                    end
+                    local lowestEquipped = EC_compCache.getLowestEquippedILvl(slots)
                     if not lowestEquipped then
                         skipped[#skipped + 1] = { id = id, name = name }
                     elseif iLvl <= lowestEquipped then
@@ -5021,9 +5080,7 @@ function EbonClearance_ToggleSettings()
     if InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
         InterfaceOptionsFrame:Hide()
     else
-        local mainPanel = _G["EbonClearanceOptionsMain"]
-        InterfaceOptionsFrame_OpenToCategory(mainPanel)
-        InterfaceOptionsFrame_OpenToCategory(mainPanel)
+        NS.OpenOptionsPanel("EbonClearanceOptionsMain")
     end
 end
 
@@ -5047,9 +5104,7 @@ SLASH_EBONCLEARANCE1 = "/ec"
 SlashCmdList["EBONCLEARANCE"] = function(msg)
     msg = (msg or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if msg == "" then
-        local mainPanel = _G["EbonClearanceOptionsMain"]
-        InterfaceOptionsFrame_OpenToCategory(mainPanel)
-        InterfaceOptionsFrame_OpenToCategory(mainPanel)
+        NS.OpenOptionsPanel("EbonClearanceOptionsMain")
         return
     end
 
@@ -5478,9 +5533,7 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
     end
 
     -- Unknown subcommand - open options
-    local mainPanel = _G["EbonClearanceOptionsMain"]
-    InterfaceOptionsFrame_OpenToCategory(mainPanel)
-    InterfaceOptionsFrame_OpenToCategory(mainPanel)
+    NS.OpenOptionsPanel("EbonClearanceOptionsMain")
 end
 
 SLASH_ECDEBUG1 = "/ecdebug"
@@ -5701,18 +5754,10 @@ f:SetScript("OnEvent", function(self, event, ...)
         local pendingOpen = EC_compCache.pendingOpenAfterCombat
         if pendingOpen then
             EC_compCache.pendingOpenAfterCombat = nil
-            if pendingOpen == "main" and InterfaceOptionsFrame_OpenToCategory then
-                local mainPanel = _G["EbonClearanceOptionsMain"]
-                if mainPanel then
-                    InterfaceOptionsFrame_OpenToCategory(mainPanel)
-                    InterfaceOptionsFrame_OpenToCategory(mainPanel)
-                end
-            elseif pendingOpen == "process" and InterfaceOptionsFrame_OpenToCategory then
-                local pbp = _G["EbonClearanceOptionsProcessBags"]
-                if pbp then
-                    InterfaceOptionsFrame_OpenToCategory(pbp)
-                    InterfaceOptionsFrame_OpenToCategory(pbp)
-                end
+            if pendingOpen == "main" then
+                NS.OpenOptionsPanel("EbonClearanceOptionsMain")
+            elseif pendingOpen == "process" then
+                NS.OpenOptionsPanel("EbonClearanceOptionsProcessBags")
             end
         end
         -- v2.22.0: Process Bags cast-button re-arm. SetAttribute is blocked

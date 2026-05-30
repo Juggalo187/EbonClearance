@@ -5,6 +5,17 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.37.7
+
+Patch release. Faster bag-clearing for players who need it, and a UX pass on the vendoring-speed slider so nobody accidentally sets themselves to the slowest setting.
+
+Player **2.1** on Discord reported the existing fastest setting still felt slow when trying to clear bags between mob waves and dodge environment hazards. After another look at the vendor pacing, this patch ships two things: a new Turbo Mode that pops multiple items off the queue per worker fire (so a full bag empties in a fraction of the time), and a relabelled speed slider with a live items-per-second readout so the practical effect of any setting is visible at a glance.
+
+- **New: Turbo Mode.** Opt-in checkbox in Merchant Settings, default OFF. When on, the vendor worker processes 4 items per fire instead of 1. Stacks with Fast Mode: Turbo + Fast = ~80 items/sec; Turbo alone (default 0.1 s interval) = ~40 items/sec; Fast alone (existing) = ~20 items/sec; default = ~10 items/sec. The per-run cap still applies (80 / 160 with Fast Mode). The 0.05 s inter-fire floor and the per-fire batch size are deliberately tuned so the per-second `UseContainerItem` packet count stays inside what server-side rate limiting accepts. Carry a note next to the toggle reminding players to disable it if they see disconnects.
+- **UX: speed slider relabelled + live readout.** The slider used to be labelled `Vendoring Speed` but the value is the interval between sells in seconds (lower = faster). Players naturally dragged it to the right end thinking "more speed" and ended up at 2 sells per second instead of 10. Now labelled `Time between sells` so the value semantic matches the label, and a new live `About N sells per second.` line below the slider updates as the slider moves and as Fast / Turbo toggle, including a `(Fast Mode overrides slider)` note when the Fast Mode floor is in effect.
+- **Bug report:** `/ec bugreport` now includes the Turbo Mode state alongside Fast Mode + Vendor Interval.
+- **Schema:** one new field, `DB.turboMode`, additive with the nil-default migration pattern. Safe overwrite from v2.37.6.
+
 ### v2.37.6
 
 Patch release. Adds a `/ec perf` self-diagnostic and clickable Run buttons for slash commands.
