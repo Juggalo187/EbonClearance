@@ -5463,6 +5463,17 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
         return
     end
 
+    if cmd == "commtest" then
+        -- v2.39.0: solo diagnostic for the version-alert comms layer.
+        -- Tests wire relay (guild echo) and the nudge logic (simulated peer).
+        if NS.Comms then
+            NS.Comms.RunSelfTest()
+        else
+            PrintNice("|cffff4444Comms module not loaded.|r")
+        end
+        return
+    end
+
     if cmd == "affixdebug" then
         -- v2.37.0 (Borrow A): toggle / inspect / clear the affix-pipeline
         -- event log. The log is account-wide (ADB.affixDebug) so the

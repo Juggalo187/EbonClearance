@@ -63,6 +63,7 @@ ok("comms uses numeric version encoding", comms:find("1000000", 1, true) ~= nil)
 ok("comms has no 4.0 prefix-registration API", not comms:find("RegisterAddonMessagePrefix", 1, true))
 ok("comms defines NS.Comms", comms:find("NS.Comms", 1, true) ~= nil)
 ok("comms gates on versionAlerts", comms:find("versionAlerts", 1, true) ~= nil)
+ok("comms exposes RunSelfTest", comms:find("function Comms.RunSelfTest", 1, true) ~= nil)
 
 local events = readCode("EbonClearance_Events.lua")
 ok("hub registers PARTY_MEMBERS_CHANGED", events:find("PARTY_MEMBERS_CHANGED", 1, true) ~= nil)

@@ -149,6 +149,70 @@ Comms.RegisterHandler("VERR", function(payload, sender, channel)
     considerPeerVersion(payload, sender)
 end)
 
+-- ---- self-test diagnostic (/ec commtest) --------------------------------
+-- Lets a solo player verify two things without a second client:
+--   1. the wire: does this server actually deliver addon messages? (a guild
+--      addon message echoes back to the sender on stock 3.3.5a)
+--   2. the logic: does a higher peer version produce one nudge, and does the
+--      opt-out toggle suppress it?
+local commtestToken = nil
+local commtestEchoed = false
+
+-- A ping we sent comes back to us (self-echo on GUILD) or a peer answers PONG.
+Comms.RegisterHandler("PING", function(payload, sender, channel)
+    if commtestToken and payload == commtestToken then
+        commtestEchoed = true
+        NS.PrintNicef("Comms relay OK: message delivered (echo from %s).", tostring(sender))
+    end
+    -- If a real peer pinged us, answer so their test can pass too.
+    if sender and sender ~= UnitName("player") then
+        Comms.Send("PONG", payload, "WHISPER", sender)
+    end
+end)
+
+Comms.RegisterHandler("PONG", function(payload, sender, channel)
+    if commtestToken and payload == commtestToken then
+        commtestEchoed = true
+        NS.PrintNicef("Comms relay OK: reply received from %s.", tostring(sender))
+    end
+end)
+
+function Comms.RunSelfTest()
+    local myVer = NS.GetVersion and NS.GetVersion() or "unknown"
+    NS.PrintNicef("Comms self-test. Your version: %s (parsed %s).",
+        myVer, tostring(Comms.parseVersion(myVer)))
+
+    -- 1. Wire relay check (needs a guild; bypasses the normal send throttle).
+    if GetGuildInfo("player") then
+        commtestToken = tostring(GetTime())
+        commtestEchoed = false
+        SendAddonMessage(PREFIX, "PING" .. SEP .. commtestToken, "GUILD")
+        NS.PrintNicef("Sent a guild ping; waiting for it to echo back...")
+        NS.Delay(3, function()
+            if not commtestEchoed then
+                NS.PrintNicef("Comms relay inconclusive: no echo in 3s. This core may not echo your own guild messages, or addon messages are filtered. Confirm with a second player.")
+            end
+        end)
+    else
+        NS.PrintNicef("Not in a guild, skipping the wire echo test. Join any guild to test message delivery.")
+    end
+
+    -- 2. Logic + UX check: simulate a higher-version peer through the real path.
+    versionNudgeShown = false -- reset so the test is repeatable
+    local myInt = Comms.parseVersion(myVer)
+    if myInt then
+        local maj = math.floor(myInt / 1000000)
+        local min = math.floor((myInt % 1000000) / 1000)
+        local fakeVer = string.format("v%d.%d.%d", maj, min + 1, 0)
+        local alertsOn = EbonClearanceDB and EbonClearanceDB.versionAlerts
+        NS.PrintNicef("Simulating a peer on %s. Alerts are %s; %s.",
+            fakeVer,
+            alertsOn and "ON" or "OFF",
+            alertsOn and "an Update available line should appear in ~3s" or "no nudge expected (toggle is off)")
+        considerPeerVersion(fakeVer, "CommTest")
+    end
+end
+
 -- Send-trigger entry point. Called by the event hub in EbonClearance_Events.lua
 -- with "GUILD" / "PARTY" / "RAID". Gated + throttled internally.
 function Comms.FireVersionProbe(channel)
