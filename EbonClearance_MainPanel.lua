@@ -637,10 +637,15 @@ local function BuildMainPanel(panel, content)
         mainTip,
         "Tell me when an update is available",
         function()
-            return DB.versionAlerts
+            -- versionAlerts is an account-level field on the top-level
+            -- SavedVariables (not per-character), so read it directly rather
+            -- than via a panel DB upvalue this builder does not have.
+            return EbonClearanceDB and EbonClearanceDB.versionAlerts
         end,
         function(v)
-            DB.versionAlerts = v
+            if EbonClearanceDB then
+                EbonClearanceDB.versionAlerts = v
+            end
         end,
         -14
     )

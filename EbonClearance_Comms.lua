@@ -98,7 +98,7 @@ local function showVersionNudge(peerVerStr)
     end
     versionNudgeShown = true
     NS.PrintNicef(
-        "Update available: %s (you have %s). %s",
+        "|cffffff00Update available: %s|r (you have %s). |cff33ff33%s|r",
         peerVerStr,
         tostring(myVersionStr()),
         DOWNLOAD_URL
