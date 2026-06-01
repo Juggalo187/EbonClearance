@@ -5957,12 +5957,15 @@ f:SetScript("OnEvent", function(self, event, ...)
             end
             EC_scavStateBootstrapped = true
         end
-        -- Version gossip: after a short settle, ask the guild for versions.
-        NS.Delay(5, function()
-            if NS.Comms and GetGuildInfo("player") then
-                NS.Comms.FireVersionProbe("GUILD")
-            end
-        end)
+        -- Version gossip: once per session (login / reload, not zone changes),
+        -- after a short settle, ask the guild for versions.
+        if event == "PLAYER_LOGIN" then
+            NS.Delay(5, function()
+                if NS.Comms and GetGuildInfo("player") then
+                    NS.Comms.FireVersionProbe("GUILD")
+                end
+            end)
+        end
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- Combat ended: re-fire the open driver. If the toggle is off or
         -- the queue is empty the driver early-returns; cost on combat
