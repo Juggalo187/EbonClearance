@@ -530,6 +530,60 @@ of `EbonClearance.lua`.
   richness you'd find in retail. If a tutorial assumes those, it's not
   for 3.3.5a.
 
+## Addon comms (`NS.Comms`) and version alerts
+
+Added in v2.39.0. All addon-to-addon messaging lives in
+[EbonClearance_Comms.lua](../EbonClearance_Comms.lua), which loads **after**
+`EbonClearance_Events.lua` so `NS.GetVersion`, `NS.PrintNicef`, and `NS.Delay`
+are already wired. It has two layers: a generic transport (`NS.Comms`) and the
+first consumer (the version-update nudge).
+
+**Transport.** `NS.Comms.Send(msgType, payload, channel, target)` and
+`NS.Comms.RegisterHandler(msgType, fn)`. One hidden frame owns `CHAT_MSG_ADDON`;
+it early-returns on a prefix mismatch and dispatches on the message type. The
+wire format is `msgType .. "\t" .. payload` under prefix `"ECLR1"`. A new shared
+feature (guild stats, etc.) adds a `RegisterHandler` call and nothing else.
+
+**3.3.5a constraints baked in - do not "modernise" these:**
+
+- **No `RegisterAddonMessagePrefix`.** That API is 4.0+. On 3.3.5a every
+  `CHAT_MSG_ADDON` is delivered and you filter by prefix yourself.
+- **No global channel.** `SendAddonMessage` accepts only
+  `PARTY` / `RAID` / `GUILD` / `BATTLEGROUND` / `WHISPER` (no `CHANNEL` type
+  either). Reach is guild + group; there is no server-wide broadcast. Any
+  "server-wide" feature needs a custom joined chat channel or a server relay.
+- **Group-roster events are `PARTY_MEMBERS_CHANGED` and `RAID_ROSTER_UPDATE`**,
+  registered in the event hub - NOT the 4.0 `GROUP_ROSTER_UPDATE`. The hub
+  forwards to `NS.Comms.FireVersionProbe(channel)`.
+- **Version compare is numeric, never lexical.** `Comms.parseVersion` encodes
+  `vMAJOR.MINOR.PATCH` to an integer so `v2.10.0 > v2.9.0`. A raw string `>`
+  gets that backwards once any component reaches two digits. The unit test in
+  `tests/test_comms_version.lua` locks this.
+
+**Clickable chat links need a SetItemRef REPLACEMENT, not `hooksecurefunc`.**
+The update nudge prints a custom `|Hecupdate:latest|h` hyperlink. Stock 3.3.5a
+`SetItemRef` feeds any unknown link type to `ItemRefTooltip:SetHyperlink`, which
+**errors with "Unknown link type"** (and trips other addons that hook
+`SetHyperlink`, e.g. Questie). A `hooksecurefunc` post-hook cannot prevent that -
+the stock body has already run. So the comms file **replaces** `SetItemRef` with
+a wrapper that handles our link and returns *before* calling the original; every
+other link is forwarded untouched. The click opens a `StaticPopup` with the
+release URL pre-selected (the client cannot open a browser, so copy-paste is the
+ceiling). `editBoxWidth` is unreliable on this client - the editbox is sized in
+`OnShow` from the dialog width instead.
+
+**Gating + opt-out.** Everything is gated on `EbonClearanceDB.versionAlerts`
+(account-level, default `true`, additive `EnsureDB` nil-default). The Main panel
+checkbox reads/writes `EbonClearanceDB.versionAlerts` **directly** - `BuildMainPanel`
+has no `DB` proxy upvalue, so referencing a bare `DB` there is a nil-index crash
+(it was, in the first cut).
+
+**`/ec commtest`.** Solo diagnostic: a guild self-echo ping proves the server
+actually relays addon messages (the gating unknown for any comms feature on a
+given core), and a simulated higher-version peer exercises the real nudge path
+and the opt-out. Reach for it first when a comms feature "does nothing" on a new
+realm.
+
 ## Gotchas and refactoring traps
 
 Read this section before touching any of the subsystems below. Each item is

@@ -5,6 +5,20 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.39.0
+
+New feature: EbonClearance now tells you when a newer version is out, built on a small reusable addon-comms layer that future shared features will reuse.
+
+WoW 3.3.5a addons cannot check the web for updates, so EbonClearance learns the latest version by gossiping with other players running it. When you log in (and when you join a party or raid) it asks your guild / group what version everyone is on; if someone has a newer one, you get a single chat line with a clickable link.
+
+- **Version-update nudge (default on).** One quiet chat line per session: `Update available: vX.Y.Z (you have ...)` in yellow, with a green clickable `[Click here]` link. Clicking it opens a small popup with the latest-release URL pre-selected for copy-paste (the 3.3.5a client cannot open a browser, so copy-and-paste is the most a click can offer). Turn it off with the new "Tell me when an update is available" box on the main EbonClearance panel.
+- **Reusable comms transport (`NS.Comms`).** A new `EbonClearance_Comms.lua` owns a single addon-message channel (prefix `ECLR1`): send / register-handler / receive over `SendAddonMessage` + `CHAT_MSG_ADDON`, with a per-channel send throttle. The version check is its first consumer. Reach is GUILD / PARTY / RAID with direct whisper replies; 3.3.5a has no global addon channel, so it is guild + group only.
+- **Numeric version compare.** Versions parse to integers (major, minor, patch) so two-digit versions order correctly. Malformed or absurdly-high versions are ignored, so a bad broadcast cannot produce a false nudge.
+- **`/ec commtest` diagnostic.** A solo self-test: it confirms the server actually delivers addon messages (a guild ping that echoes back) and simulates a higher-version peer so you can see the nudge and confirm the opt-out toggle, all without a second player online.
+- **Schema:** one additive account-level field, `EbonClearanceDB.versionAlerts` (boolean, default `true`). Existing saves auto-migrate via the nil-default pattern; downgrade-safe.
+
+New file `EbonClearance_Comms.lua` (loads after `EbonClearance_Events.lua`); the addon now ships 26 `.lua` files. New test suite `tests/test_comms_version.lua` runs in CI alongside the existing three.
+
 ### v2.38.4
 
 Docs-only patch. Adds a Help FAQ entry that v2.38.3 should have shipped with.

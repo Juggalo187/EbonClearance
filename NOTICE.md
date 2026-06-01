@@ -59,6 +59,16 @@ Two other addons solve overlapping problems in the same niche:
   Different scope and architecture from EC; no overlapping
   implementation patterns.
 
+The v2.39.0 version-update nudge follows a long-standing 3.3.5a pattern -
+broadcast your version on a group channel, have peers reply, and show a
+"newer version available" line once per session - long used by Auctionator
+and other addons of that era. EbonClearance's `NS.Comms` transport and the
+version check were written from scratch against `SendAddonMessage` /
+`CHAT_MSG_ADDON`; the one deliberate departure from the classic
+implementations is comparing parsed integers rather than raw version
+strings, which fixes the lexical-ordering bug (where "2.10.0" sorts below
+"2.9.0") those string comparisons carry.
+
 Cross-pollination of ideas in a small private-server addon ecosystem
 is normal and acknowledged. Where EbonClearance was inspired by an
 idea visible in another addon's behaviour, the implementation was
