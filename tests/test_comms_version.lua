@@ -10,6 +10,9 @@ local function makeFrame()
     return setmetatable({}, { __index = function() return function() end end })
 end
 _G.CreateFrame = function() return makeFrame() end
+-- The comms module also defines a StaticPopup dialog and replaces SetItemRef
+-- at load time (for the clickable update link), so provide the table it indexes.
+_G.StaticPopupDialogs = {}
 
 -- Load with the addon vararg shape WoW uses: (addonName, NS).
 local NS = {}

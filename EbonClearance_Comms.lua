@@ -80,7 +80,12 @@ frame:SetScript("OnEvent", function(self, event, prefix, message, channel, sende
 end)
 
 -- ---- version-check consumer ---------------------------------------------
-local DOWNLOAD_URL = "github.com/powerfulqa/EbonClearance"
+local RELEASE_URL = "https://github.com/powerfulqa/EbonClearance/releases/latest"
+-- Green clickable link shown in the nudge. The "ecupdate" hyperlink type is
+-- custom; the SetItemRef hook below catches the click and shows a copyable
+-- popup (the 3.3.5a client cannot open a browser, so copy-and-paste is the
+-- most a click can offer).
+local RELEASE_LINK = "|cff33ff33|Hecupdate:latest|h[Click here]|h|r"
 local NUDGE_DELAY_S = 3
 local versionNudgeShown = false -- once per session
 
@@ -98,11 +103,66 @@ local function showVersionNudge(peerVerStr)
     end
     versionNudgeShown = true
     NS.PrintNicef(
-        "|cffffff00Update available: %s|r (you have %s). |cff33ff33%s|r",
+        "|cffffff00Update available: %s|r (you have %s). %s",
         peerVerStr,
         tostring(myVersionStr()),
-        DOWNLOAD_URL
+        RELEASE_LINK
     )
+end
+
+-- Copy-URL popup shown when the player clicks the green release link. WoW
+-- 3.3.5a cannot launch a browser, so we present the URL pre-selected for
+-- Ctrl+C. The default SetItemRef ignores unknown link types, so this hook is
+-- the only handler for the custom "ecupdate" link.
+StaticPopupDialogs["EBONCLEARANCE_UPDATE_URL"] = {
+    text = "Copy this link, then open it in your browser:",
+    button1 = CLOSE,
+    hasEditBox = true,
+    hasWideEditBox = false,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnShow = function(self)
+        local eb = self.editBox or _G[(self:GetName() or "") .. "EditBox"]
+        if eb then
+            -- editBoxWidth is not honored reliably on this client, so size the
+            -- box to the dialog's own width (driven by the title text) minus a
+            -- small inset, so it fills the popup instead of sitting narrow.
+            local w = self:GetWidth() or 0
+            if w < 120 then
+                w = 320
+            end
+            eb:SetWidth(w - 40)
+            eb:SetText(RELEASE_URL)
+            eb:HighlightText() -- whole URL selected for Ctrl+C
+            eb:SetCursorPosition(0)
+            eb:SetFocus()
+        end
+    end,
+    EditBoxOnEnterPressed = function(self)
+        self:GetParent():Hide()
+    end,
+    EditBoxOnEscapePressed = function(self)
+        self:GetParent():Hide()
+    end,
+}
+
+-- Intercept clicks on our custom link BEFORE the stock handler runs. We
+-- REPLACE SetItemRef (rather than hooksecurefunc) on purpose: the stock
+-- 3.3.5a SetItemRef passes unknown link types to ItemRefTooltip:SetHyperlink,
+-- which errors with "Unknown link type" (and trips other addons that hook
+-- SetHyperlink). Returning early for our link avoids that path entirely;
+-- every other link is forwarded to the original untouched.
+local origSetItemRef = SetItemRef
+function SetItemRef(link, text, button, chatFrame)
+    if type(link) == "string" and link:sub(1, 9) == "ecupdate:" then
+        StaticPopup_Show("EBONCLEARANCE_UPDATE_URL")
+        return
+    end
+    if origSetItemRef then
+        return origSetItemRef(link, text, button, chatFrame)
+    end
 end
 
 -- Decide whether a peer's advertised version should trigger a nudge.
