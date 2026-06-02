@@ -590,6 +590,37 @@ given core), and a simulated higher-version peer exercises the real nudge path
 and the opt-out. Reach for it first when a comms feature "does nothing" on a new
 realm.
 
+### Guild stats sharing (`NS.GuildShare`, v2.40.0)
+
+`EbonClearance_GuildShare.lua` is the second `NS.Comms` consumer. It pools
+guild/group stats into a transient, session-only aggregate
+(`EC_compCache.guildAgg`) - never saved, re-polled each query.
+
+- **Message types:** `GREQ` (broadcast on GUILD/PARTY/RAID when the panel opens
+  or Refresh is clicked, throttled to match the comms send throttle) and `GDAT`
+  (a whisper reply, sent only if `EbonClearanceDB.shareGuildData`). Payload
+  sections, split on `|` and dispatched by prefix (order-independent):
+  `stats:totalCopper,itemsSold,bestGPH`, optional `name:<player>` (only if
+  `shareGuildData` AND `shareGuildName`), `qual:<q>=<count>;...` (per-rarity sold
+  counts), `items:<id>~<name>=<count>;...` (top-3; the id powers the panel hover
+  tooltip, the name displays so no `GetItemInfo` cache dependency), and
+  `zones:<name>=<copper>;...` (top-5). Capped under 255 bytes; **zones trim
+  first** since items/stats/quality are small and wanted.
+- **Aggregation:** items pool by id (keeping the name), zones by name, quality
+  summed per rarity; the best-GPH holder's name is tracked (nil if anonymous),
+  and consenting names collect into a set for the "Shared by" line.
+- **Anonymity** is at the display/storage layer: the `GDAT` sender is never
+  stored or shown. `shareGuildName` is a dependent sub-toggle of
+  `shareGuildData` (disabled/greyed when not sharing).
+- **Load order matters:** `EbonClearance_GuildPanel.lua` ("Stats - Guild") loads
+  BEFORE `EbonClearance_Events.lua` so the central `InterfaceOptions_AddCategory`
+  block can register it right after "Stats - Personal"; its `initPanel`/widgets
+  are deferred to OnShow, so the early load only creates the frame and sets
+  `NS.RefreshGuildPanel`. `EbonClearance_GuildShare.lua` loads after
+  `EbonClearance_Comms.lua` (it needs `NS.Comms` at load).
+- **`/ec guildtest`** injects simulated members plus the local player via the
+  real send path (honoring live toggles), so the panel is testable solo.
+
 ## Gotchas and refactoring traps
 
 Read this section before touching any of the subsystems below. Each item is

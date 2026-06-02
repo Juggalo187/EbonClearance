@@ -5,6 +5,21 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.40.0
+
+New feature: a "Stats - Guild" panel that anonymously pools your guild's (and group's) farming and selling data, built on the v2.39.0 addon-comms layer. The existing "Stats" panel is renamed "Stats - Personal" and the two sit together in the options menu.
+
+WoW 3.3.5a has no server-wide addon channel, so this is guild/group scoped. When you open the panel (or click Refresh), EbonClearance asks guildmates and group members who also run it and have opted in, pools whatever they send within a few seconds, and shows it. The view is a live snapshot - it is not saved, so it always reflects who is online and sharing right now. Your own lifetime stats keep growing as usual; the guild view just re-pools everyone's current totals each time you look.
+
+- **Stats - Guild panel.** Best farming zones (by gold), guild totals (combined gold, items sold, best gold/hour - credited to its holder when shared), most-sold items, and sold-by-rarity counts. Two-column layout; most-sold rows show the item tooltip on hover (at the cursor). A `[?]` icon links to its Help FAQ entry.
+- **Opt-in, anonymous by default.** "Share my farming data with my guild" is OFF by default. A dependent sub-toggle, "Show my name with my shared data," is disabled until sharing is on; with it on, your name appears in the "Shared by" line (and can be credited on the best gold/hour line). Without it you stay pooled-anonymous. Honest caveat (stated in-panel): a 3.3.5a addon message always carries its sender, so "anonymous" means EbonClearance discards and never shows the sender, not that it is hidden from someone logging addon traffic.
+- **Reuses the comms transport.** New message types on the v2.39.0 `NS.Comms` layer; reach is GUILD / PARTY / RAID with direct whisper replies. Compact payload kept under the 255-byte limit (top-5 zones, top-3 items by id + name, per-rarity counts, optional name).
+- **`/ec guildtest`.** A solo diagnostic that injects simulated members - and includes you, honoring your live toggles - so you can see the panel populate without a second player online.
+- **Personal Stats polish.** "Top 5 Most Sold / Most Deleted" counts are now gold-colored to match the Guild panel.
+- **Schema:** two additive account-level fields, `EbonClearanceDB.shareGuildData` and `shareGuildName` (both default `false`). Downgrade-safe via the nil-default pattern.
+
+New files `EbonClearance_GuildShare.lua` + `EbonClearance_GuildPanel.lua` (the addon now ships 29 `.lua` files). New test suite `tests/test_guildshare.lua` runs in CI and the release gate.
+
 ### v2.39.1
 
 Patch release. Makes the master Enable toggle discoverable from the panels and chat surfaces players actually check when something goes wrong.

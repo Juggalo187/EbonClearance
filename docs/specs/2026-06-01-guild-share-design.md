@@ -96,6 +96,17 @@ Reuses `NS.AddCheckbox`, `NS.MakeHeader`, `NS.MakeLabel`, `NS.CopperToColoredTex
 ## Out of scope
 
 - Server-wide delivery (custom chat channel or server relay) - dropped.
-- Named leaderboards / per-player attribution.
 - Persisting the guild aggregate across sessions (transient only).
-- Sharing anything beyond zones + the three headline stats.
+
+## As shipped (v2.40.0 deltas from the original design above)
+
+The feature grew during implementation. The final shipped form, in addition to the design above:
+
+- **More shared data.** Beyond zones + the three headline stats, members also pool their **top-3 vendor-sold items** and **per-rarity sold counts** (`DB.soldItemCounts` / `DB.soldItemsByQuality`).
+- **Items carry id + name.** Wire form `items:<id>~<name>=<count>`. The name displays (no receiver `GetItemInfo` cache dependency); the id powers a **hover tooltip** on each most-sold row (`GameTooltip:SetHyperlink`, anchored at the cursor). Pooled by id.
+- **Optional non-anonymous mode.** A second account field `EbonClearanceDB.shareGuildName` (default `false`), a **dependent sub-toggle** of `shareGuildData` (disabled/greyed when not sharing). When on, the member's `name:` rides in the payload; the panel shows a **"Shared by: ... (+N anonymous)"** line, and the **best gold/hour** value is credited to its holder when that holder consented. Anonymous remains the default.
+- **Panel rename + grouping.** The old "Stats" panel is "Stats - Personal"; the new one is "Stats - Guild"; both are registered adjacently (central `Events.lua` block) above "Sell List". `GuildPanel.lua` loads before `Events.lua` so the central registration finds its frame.
+- **Layout / polish.** Two-column (label / aligned value) rows; sold counts are gold-colored (`ffd100`) on both the Guild panel and the personal "Top 5 Most Sold / Most Deleted"; a `[?]` help icon on the panel deep-links to a "What is the Stats - Guild panel?" FAQ entry.
+- **`/ec guildtest`** solo diagnostic (injects simulated members + the local player via the real send path).
+
+Still out of scope: server-wide delivery, a persistent accumulating guild ledger, per-name leaderboard breakdowns (only a consenting-contributor list, not per-member totals).

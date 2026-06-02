@@ -20,6 +20,7 @@ A **Project Ebonhold-aware** bag manager. Out of the box it sells your junk and 
 - **Item-level overlay** (opt-in). Quality-coloured iLvl in the bottom-right corner of equippable gear slots, with player-adjustable font size. Three independently togglable surfaces: bags, character sheet & inspect, merchant.
 - **Profile import/export** for sharing whole settings packs (lists + per-rarity rules) between characters or with other players.
 - **Update nudge** (on by default). Tells you when a newer version is out. WoW 3.3.5a addons can't check the web, so EbonClearance learns the latest version from other users in your guild or group, then shows one chat line per session with a clickable copy-link to the latest release. Toggle it off on the main panel.
+- **Guild stats sharing** (opt-in, off by default). The **Stats - Guild** panel pools your guild's or group's best farming zones, most-sold items, totals, and sold-by-rarity counts from members who also run EbonClearance. Anonymous by default (optionally show your name), guild/group only, shown as a live snapshot. Most-sold rows show the item tooltip on hover.
 - **Reactive layout**, minimap button + LDB launcher, keybindings, first-run welcome, session + lifetime stats.
 
 A complete enumeration of every feature lives in [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md). Behaviour history is in [CHANGELOG.md](CHANGELOG.md). For the design lineage and prior-art acknowledgement, see [NOTICE.md](NOTICE.md).
@@ -71,6 +72,7 @@ All settings live under `/ec`, which opens the scrollable config panel. Highligh
 | `/ec sellinfo [bag slot]` | Trace why a bag item will or won't sell - per-predicate chain trace (also available via Alt+Shift+Right-Click on the item) |
 | `/ec affixdebug on\|off\|status\|dump\|clear` | Record affix-detection events for bug reports; `dump` opens a copyable window with the event log |
 | `/ec commtest` | Diagnostic: check that addon messages are delivered on this server and preview the update nudge (works solo) |
+| `/ec guildtest` | Diagnostic: preview the Stats - Guild panel with simulated members (works solo) |
 | `/ec help` | Print the full slash-command reference in chat |
 | `/ecdebug` | Show debug info and run a bag scan |
 
@@ -86,7 +88,7 @@ Working on the addon? There's developer documentation under [docs/](docs/):
 - [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md) is the prescriptive guide for coding in this addon. Read it first: it covers 3.3.5a client gotchas, the file's architecture, naming conventions, the state machine, UI patterns and the decision not to embed Ace3.
 - [docs/CODE_REVIEW.md](docs/CODE_REVIEW.md) is a short list of known follow-up cleanups that weren't part of the last pass.
 
-A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check *.lua` and `luacheck *.lua` before opening a PR. (The addon ships as 27 `.lua` files after the v2.32.0 file-split, the v2.36.0 Help / Stats panel splits, the v2.38.0 Quickstart panel, and the v2.39.0 `EbonClearance_Comms.lua` addition; the entry hub is `EbonClearance_Events.lua`.)
+A Luacheck config ([.luacheckrc](.luacheckrc)) and a StyLua formatter config ([stylua.toml](stylua.toml)) are checked in. Run `stylua --check *.lua` and `luacheck *.lua` before opening a PR. (The addon ships as 29 `.lua` files after the v2.32.0 file-split, the v2.36.0 Help / Stats panel splits, the v2.38.0 Quickstart panel, the v2.39.0 `EbonClearance_Comms.lua` addition, and the v2.40.0 guild-share files; the entry hub is `EbonClearance_Events.lua`.)
 
 ## Changelog
 
