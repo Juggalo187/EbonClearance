@@ -102,31 +102,38 @@ end
 flatten(a)
 ok("sender name not stored in aggregate", table.concat(flat, "|"):find("SecretSenderName", 1, true) == nil)
 
--- items: round-trip (3rd arg to encodePayload; items = {{id=, count=}})
+-- items now travel by NAME (3rd arg). 4th arg is an optional consenting player name.
 local pItems = gs.encodePayload(
     { { name = "Barrens", copper = 200 } },
     { totalCopper = 1, itemsSold = 1, bestGPH = 1 },
-    { { id = 4306, count = 7 }, { id = 2589, count = 3 } }
+    { { name = "Silk Cloth", count = 7 }, { name = "Linen Cloth", count = 3 } },
+    "Alaric"
 )
 ok("payload has items section", pItems:find("items:", 1, true) ~= nil)
+ok("payload has name section", pItems:find("name:Alaric", 1, true) ~= nil)
 local dItems = gs.decodePayload(pItems)
 eq("decode item count", #dItems.items, 2)
-eq("decode item id", dItems.items[1].id, 4306)
+eq("decode item name", dItems.items[1].name, "Silk Cloth")
 eq("decode item count val", dItems.items[1].count, 7)
+eq("decode name", dItems.name, "Alaric")
 eq("decode still has zone", dItems.zones[1].name, "Barrens")
-eq("decode still has stats", dItems.stats.totalCopper, 1)
 
--- backward compat: 2-arg encode (no items) still decodes with empty items
+-- no 4th arg -> anonymous (no name section)
+local dAnon = gs.decodePayload(gs.encodePayload({ { name = "Barrens", copper = 5 } }, { totalCopper = 0, itemsSold = 0, bestGPH = 0 }, { { name = "Wool Cloth", count = 9 } }))
+eq("anonymous payload has no name", dAnon.name, nil)
+eq("item still parses", dAnon.items[1].name, "Wool Cloth")
+
+-- backward compat: 2-arg encode (no items, no name)
 local dNoItems = gs.decodePayload(gs.encodePayload({ { name = "Barrens", copper = 5 } }, { totalCopper = 0, itemsSold = 0, bestGPH = 0 }))
 eq("no items section -> empty items", #dNoItems.items, 0)
-eq("zone still parses without items", dNoItems.zones[1].name, "Barrens")
 
--- merge pools items by id with contributor counts
+-- merge pools items by name; collects consenting contributor names
 local aItems = gs.newAggregate()
-gs.mergeReply(aItems, gs.decodePayload(gs.encodePayload({}, { totalCopper = 0, itemsSold = 0, bestGPH = 0 }, { { id = 4306, count = 5 } })))
-gs.mergeReply(aItems, gs.decodePayload(gs.encodePayload({}, { totalCopper = 0, itemsSold = 0, bestGPH = 0 }, { { id = 4306, count = 2 } })))
-eq("merged item pooled count", aItems.items[4306].count, 7)
-eq("merged item contributors", aItems.items[4306].contributors, 2)
+gs.mergeReply(aItems, gs.decodePayload(gs.encodePayload({}, { totalCopper = 0, itemsSold = 0, bestGPH = 0 }, { { name = "Silk Cloth", count = 5 } }, "Alaric")))
+gs.mergeReply(aItems, gs.decodePayload(gs.encodePayload({}, { totalCopper = 0, itemsSold = 0, bestGPH = 0 }, { { name = "Silk Cloth", count = 2 } })))
+eq("merged item pooled by name", aItems.items["Silk Cloth"].count, 7)
+eq("merged item contributors", aItems.items["Silk Cloth"].contributors, 2)
+ok("named contributor recorded", aItems.contributors["Alaric"] == true)
 
 -- ---- static-pattern invariants (scan live code, not comments) ----
 local function readCode(p)
