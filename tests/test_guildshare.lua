@@ -3,10 +3,18 @@
 -- Run: lua tests/test_guildshare.lua
 -- Loads the chunk in isolation with a stub NS.Comms (it registers handlers at load).
 
+local handlers = {}
+local sent = {}
+local function clearSent() for i = #sent, 1, -1 do sent[i] = nil end end
 local NS = {
-    Comms = { RegisterHandler = function() end, Send = function() end },
+    Comms = {
+        RegisterHandler = function(t, fn) handlers[t] = fn end,
+        Send = function(t, payload, channel, target) sent[#sent + 1] = { t = t, payload = payload, channel = channel, target = target } end,
+    },
     Delay = function() end,
+    compCache = {},
 }
+_G.UnitName = function() return "Self" end
 local chunk = assert(loadfile("EbonClearance_GuildShare.lua"))
 chunk("EbonClearance", NS)
 local gs = NS.GuildShare
@@ -54,6 +62,45 @@ eq("merge Barrens contributors", agg.zones["Barrens"].contributors, 2)
 eq("merge totalCopper", agg.totalCopper, 300)
 eq("merge totalItems", agg.totalItems, 8)
 eq("merge bestGPH (max)", agg.bestGPH, 2000)
+
+-- ---- transport handler behavior (privacy-critical paths) ----
+EbonClearanceDB = { copperByZone = { Barrens = 100 }, totalCopper = 100, soldItemsByQuality = { 5 }, bestGPH = 50 }
+
+-- opt-in OFF: a GREQ from someone else produces no reply
+EbonClearanceDB.shareGuildData = false
+clearSent()
+handlers.GREQ("", "Other", "GUILD")
+ok("no reply when opted out", #sent == 0)
+
+-- opt-in ON: a GREQ from someone else produces exactly one GDAT whisper to them
+EbonClearanceDB.shareGuildData = true
+clearSent()
+handlers.GREQ("", "Other", "GUILD")
+ok("one reply when opted in", #sent == 1)
+ok("reply is GDAT", sent[1] and sent[1].t == "GDAT")
+ok("reply is a whisper to requester", sent[1] and sent[1].channel == "WHISPER" and sent[1].target == "Other")
+
+-- a GREQ that appears to come from ourselves produces no reply
+clearSent()
+handlers.GREQ("", "Self", "GUILD")
+ok("no self-reply", #sent == 0)
+
+-- GDAT merges into the aggregate, and the sender name is never stored
+NS.compCache.guildAgg = nil
+local gdatPayload = gs.encodePayload({ { name = "Barrens", copper = 100 } }, { totalCopper = 100, itemsSold = 5, bestGPH = 50 })
+handlers.GDAT(gdatPayload, "SecretSenderName", "WHISPER")
+local a = gs.GetAggregate()
+eq("GDAT merged memberCount", a.memberCount, 1)
+eq("GDAT merged zone copper", a.zones["Barrens"].copper, 100)
+local flat = {}
+local function flatten(t)
+    for k, v in pairs(t) do
+        flat[#flat + 1] = tostring(k)
+        if type(v) == "table" then flatten(v) else flat[#flat + 1] = tostring(v) end
+    end
+end
+flatten(a)
+ok("sender name not stored in aggregate", table.concat(flat, "|"):find("SecretSenderName", 1, true) == nil)
 
 print()
 if fails > 0 then io.stderr:write("RESULT: " .. fails .. " test(s) failed\n"); os.exit(1) end

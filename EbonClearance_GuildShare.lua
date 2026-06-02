@@ -27,7 +27,7 @@ end
 
 -- A zone name is unsafe if it contains one of our payload delimiters.
 local function zoneNameSafe(name)
-    return type(name) == "string" and not name:find("[=;|,\t]")
+    return type(name) == "string" and name ~= "" and not name:find("[=;|,\t]")
 end
 
 -- Build the compact wire payload. Caps to MAX_ZONES, skips delimiter-unsafe
