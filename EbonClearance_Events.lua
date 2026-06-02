@@ -5494,6 +5494,17 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
         return
     end
 
+    if cmd == "guildtest" then
+        -- Solo diagnostic for the guild-share panel: inject simulated members.
+        if NS.GuildShare then
+            local n = NS.GuildShare.InjectTestPeers()
+            PrintNicef("Injected %d simulated guild members. Open the Guild panel (or re-run this with it open) to see the pooled data.", n)
+        else
+            PrintNice("|cffff4444Guild-share module not loaded.|r")
+        end
+        return
+    end
+
     if cmd == "status" or cmd == "enable" or cmd == "disable" then
         -- v2.39.1: discoverable surface for the master Enable toggle.
         -- Pre-v2.39.1 the only ways to flip DB.enabled were the

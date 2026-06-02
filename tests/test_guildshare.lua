@@ -116,6 +116,7 @@ local function readCode(p)
 end
 local share = readCode("EbonClearance_GuildShare.lua")
 ok("exposes NS.GuildShare", share:find("NS.GuildShare", 1, true) ~= nil)
+ok("exposes InjectTestPeers diagnostic", share:find("function GuildShare.InjectTestPeers", 1, true) ~= nil)
 ok("uses NS.Comms transport", share:find("NS.Comms", 1, true) ~= nil)
 ok("reply gated on shareGuildData", share:find("shareGuildData", 1, true) ~= nil)
 ok("registers GREQ", share:find('"GREQ"', 1, true) ~= nil)

@@ -145,6 +145,26 @@ function GuildShare.GetAggregate()
     return agg()
 end
 
+-- Diagnostic (/ec guildtest): simulate guildmates replying so the panel can be
+-- exercised on one account. Resets the transient aggregate, merges a few fake
+-- peers through the real merge path, and repaints. Sends nothing over the wire
+-- and touches no saved data (the aggregate is session-only).
+function GuildShare.InjectTestPeers()
+    NS.compCache.guildAgg = GuildShare.newAggregate()
+    local fakes = {
+        { stats = { totalCopper = 5000000, itemsSold = 120, bestGPH = 450000 }, zones = { { name = "The Barrens", copper = 3000000 }, { name = "Durotar", copper = 800000 } } },
+        { stats = { totalCopper = 3200000, itemsSold = 80, bestGPH = 600000 }, zones = { { name = "The Barrens", copper = 1500000 }, { name = "Elwynn Forest", copper = 2200000 } } },
+        { stats = { totalCopper = 900000, itemsSold = 40, bestGPH = 300000 }, zones = { { name = "Westfall", copper = 700000 } } },
+    }
+    for _, f in ipairs(fakes) do
+        GuildShare.mergeReply(GuildShare.GetAggregate(), f)
+    end
+    if NS.RefreshGuildPanel then
+        NS.RefreshGuildPanel()
+    end
+    return #fakes
+end
+
 -- Broadcast a request and reset the aggregate for a fresh snapshot. Throttled
 -- so spam-clicking Refresh cannot flood the guild channel.
 function GuildShare.RequestNow()
