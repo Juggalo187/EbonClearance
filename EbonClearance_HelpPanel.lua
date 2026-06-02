@@ -85,6 +85,12 @@ local EC_HELP_ENTRIES = {
         panel = "EbonClearanceOptionsStats",
     },
     {
+        id = "guild-sharing",
+        q = "What is the Stats - Guild panel?",
+        a = "Stats - Guild pools data from guildmates (and group members) who also run EbonClearance and have opted in: their best farming zones, combined totals, and most-sold items. It is anonymous by default and guild/group only - nothing is shared server-wide. Two boxes on the panel: 'Share my farming data with my guild' turns your sharing on (off by default), and 'Show my name with my shared data' optionally attaches your name (only available while sharing is on). The view is a live snapshot taken when you open the panel or click Refresh - it is not saved, so it reflects whoever is online and sharing right now. Your own lifetime stats keep growing as usual; the guild view just re-pools everyone's current totals each time you look.",
+        panel = "EbonClearanceOptionsGuild",
+    },
+    {
         id = "what-are-profiles",
         q = "What are Profiles? (and how are they different from Quickstart?)",
         a = "Profiles are named snapshots of your |cffb6ffb6Sell List|r and |cffb6ffb6Keep List|r. Save your current lists as a profile, then later swap to a different one in a single click. Quickstart presets are different: they configure the addon's |cffffd870behaviour|r (speed, auto-sell rules, protections) but never touch your lists. The two systems are complementary - profiles for lists, Quickstart for settings. Slash commands: /ec profile save <name>, /ec profile load <name>, /ec profile list, /ec profile delete <name>.",

@@ -168,6 +168,9 @@ GuildPanel:SetScript("OnShow", function(self)
         -- Build pass: runs once on the first OnShow.
 
         local heading = NS.MakeHeader(content, "Stats - Guild", -16)
+        if NS.AddHelpIcon then
+            NS.AddHelpIcon(content, heading, "LEFT", "RIGHT", 8, 0, "guild-sharing")
+        end
 
         local descLabel = NS.MakeLabel(
             content,
