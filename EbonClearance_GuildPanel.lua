@@ -36,7 +36,7 @@ local repaintGuildPanel
 
 repaintGuildPanel = function()
     local panel = GuildPanel
-    if not panel._guildZonesFS and not panel._guildTotalsFS then
+    if not panel._guildZonesFS or not panel._guildTotalsFS then
         return
     end
     if not (NS.GuildShare and NS.GuildShare.GetAggregate) then
@@ -139,8 +139,9 @@ GuildPanel:SetScript("OnShow", function(self)
         )
 
         -- "Guild's Best Farming Zones" sub-header + data FontString.
-        local zonesHeader = NS.MakeHeader(content, "Guild's Best Farming Zones", -10)
+        local zonesHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
         zonesHeader:SetPoint("TOPLEFT", optInCB, "BOTTOMLEFT", 0, -16)
+        zonesHeader:SetText("Guild's Best Farming Zones")
 
         local zonesFS = content:CreateFontString(
             nil, "ARTWORK", "GameFontHighlight"
@@ -156,8 +157,9 @@ GuildPanel:SetScript("OnShow", function(self)
         buildSelf._guildZonesFS = zonesFS
 
         -- "Guild Totals" sub-header + data FontString.
-        local totalsHeader = NS.MakeHeader(content, "Guild Totals", -10)
+        local totalsHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
         totalsHeader:SetPoint("TOPLEFT", zonesFS, "BOTTOMLEFT", 0, -16)
+        totalsHeader:SetText("Guild Totals")
 
         local totalsFS = content:CreateFontString(
             nil, "ARTWORK", "GameFontHighlight"
