@@ -144,6 +144,7 @@ function GuildShare.mergeReply(agg, decoded)
     agg.totalItems = agg.totalItems + (decoded.stats.itemsSold or 0)
     if (decoded.stats.bestGPH or 0) > agg.bestGPH then
         agg.bestGPH = decoded.stats.bestGPH
+        agg.bestGPHName = decoded.name -- nil when the top holder is anonymous
     end
     for _, z in ipairs(decoded.zones or {}) do
         local e = agg.zones[z.name]
@@ -231,6 +232,12 @@ function GuildShare.InjectTestPeers()
     }
     for _, f in ipairs(fakes) do
         GuildShare.mergeReply(GuildShare.GetAggregate(), f)
+    end
+    -- Also include THIS player via the real send path, so toggling "Share my
+    -- farming data" / "Show my name" is visible solo: with sharing on you appear
+    -- (named or anonymous per your toggle); with it off you do not appear at all.
+    if EbonClearanceDB and EbonClearanceDB.shareGuildData then
+        GuildShare.mergeReply(GuildShare.GetAggregate(), GuildShare.decodePayload(localPayload()))
     end
     if NS.RefreshGuildPanel then
         NS.RefreshGuildPanel()

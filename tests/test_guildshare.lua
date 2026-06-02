@@ -135,6 +135,13 @@ eq("merged item pooled by name", aItems.items["Silk Cloth"].count, 7)
 eq("merged item contributors", aItems.items["Silk Cloth"].contributors, 2)
 ok("named contributor recorded", aItems.contributors["Alaric"] == true)
 
+-- best-GPH holder name: tracked when the top holder consented; nil if anonymous
+local aGPH = gs.newAggregate()
+gs.mergeReply(aGPH, gs.decodePayload(gs.encodePayload({}, { totalCopper = 0, itemsSold = 0, bestGPH = 1000 }, nil, "Alaric")))
+eq("bestGPH name = consenting holder", aGPH.bestGPHName, "Alaric")
+gs.mergeReply(aGPH, gs.decodePayload(gs.encodePayload({}, { totalCopper = 0, itemsSold = 0, bestGPH = 5000 }, nil)))
+eq("bestGPH name cleared when higher holder is anonymous", aGPH.bestGPHName, nil)
+
 -- ---- static-pattern invariants (scan live code, not comments) ----
 local function readCode(p)
     local fh = assert(io.open(p, "r"))

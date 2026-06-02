@@ -105,7 +105,7 @@ repaintGuildPanel = function()
                 "Members shared: " .. (agg.memberCount or 0) .. "\n"
                 .. "Combined gold: " .. copperStr .. "\n"
                 .. "Combined items sold: " .. (agg.totalItems or 0) .. "\n"
-                .. "Best gold/hour seen: " .. (NS.CopperToColoredText and NS.CopperToColoredText(agg.bestGPH or 0) or tostring(agg.bestGPH or 0)) .. "\n"
+                .. "Best gold/hour seen: " .. (NS.CopperToColoredText and NS.CopperToColoredText(agg.bestGPH or 0) or tostring(agg.bestGPH or 0)) .. (agg.bestGPHName and (" (" .. agg.bestGPHName .. ")") or "") .. "\n"
                 .. sharedBy
             )
         else
