@@ -383,7 +383,7 @@ function NS.RefreshStats()
             local rows = { "|cffffd200Top 5 Most Sold|r" }
             for i = 1, #top do
                 rows[#rows + 1] = string.format(
-                    "  %d. %s  |cff888888x%d|r",
+                    "  %d. %s  |cff888888x|r|cffffd100%d|r",
                     i,
                     ItemLabel(top[i].id),
                     top[i].count
@@ -401,7 +401,7 @@ function NS.RefreshStats()
             local rows = { "|cffffd200Top 5 Most Deleted|r" }
             for i = 1, #top do
                 rows[#rows + 1] = string.format(
-                    "  %d. %s  |cff888888x%d|r",
+                    "  %d. %s  |cff888888x|r|cffffd100%d|r",
                     i,
                     ItemLabel(top[i].id),
                     top[i].count
