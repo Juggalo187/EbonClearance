@@ -213,14 +213,6 @@ local function EC_ClearListWithPrune(t)
     end
 end
 
--- v2.18.0: CreateListUI header-row extraction. Builds the title
--- FontString + ID-input EditBox + Add Button + Clear All Button.
--- Also wires the input's focus-tracking handlers (NS.activeIDBox is the
--- shift-click-to-add target) and the drag-to-receive handler that
--- populates the input with an itemID when a bag item is dropped onto
--- it - these are pure layout (don't depend on Refresh), so they live
--- here. Add and Clear All button OnClick handlers stay in CreateListUI
--- because they call Refresh. Returns (input, addBtn, clearAllBtn).
 -- v2.41.0: the box no longer draws the list's name as an in-box title -
 -- the panel heading + description above the box already identify the list.
 -- This row is the "Add to list" group: a section header + one merged input
@@ -284,19 +276,12 @@ function EC_compCache.buildListHeaderRow(box, setTableName)
     return input, addBtn
 end
 
--- v2.18.0: CreateListUI search-and-sort-row extraction. Builds the
--- "Search:" label + search input + sort-by-ID button + sort-by-Name button,
--- all on one line at y=-52 within the box. Pure layout - no OnClick
--- wiring; caller attaches handlers after Refresh exists. Returns
--- (search, sortIDBtn, sortNameBtn). The sort buttons use right-pointing
--- triangle glyphs ("\226\150\178") by default; the OnClick handlers in
--- CreateListUI swap to down-pointing ("\226\150\188") to indicate
--- descending order.
 -- v2.41.0: the "Find in list" group. A thin divider separates it from the
--- "Add to list" group above. Header line carries the Sort label + the two
--- sort buttons + Clear All (hard-right); the Search input sits on its own
--- line below and stretches to the box's right edge (stays reactive on
--- panel resize). Returns (search, sortIDBtn, sortNameBtn, clearAllBtn).
+-- "Add to list" group above. The header line carries the Sort label + the
+-- Name sort button + Clear All (hard-right); the Search input + the "Show:"
+-- rarity filter sit on the line below (the search input stretches to the
+-- rarity dropdown and stays reactive on panel resize). Returns
+-- (search, sortNameBtn, clearAllBtn, rarityDD).
 function EC_compCache.buildListSearchAndSortRow(box, setTableName)
     local divider = box:CreateTexture(nil, "ARTWORK")
     divider:SetTexture(0.4, 0.35, 0.25, 0.8)
@@ -431,7 +416,7 @@ local function CreateListUI(parent, titleText, setTableName, x, y)
     -- or less room (e.g. WhitelistPanel has extra controls above it).
     box:SetSize(w, 280)
 
-    -- v2.41.0: "Add to list" group (By ID + By name rows).
+    -- v2.41.0: "Add to list" group (one merged ID/name input + Add).
     local input, addBtn = EC_compCache.buildListHeaderRow(box, setTableName)
 
     -- v2.41.0: default to alphabetical (Name) order - the item ID is no

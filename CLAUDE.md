@@ -49,18 +49,19 @@ The release is driven by [.github/workflows/release.yml](.github/workflows/relea
 **Always add the CHANGELOG stanza AND sync the surrounding docs BEFORE you tag.** The recommended sequence:
 
 1. Make code changes; verify with the four invariant tests.
-2. Add the `### vX.Y.Z` stanza to `CHANGELOG.md` describing what's in the release.
-3. **Sync the docs.** Audit the diff and ask "did this patch touch anything externally visible to a player or a contributor?" If yes, update the relevant docs in the same patch:
+2. **Audit the iteration for leftovers and clean them up.** Multi-iteration features leave debris: stale comments that describe controls/parameters that were renamed or removed, orphaned locals/functions, unreachable branches, doc-comment return signatures that drifted. Sweep the diff (grep for the names of any symbols you removed; read each changed function end-to-end) and fix what you find BEFORE tagging, so the release ships clean. This is also the moment to spot feature-creep duplication introduced across iterations.
+3. Add the `### vX.Y.Z` stanza to `CHANGELOG.md` describing what's in the release.
+4. **Sync the docs.** Audit the diff and ask "did this patch touch anything externally visible to a player or a contributor?" If yes, update the relevant docs in the same patch:
    - In-game Help / FAQ ([EbonClearance_HelpPanel.lua](EbonClearance_HelpPanel.lua)) - for any player-facing surface change (new panel, toggle, view, slash command, tooltip annotation, changed default, schema-visible change).
    - [README.md](README.md) - for installation, configuration, slash-command table, or feature-bullet changes. Slash-command additions ALWAYS get a row in the README table.
    - [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md) - for architecture, file layout, shared helpers, naming conventions, test invariants, or 3.3.5a gotchas. Contributors read this first.
    - [NOTICE.md](NOTICE.md) - for adopting or diverging from a convention shared with related projects.
    - This file ([CLAUDE.md](CLAUDE.md)) - if you add or remove a `.lua` file (update the count), change the test invariants list, or introduce a new release-process step.
-4. Commit code + CHANGELOG + docs together (or in two commits if the diff is large: features first, then docs).
-5. Push to `origin/master`.
-6. Tag the release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-7. The workflow runs (~1-2 min) and re-runs all five test suites at the gate. The version-bump bot commit (`Update version to vX.Y.Z [skip ci]`) lands on `origin/master`, carrying the CI-side rewrites of `EbonClearance.toc` + `EbonClearance_Events.lua`'s `ADDON_VERSION`.
-8. **Required final step: `git pull --rebase` to sync local with the CI build work.** Because step 7 committed the version bump upstream, your local branch is now 1 commit behind `origin/master`. You MUST rebase before any further work, or the next local commit diverges from origin. Confirm with `git status -sb` - it should read `## master...origin/master` with no `[ahead N]` / `[behind N]`.
+5. Commit code + CHANGELOG + docs together (or in two commits if the diff is large: features first, then docs).
+6. Push to `origin/master`.
+7. Tag the release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+8. The workflow runs (~1-2 min) and re-runs all five test suites at the gate. The version-bump bot commit (`Update version to vX.Y.Z [skip ci]`) lands on `origin/master`, carrying the CI-side rewrites of `EbonClearance.toc` + `EbonClearance_Events.lua`'s `ADDON_VERSION`.
+9. **Required final step: `git pull --rebase` to sync local with the CI build work.** Because step 8 committed the version bump upstream, your local branch is now 1 commit behind `origin/master`. You MUST rebase before any further work, or the next local commit diverges from origin. Confirm with `git status -sb` - it should read `## master...origin/master` with no `[ahead N]` / `[behind N]`.
 
 If you tag without a CHANGELOG stanza (e.g. a fast patch where the commit message was the only record), the release page ships with the fallback stub and players reading the release notes see no detail. The recovery path:
 
