@@ -5,6 +5,20 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.41.0
+
+The item lists are easier to read and the controls above them are clearer for new players.
+
+- **Item icons, quality-colored names, hover tooltips.** Every row in the Sell, Account Sell, Keep, Delete, and Process Bags lists now shows the item's icon and a name colored by its quality (greens green, blues blue, epics purple). Hover any row to see the full item tooltip at the cursor. The green item ID that used to start each editable-list row is replaced by the icon; the ID is still matched by the Search box. Items not yet in your client cache briefly show a question-mark icon and fill in within a second or two.
+- **Tidier list controls.** The Add / Search / Sort area above each list is reorganized into two clear groups: an **Add to list** group and a **Find in list** group (Search, Sort, Clear All, and the new rarity filter), separated by a divider. Every button and input now has a plain-language hover tip.
+- **One "Add item" field.** The separate "add by ID" and "add by name" inputs are merged into a single field: type an item ID, or an item name (exact, or part of a name to add matching items from your bags). Shift-click or drag a bag item to fill in its ID. Note WoW 3.3.5a has no full item-database name search, so a name the client has never seen can't be found by name; an item ID always works.
+- **Rarity filter replaces the ID sort.** Sorting by an item ID you can no longer see was no use, so the "ID" sort button is gone. In its place a **Show:** dropdown filters the list to a single rarity (All / Poor / Common / Uncommon / Rare / Epic / Legendary), which stacks with the Search box. Lists now sort alphabetically by name by default; the **Name** sort button still flips A-Z / Z-A.
+- **Fixed the sort-button arrow.** The up/down sort arrow used a font glyph the 3.3.5 client doesn't have, so it showed as `?`. It now uses a texture arrow that renders correctly.
+
+The icon, name color, and tooltip reuse the lookup each row already did, so there is no extra cost. Sort, Search, Remove, Clear All, and the "Add from bags" buttons all work as before. No schema change, safe overwrite from v2.40.x. Changes live in `EbonClearance_ListWidget.lua` (editable lists) and `EbonClearance_ProcessBagsPanel.lua` (Process Bags rows).
+
+- **Internal:** the three `CreateListUI` perf-guardrail checks now slice to the function's real end marker instead of a fixed byte window, so they no longer go red when the function legitimately grows.
+
 ### v2.40.1
 
 Patch release. Fixes a Process Bags trap where clicking the Cast button during the cast or global cooldown would equip the item instead of processing it.

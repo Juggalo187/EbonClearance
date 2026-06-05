@@ -504,8 +504,16 @@ function EC_compCache.refreshProcessPanel()
                 row:SetHeight(20)
                 row:EnableMouse(true)
                 row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                -- v2.41.0: item icon at the left of the row, matching the
+                -- editable list panels. Texture set per-row below from the
+                -- bag slot. SetTexCoord crops the stock icon border.
+                local icon = row:CreateTexture(nil, "ARTWORK")
+                icon:SetSize(18, 18)
+                icon:SetPoint("LEFT", row, "LEFT", 2, 0)
+                icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+                row.icon = icon
                 local txt = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-                txt:SetPoint("LEFT", row, "LEFT", 16, 0)
+                txt:SetPoint("LEFT", icon, "RIGHT", 6, 0)
                 txt:SetPoint("RIGHT", row, "RIGHT", -16, 0)
                 txt:SetJustifyH("LEFT")
                 row.text = txt
@@ -525,7 +533,7 @@ function EC_compCache.refreshProcessPanel()
                 hl:SetAlpha(0)
                 row:SetScript("OnEnter", function(self)
                     hl:SetAlpha(0.3)
-                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
                     if self.bag and self.slot then
                         GameTooltip:SetBagItem(self.bag, self.slot)
                     elseif self.itemLink then
@@ -567,6 +575,10 @@ function EC_compCache.refreshProcessPanel()
             row.itemID = entry.itemID
             row.itemString = entry.itemString
             row.itemLink = entry.link
+            -- v2.41.0: row icon from the live bag slot (always cached for
+            -- items in your own bags); question-mark fallback for safety.
+            local iconTex = GetContainerItemInfo(entry.bag, entry.slot)
+            row.icon:SetTexture(iconTex or "Interface\\Icons\\INV_Misc_QuestionMark")
             -- v2.25.0: entryIndex tracks the list[] position (which spans
             -- both visible and collapsed entries), not the visible-row
             -- counter. armedIndex is also a list[] index, so this keeps

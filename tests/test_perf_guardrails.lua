@@ -724,7 +724,10 @@ do
     else
         -- Refresh() lives inside CreateListUI. Capture the bigger
         -- enclosing range and look for the pre-compute pattern.
-        local body = src:sub(fnStart, fnStart + 12000)
+        -- Slice to the function's real end marker rather than a fixed byte
+        -- window, so the body covers all of CreateListUI even as it grows.
+        local fnEnd = src:find("\nNS%.CreateListUI = CreateListUI", fnStart) or (fnStart + 14000)
+        local body = src:sub(fnStart, fnEnd)
         local hasMap = body:find("local nameByID = {}") ~= nil
         local mapDrivenSort = body:find("nameByID%[a%]") ~= nil
             and body:find("nameByID%[b%]") ~= nil
@@ -750,7 +753,10 @@ do
         check("CreateListUI search input is debounced",
               false, "CreateListUI not found")
     else
-        local body = src:sub(fnStart, fnStart + 12000)
+        -- Slice to the function's real end marker rather than a fixed byte
+        -- window, so the body covers all of CreateListUI even as it grows.
+        local fnEnd = src:find("\nNS%.CreateListUI = CreateListUI", fnStart) or (fnStart + 14000)
+        local body = src:sub(fnStart, fnEnd)
         -- The search OnTextChanged handler must NOT call Refresh()
         -- directly. It should poke a debounce frame instead.
         local handler = body:match('search:SetScript%("OnTextChanged",%s*function%(%)(.-)end%)')
@@ -780,7 +786,10 @@ do
         check("CreateListUI hoists tooltip-prime SetOwner out of the loop",
               false, "CreateListUI not found")
     else
-        local body = src:sub(fnStart, fnStart + 12000)
+        -- Slice to the function's real end marker rather than a fixed byte
+        -- window, so the body covers all of CreateListUI even as it grows.
+        local fnEnd = src:find("\nNS%.CreateListUI = CreateListUI", fnStart) or (fnStart + 14000)
+        local body = src:sub(fnStart, fnEnd)
         -- Look for the prime-frame setup pattern outside the
         -- per-row loop.
         local hasPrimeHoist = body:find("local primeFrame = GameTooltip") ~= nil
@@ -3079,16 +3088,18 @@ end
 -- ---------------------------------------------------------------------------
 -- Test 54 (Stage 8e-ix-d): list widget extracted.
 -- ---------------------------------------------------------------------------
--- Stage 8e-ix-d moves the five list-row factories (makeListRowFactory,
--- buildListHeaderRow, buildListSearchAndSortRow, buildListMatchRow,
--- buildListScrollArea), the CreateListUI widget body itself, and the
--- shared EC_AddScanByQualityRow into EbonClearance_ListWidget.lua. The
--- file lives after PanelInfra/PanelWidgets in the .toc load order so
+-- Stage 8e-ix-d moves the list-row factories (makeListRowFactory,
+-- buildListHeaderRow, buildListSearchAndSortRow, buildListScrollArea),
+-- the CreateListUI widget body itself, and the shared
+-- EC_AddScanByQualityRow into EbonClearance_ListWidget.lua. The file
+-- lives after PanelInfra/PanelWidgets in the .toc load order so
 -- NS.StyleInputBox and NS.HookScrollbarAutoHide are already published
--- by the time the row factories are defined.
+-- by the time the row factories are defined. (v2.41.0 merged the old
+-- buildListMatchRow "By name" add into the single buildListHeaderRow
+-- input, so that factory no longer exists.)
 --
 -- Locks:
---   1. The new file defines all 5 row-factory functions on EC_compCache.
+--   1. The new file defines the row-factory functions on EC_compCache.
 --   2. CreateListUI is a file-scope local in the new file.
 --   3. EC_AddScanByQualityRow is a file-scope local in the new file.
 --   4. NS.CreateListUI and NS.AddScanByQualityRow are exposed from the
@@ -3107,7 +3118,7 @@ do
         local lwSrc = lwFile:read("*a") or ""
         lwFile:close()
         local factories = { "makeListRowFactory", "buildListHeaderRow",
-            "buildListSearchAndSortRow", "buildListMatchRow",
+            "buildListSearchAndSortRow",
             "buildListScrollArea" }
         for _, name in ipairs(factories) do
             check(
@@ -3182,7 +3193,7 @@ do
         end))
         -- Function bodies must NOT be redefined in EbonClearance_Events.lua.
         for _, name in ipairs({ "makeListRowFactory", "buildListHeaderRow",
-                "buildListSearchAndSortRow", "buildListMatchRow",
+                "buildListSearchAndSortRow",
                 "buildListScrollArea" }) do
             check(
                 "EC_compCache." .. name .. " no longer defined in EbonClearance_Events.lua",

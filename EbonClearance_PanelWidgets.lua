@@ -47,9 +47,9 @@ NS.MakeHeader = MakeHeader
 
 -- StyleInputBox: applied to every InputBoxTemplate EditBox we use. v2.18.0
 -- moved this up from its old position below CreateListUI so the new
--- EC_compCache.buildListHeaderRow / buildListSearchAndSortRow /
--- buildListMatchRow helpers (which call it during their pure-layout build)
--- can see it as an upvalue. Forward-reference discipline: Lua file-scope
+-- EC_compCache.buildListHeaderRow / buildListSearchAndSortRow helpers
+-- (which call it during their pure-layout build) can see it as an
+-- upvalue. Forward-reference discipline: Lua file-scope
 -- locals are only visible to code AFTER their declaration; the v2.18.0
 -- split inadvertently placed the helpers BEFORE StyleInputBox, which
 -- worked at parse time but exploded at first OnShow with

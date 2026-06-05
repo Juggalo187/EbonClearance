@@ -138,8 +138,8 @@ One file, roughly in this order:
 - Session-stats table (`EC_session`) and `EC_ResetSession`.
 - Pet check OnUpdate and auto-loot cycle (`EC_petCheckFrame`).
 - Vendor loop (`BuildQueue`, `DoNextAction`, `worker`).
-- UI: `CreateListUI` (search / sort / "Add matching in bags" row baked
-  in), minimap button, dormant `EC_CreateVendorButton`,
+- UI: `CreateListUI` (merged add input / search / name sort / rarity
+  filter baked in), minimap button, dormant `EC_CreateVendorButton`,
   `StaticPopupDialogs` for confirmation, Interface Options panels
   (Main, Merchant Settings - includes the quality threshold,
   Whitelist - Character, Whitelist - Account, Profiles, Import/Export,
@@ -2404,7 +2404,33 @@ non-contiguous chunks of `EbonClearance.lua`:
 - `CreateListUI` itself (309 LOC) - the assembled list widget,
   including its `Refresh` closure with name-sort, search debounce,
   affix annotation, tooltip prime, and the Add / Clear All / Add
-  Matching button OnClick handlers.
+  Matching button OnClick handlers. (v2.41.0: each pooled row now
+  carries an 18px item icon in place of the old itemID text, a
+  quality-colored name via `NS.ColorTextByQuality`, and a
+  cursor-anchored hover tooltip wired once in `makeListRowFactory`
+  reading `row.itemID`. The icon texture + quality come from the
+  same per-row `GetItemInfo` the name already needed. The header
+  controls regrouped into an "Add to list" group (`buildListHeaderRow`,
+  now a single merged input that takes an item ID or a name - the old
+  `buildListMatchRow` "By name" scan folded into it and that factory was
+  removed) and a "Find in list" group (`buildListSearchAndSortRow`:
+  divider + Sort button + Clear All + Search + rarity filter). The
+  merged add (CreateListUI's `DoAdd`) routes a numeric entry to an ID
+  add and resolves text via an exact cached-name `GetItemInfo` hit plus
+  a bag substring scan (3.3.5a has no full item-database name search).
+  `buildListHeaderRow` dropped its `titleText` arg; the in-box title is
+  gone since each panel heads the box itself.
+  The Name sort arrow uses the `SORT_ASC` / `SORT_DESC` texture
+  constants - the old U+25B2 / U+25BC glyphs are not in the 3.3.5 font
+  and rendered as "?". The "ID" sort button was removed (the row no
+  longer shows an ID) and replaced by a "Show:" rarity-filter dropdown
+  (`UIDropDownMenuTemplate`; options from the `EC_RARITY_FILTERS`
+  file-scope table, colored via `NS.ColorTextByQuality`); the
+  `rarityFilter` upvalue stacks with search in `Refresh`, and the
+  default sort is now `name_asc`. `EC_AddControlTip` attaches plain
+  hover tips via `HookScript`. The same icon + cursor tooltip were
+  added to the Process Bags queue rows in
+  `EbonClearance_ProcessBagsPanel.lua`.)
 - `EC_AddScanByQualityRow` (78 LOC) - the shared "Add from bags:
   White / Green / Blue" scan row used by both Sell List panels.
 

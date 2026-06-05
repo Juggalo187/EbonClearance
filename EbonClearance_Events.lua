@@ -4821,7 +4821,7 @@ end
 
 
 -- The list-row factories (EC_compCache.makeListRowFactory,
--- buildListHeaderRow, buildListSearchAndSortRow, buildListMatchRow,
+-- buildListHeaderRow, buildListSearchAndSortRow,
 -- buildListScrollArea) live in EbonClearance_ListWidget.lua after
 -- Stage 8e-ix-d of the file split. Hung off EC_compCache (not as
 -- file-scope locals) to stay under Lua 5.1's 200-locals-per-main-chunk

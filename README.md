@@ -9,7 +9,7 @@ A **Project Ebonhold-aware** bag manager. Out of the box it sells your junk and 
 ## What It Does
 
 - **Auto-sell trash + auto-vendor your loot.** Per-rarity rules (White / Green / Blue / Purple) with two cap modes: follow your equipped iLvl (default on Whites and Greens for fresh installs) or set a fixed max. Per-rarity bind-type filter (Any / BoE / BoP). Grey junk always auto-sells. Equipped gear is never touched.
-- **Per-character + account-wide Sell Lists**, plus a Keep List and a Delete List. Bulk-add buttons scan your bags and add by colour or name. Saved profiles let you switch lists by activity.
+- **Per-character + account-wide Sell Lists**, plus a Keep List and a Delete List. Add items by ID or name (or bulk-add from your bags by colour), and switch lists by activity with saved profiles. Each list row shows the item's icon and a quality-colored name, hovering a row brings up the item tooltip, and you can filter the view by rarity.
 - **Project Ebonhold-specific protections** that the auto-rule sweep respects: affixed Rare/Epic drops (per-instance), chance-on-hit proc items, tomes and recipes (learned-state-aware), quest items, profession tools, equipped gear and looted upgrades, equipment-manager set members. Each protection has an Alt+Right-Click → **Allow Sell** override that's account-wide for items / per-affix-description for affixes.
 - **Greedy Scavenger + Goblin Merchant loop.** Auto-summon, dismiss-on-mount, re-summon-if-stuck, combat-resilient. Auto-loot cycle dismisses the scavenger and brings up the merchant when bags fill, then re-summons to continue. Heavy-combat safe.
 - **Fast Loot.** Throttled drain (~110 ms per slot) on manual loot windows so private-server anti-flood doesn't disconnect you. BoP-bind popups auto-confirm.
@@ -38,7 +38,7 @@ Per-character on/off: tick / untick the **Enable EbonClearance** checkbox at the
 
 All settings live under `/ec`, which opens the scrollable config panel. Highlights:
 
-- **Lists.** Sell List, Account Sell List, Keep List, Delete List. Each panel has bulk-add buttons (by quality on the Sell Lists) and a name-substring matcher.
+- **Lists.** Sell List, Account Sell List, Keep List, Delete List. One "Add item" field takes an item ID or a name (exact, or part of a name to add matching items from your bags); the Sell Lists also have by-quality bulk-add buttons. Rows show the item icon and a quality-colored name; hover a row for the item tooltip. Filter the view by name or rarity, and sort by name.
 - **Profiles.** Save / load / rename / clear. Default profile is locked empty.
 - **Merchant Settings.** Per-rarity quality thresholds with `Use equipped iLvl` or fixed-max-iLvl cap, per-rarity bind-type filter, merchant target (Goblin / normal vendors / both), Fast Mode toggle, vendor sell speed, summon delay.
 - **Protection Settings.** Auto-protect equipped gear, looted upgrades, equipment-manager sets, affixed Rare/Epic items, chance-on-hit items, tomes / recipes (with optional extension to already-known items).

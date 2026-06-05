@@ -76,8 +76,26 @@ Player-facing visual change to existing lists; no new toggle, command, or schema
 
 `v2.41.0` - minor bump (new user-facing UX feature, fully additive, downgrade-safe).
 
+## As shipped (v2.41.0, scope expanded during build at user request)
+
+Two additions agreed after the core landed and verified:
+
+1. **Process Bags rows get the icon + cursor tooltip too.** The Process Bags queue (`EbonClearance_ProcessBagsPanel.lua`) already showed a quality-colored item link and a hover tooltip (anchored right). Added an 18px item icon at the left of each row (sourced from the live bag slot via `GetContainerItemInfo`, always cached) and switched its tooltip anchor to `ANCHOR_CURSOR` to match the editable lists.
+
+2. **Grouped, clearer list-header controls** (the "confusing for new users" cluster), in `CreateListUI`:
+   - The redundant in-box title is dropped (each panel already has a heading + description + how-to-add hint above the box). `buildListHeaderRow` no longer takes `titleText`.
+   - Controls regroup into an **Add to list** group and a **Find in list** group (Sort button + Clear All on the header line, Search input + rarity filter below), separated by a thin divider. Clear All moved from the header row into the Find group (returned from `buildListSearchAndSortRow` now).
+   - **The two add inputs are merged into one** (later user request): a single "Add item:" field takes an item ID or a name. `buildListMatchRow` was removed; its bag-name-scan folded into CreateListUI's `DoAdd`, which routes a numeric entry to an ID add and resolves text via an exact cached-name `GetItemInfo` hit plus a bag substring scan. 3.3.5a has no full item-database name search, so an uncached name can't be resolved; the empty-result message says so and notes an ID always works. The `tests/test_perf_guardrails.lua` factory-list invariant dropped `buildListMatchRow` in lockstep.
+   - The broken sort-direction arrows (triangle glyphs U+25B2 / U+25BC, absent from the 3.3.5 client font, rendered as `?`) are replaced by inline button-arrow textures (`SORT_ASC` / `SORT_DESC` file-scope constants).
+   - **The "ID" sort button is removed and replaced by a "Show:" rarity filter** (a `UIDropDownMenuTemplate` matching the Merchant DE-cap dropdown style; options from the `EC_RARITY_FILTERS` file-scope table, quality-colored via `NS.ColorTextByQuality`). Sorting by an ID the row no longer displays was dead weight; filtering by rarity pairs with the quality-colored names. The filter (`rarityFilter` upvalue, nil = All) stacks with the search filter in `Refresh`; uncached items (unknown quality) stay hidden under a specific rarity until they cache. The default sort is now `name_asc` (alphabetical); the Name button still toggles asc/desc and the now-unreachable id-sort comparator branches were removed.
+   - Every control gains a plain-language hover tip via the new `EC_AddControlTip` helper (`HookScript` so it never clobbers the ID input's focus-tracking handlers).
+   - The scroll area top offset moves from -102 to -132 to clear the taller grouped header.
+
+The manual add controls were reviewed for removal (Alt+Right-Click + rules cover most adds now) and deliberately kept: "By ID" is the only path to pre-stage an item you do not currently hold, and shift-click-to-add is an expected convention.
+
 ## Out of scope
 
-- Process Bags queue, personal Stats Top-5, Guild most-sold rows.
+- Personal Stats Top-5 and Guild most-sold rows (the Guild rows already have hover tooltips).
 - Click / shift-click-to-link behaviour on rows (hover tooltip only).
-- Keeping the raw ID visible on the row in any form.
+- Keeping the raw ID visible on the editable-list row in any form.
+- Removing any manual add control (reviewed, kept).

@@ -259,13 +259,14 @@ block lives on `EbonClearance_Core.lua` (loaded first per the .toc).
 Actioned in v2.18.0. Five helper functions extracted onto `EC_compCache`
 (same discipline as `EC_compCache.initPanel`):
 
-- `EC_compCache.buildListHeaderRow(box, titleText, setTableName)` returns
-  `(input, addBtn, clearAllBtn)`. Wires focus-tracking + drag-to-receive
-  on the input as pure layout; OnClick handlers stay in CreateListUI.
+- `EC_compCache.buildListHeaderRow(box, setTableName)` returns
+  `(input, addBtn)` - the "Add to list" group, one merged ID/name input.
+  Wires focus-tracking + drag-to-receive on the input as pure layout;
+  the add OnClick (CreateListUI's `DoAdd`) handles ID vs name. (v2.41.0
+  merged the old `buildListMatchRow` "By name" scan into this input, so
+  that factory was removed.)
 - `EC_compCache.buildListSearchAndSortRow(box, setTableName)` returns
-  `(search, sortIDBtn, sortNameBtn)`. No OnClick wiring.
-- `EC_compCache.buildListMatchRow(box, setTableName)` returns
-  `(matchInput, matchBtn)`. No OnClick wiring.
+  `(search, sortNameBtn, clearAllBtn, rarityDD)`. No OnClick wiring.
 - `EC_compCache.buildListScrollArea(box, w, setTableName)` returns
   `(scroll, content)`. Installs the auto-hide scrollbar hook and the
   OnSizeChanged reactive-width hook internally.

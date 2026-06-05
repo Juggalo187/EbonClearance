@@ -57,7 +57,7 @@ local EC_HELP_ENTRIES = {
     {
         id = "what-are-the-lists",
         q = "What are the Sell, Keep, and Delete lists?",
-        a = "Three lists that give you fine control over what happens at a vendor. Sell List: items you always want vendored. Keep List: items you never want touched. Delete List: items destroyed at the next merchant visit (with confirmation handled). The Keep List wins over the Sell List, and both win over the automatic quality rules. Add to any list by Alt+Right-Click on a bag item, or by typing the item's name on the relevant panel.",
+        a = "Three lists that give you fine control over what happens at a vendor. Sell List: items you always want vendored. Keep List: items you never want touched. Delete List: items destroyed at the next merchant visit (with confirmation handled). The Keep List wins over the Sell List, and both win over the automatic quality rules. Add to any list by Alt+Right-Click on a bag item, or on the panel use the Add item box (type an item ID, or a name to add matching items from your bags). Each row shows the item's icon and a quality-colored name; hover it for the tooltip, and use Show: to filter the list by rarity.",
         panel = nil,
     },
     {
