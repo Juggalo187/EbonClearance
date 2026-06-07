@@ -725,6 +725,33 @@ delete list on first install is intentional. If a future scenario needs to
 pre-populate specific IDs, use the `_seededLists` guard to avoid re-seeding
 existing users.
 
+### Auto-delete-on-pickup shares the vendor delete path; two EC-TRAPs (v2.42.0)
+
+`DB.autoDeleteOnPickup` (account-wide, default off, gated by `enableDeletion`)
+destroys Delete-List items as they enter the bags. To keep it from drifting
+from the vendor delete, two helpers on `EC_compCache` are the single source of
+truth, used by BOTH `BuildQueue`'s delete branch and `runAutoDeleteOnPickup`:
+
+- `deleteListSlotEligible(bag, slot)` - the policy (on the list, not locked,
+  affix-protection veto). Do not re-inline this into either caller.
+- `executeBagSlotDelete(bag, slot, itemID, count, quality, announce)` - the
+  destructive sequence (pickup, `pendingDelete`, `DeleteCursorItem`, stat
+  bumps); `announce` prints the per-item chat line on the auto path only.
+
+`runAutoDeleteOnPickup` runs from the existing BAG_UPDATE debounce frame
+(`EC_compCache.bagUpdateFrame`), never the raw `BAG_UPDATE` branch. Two
+`EC-TRAP` markers guard it (also locked by Test 88aa):
+
+- **No `InCombatLockdown` gate** - looks like a missing combat guard, but
+  `DeleteCursorItem` is not combat-protected on 3.3.5a and farming happens in
+  combat, which is the whole point. Do not add one.
+- **One delete per debounce cycle** (no batch loop) - looks like a missing
+  batch, but each delete fires the next BAG_UPDATE, which re-fires the
+  debounce for the next item. The scan waits on a VISIBLE `DELETE_*` popup
+  (not on `pendingDelete`): a low-rarity item deletes with no popup and never
+  clears `pendingDelete`, so gating on `pendingDelete` would wedge the cascade
+  after the first item. A batch loop breaks the single-popup serialisation.
+
 ### Stuck-Scavenger detection uses movement time, not distance
 
 `UnitPosition("pet")` does not return data for CRITTER-type companions on

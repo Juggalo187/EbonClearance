@@ -59,6 +59,8 @@ DeletePanel:SetScript("OnShow", function(self)
             "Add items by shift-clicking them, dragging them in, or typing the item ID below."
         )
 
+        local autoCB, refreshAutoCBEnabled
+
         local delCB =
             CreateFrame("CheckButton", "EbonClearanceEnableDeleteCB", self, "InterfaceOptionsCheckButtonTemplate")
         delCB:SetPoint("TOPLEFT", delHint, "BOTTOMLEFT", 0, -6)
@@ -72,6 +74,16 @@ DeletePanel:SetScript("OnShow", function(self)
         delCB:SetScript("OnClick", function()
             DB.enableDeletion = delCB:GetChecked() and true or false
             PlaySound("igMainMenuOptionCheckBoxOn")
+            -- v2.42.0: turning deletion OFF also disarms auto-delete-on-pickup
+            -- (not just greys it). Avoids an "armed but inactive" limbo, and
+            -- means re-enabling deletion requires re-ticking auto-delete -
+            -- which re-runs the confirm gate and kicks a fresh scan.
+            if not DB.enableDeletion and DB.autoDeleteOnPickup then
+                DB.autoDeleteOnPickup = false
+                if autoCB then
+                    autoCB:SetChecked(false)
+                end
+            end
             -- Toggling deletion changes EC_IsSellable / BuildQueue's
             -- delete-list verdict for every Delete List slot. Repaint
             -- so the slot tints track immediately without requiring a
@@ -79,6 +91,59 @@ DeletePanel:SetScript("OnShow", function(self)
             -- invariant (Test 26 in test_perf_guardrails.lua).
             if NS.RefreshSellBorders then
                 NS.RefreshSellBorders()
+            end
+            if refreshAutoCBEnabled then
+                refreshAutoCBEnabled()
+            end
+        end)
+
+        -- v2.42.0: auto-delete-on-pickup sub-toggle, dependent on "Allow items
+        -- to be deleted". Greyed + disabled when deletion is off. Enabling
+        -- requires an explicit confirm (irreversible) and kicks one debounce
+        -- scan so items already in bags get cleaned.
+        autoCB =
+            CreateFrame("CheckButton", "EbonClearanceAutoDeleteCB", self, "InterfaceOptionsCheckButtonTemplate")
+        autoCB:SetPoint("TOPLEFT", delCB, "BOTTOMLEFT", 0, -2)
+        autoCB:SetChecked(DB.autoDeleteOnPickup)
+        local autoText = _G[autoCB:GetName() .. "Text"]
+        if autoText then
+            autoText:SetText("Auto-delete these items the moment they enter your bags")
+            autoText:SetWidth(420)
+            autoText:SetJustifyH("LEFT")
+        end
+        refreshAutoCBEnabled = function()
+            if DB.enableDeletion then
+                autoCB:Enable()
+                if autoText then
+                    autoText:SetTextColor(1, 1, 1)
+                end
+            else
+                autoCB:Disable()
+                if autoText then
+                    autoText:SetTextColor(0.5, 0.5, 0.5)
+                end
+            end
+        end
+        refreshAutoCBEnabled()
+        autoCB:SetScript("OnClick", function()
+            if autoCB:GetChecked() then
+                autoCB:SetChecked(false) -- stay off until confirmed
+                local dialog = StaticPopup_Show("EC_CONFIRM_AUTODELETE")
+                if dialog then
+                    dialog.data = function()
+                        DB.autoDeleteOnPickup = true
+                        autoCB:SetChecked(true)
+                        PlaySound("igMainMenuOptionCheckBoxOn")
+                        if EC_compCache.bagUpdateFrame then
+                            EC_compCache.bagUpdatePending = true
+                            EC_compCache.bagUpdateAccum = 0
+                            EC_compCache.bagUpdateFrame:Show()
+                        end
+                    end
+                end
+            else
+                DB.autoDeleteOnPickup = false
+                PlaySound("igMainMenuOptionCheckBoxOff")
             end
         end)
 
@@ -89,7 +154,11 @@ DeletePanel:SetScript("OnShow", function(self)
         -- stays at its build-time width and the search row + add-matching
         -- row buttons drift outside the panel boundary on shrink.
         self.listUI:ClearAllPoints()
-        self.listUI:SetPoint("TOPLEFT", 16, -130)
+        -- v2.42.0: anchor below the auto-delete sub-toggle (not a fixed
+        -- y-offset) so the list always clears the checkboxes even as the
+        -- description / hint text wraps. Mirrors the Keep List panel's
+        -- anchor-to-hint approach.
+        self.listUI:SetPoint("TOPLEFT", autoCB, "BOTTOMLEFT", 0, -12)
         self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
         self.listUI:Refresh()
     end)

@@ -718,6 +718,11 @@ local function EnsureDB()
     if type(DB.enableDeletion) ~= "boolean" then
         DB.enableDeletion = true
     end
+    -- v2.42.0: auto-delete Delete-List items on pickup. Account-wide (top-
+    -- level) to match its gate enableDeletion; default OFF (destructive, opt-in).
+    if type(DB.autoDeleteOnPickup) ~= "boolean" then
+        DB.autoDeleteOnPickup = false
+    end
     if type(DB.summonGreedy) ~= "boolean" then
         DB.summonGreedy = true
     end
@@ -2372,6 +2377,11 @@ EC_compCache.bagUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
     -- visible bag slot - bounded by the user's open bag count.
     if NS.RefreshSellBorders then
         NS.RefreshSellBorders()
+    end
+    -- v2.42.0: auto-delete-on-pickup runs from the debounce (NOT the raw
+    -- BAG_UPDATE branch) so the coalescing invariant holds.
+    if EC_compCache.runAutoDeleteOnPickup then
+        EC_compCache.runAutoDeleteOnPickup()
     end
 end)
 
@@ -4337,6 +4347,124 @@ local function EC_IsSellable(bag, slot, junkOnly)
 end
 NS.IsSellable = EC_IsSellable
 
+-- v2.42.0: shared Delete-List eligibility predicate. Returns (itemID, count,
+-- quality) when the bag slot holds a Delete-List item eligible for destruction
+-- (on the list, not locked, and not affix-protected), else nil. Used by both
+-- BuildQueue's delete branch and the auto-delete-on-pickup scan so vendor-delete
+-- and auto-delete apply identical policy with zero drift. Affix protection is the
+-- only veto; quest items / tomes / profession tools are NOT protected - the
+-- Delete List is explicit user intent.
+function EC_compCache.deleteListSlotEligible(bag, slot)
+    local DB = NS.DB
+    if not (DB and DB.deleteList) then
+        return nil
+    end
+    local id = GetContainerItemID(bag, slot)
+    if not (id and IsInSet(DB.deleteList, id)) then
+        return nil
+    end
+    local _, count, locked = GetContainerItemInfo(bag, slot)
+    if not (count and count > 0) or locked then
+        return nil
+    end
+    local _, _, quality = GetItemInfo(id)
+    if DB.protectAffixedRareItems and quality and quality >= 3 then
+        local affix = EC_compCache.bagSlotAffixData(bag, slot)
+        if affix then
+            local affixKey = affix.description
+                and EC_compCache.normaliseAffixDesc
+                and EC_compCache.normaliseAffixDesc(affix.description)
+            local ADB = NS.ADB
+            local manualAllow = affixKey and ADB and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
+            local isDupe = DB.affixAllowExactDupes
+                and EC_compCache.playerHasAffixDescription(affix.description)
+            if not (manualAllow or isDupe) then
+                return nil -- affix-protected
+            end
+        end
+    end
+    return id, count, quality
+end
+
+-- v2.42.0: shared destructive delete of one bag slot. Picks the item up,
+-- queues pendingDelete (so HookDeletePopupOnce auto-confirms the DELETE_*
+-- popup), deletes it, and bumps the deletion stats - identical accounting for
+-- the vendor path and the auto-delete path. `announce` true prints one chat
+-- line (auto-delete); the vendor path passes false (it has its own summary).
+-- Returns true if the delete was issued.
+function EC_compCache.executeBagSlotDelete(bag, slot, itemID, count, quality, announce)
+    ClearCursor()
+    PickupContainerItem(bag, slot)
+    if GetCursorInfo() ~= "item" then
+        ClearCursor()
+        EC_compCache.pendingDelete = nil
+        return false
+    end
+    EC_compCache.pendingDelete = { bag = bag, slot = slot, itemID = itemID }
+    DeleteCursorItem()
+    ClearCursor()
+    local delCount = count or 1
+    EC_BumpStat("totalItemsDeleted", delCount)
+    EC_session.deleted = EC_session.deleted + delCount
+    if itemID then
+        EC_BumpStatBucket("deletedItemCounts", itemID, delCount)
+    end
+    if quality then
+        EC_BumpStatBucket("deletedItemsByQuality", quality, delCount)
+    end
+    if announce then
+        local link = select(2, GetItemInfo(itemID)) or ("item:" .. tostring(itemID))
+        PrintNicef("|cffff4444Auto-deleted|r %s.", link)
+    end
+    return true
+end
+
+-- v2.42.0: auto-delete-on-pickup scan. Runs from the BAG_UPDATE debounce only.
+-- Deletes ONE eligible Delete-List item per cycle; the deletion fires another
+-- BAG_UPDATE which re-fires the debounce for the next one, self-terminating
+-- when none remain (ineligible items are skipped, so no loop).
+-- EC-TRAP: one-per-cycle by design (no batch loop). Each delete fires a
+-- BAG_UPDATE that re-fires the debounce for the next item; the scan waits on a
+-- visible DELETE_* popup so confirmation-required items resolve one at a time.
+-- Do NOT "optimise" into a batch delete, and do NOT gate on pendingDelete
+-- instead of the popup (low-rarity items delete with no popup and never clear
+-- pendingDelete, which would wedge the cascade after the first item).
+-- EC-TRAP: deliberately NOT gated on InCombatLockdown - DeleteCursorItem is
+-- not combat-protected on 3.3.5a and farming happens in combat, which is the
+-- whole point of the feature. Do NOT add a combat guard.
+function EC_compCache.runAutoDeleteOnPickup()
+    local DB = NS.DB
+    if not (DB and DB.enableDeletion and DB.autoDeleteOnPickup) then
+        return
+    end
+    if EC_compCache.vendorRunning then
+        return
+    end
+    -- Wait if a delete-confirmation popup from a prior delete is still on
+    -- screen (HookDeletePopupOnce confirms it; the resulting BAG_UPDATE
+    -- re-fires this scan for the next item). Gate on the VISIBLE popup, NOT
+    -- on pendingDelete: a low-rarity item deletes with no popup and never
+    -- clears pendingDelete, so gating on pendingDelete would wedge the
+    -- cascade after the first item (only one of several would be deleted).
+    local popup = StaticPopup1
+    if popup and popup:IsShown() and popup.which and popup.which:find("^DELETE_") then
+        return
+    end
+    if GetCursorInfo() then
+        return
+    end
+    for bag = 0, 4 do
+        local slots = GetContainerNumSlots(bag)
+        for slot = 1, slots do
+            local id, count, quality = EC_compCache.deleteListSlotEligible(bag, slot)
+            if id then
+                EC_compCache.executeBagSlotDelete(bag, slot, id, count, quality, true)
+                return
+            end
+        end
+    end
+end
+
 local function BuildQueue(junkOnly)
     wipe(queue)
     queueIndex = 1
@@ -4363,90 +4491,19 @@ local function BuildQueue(junkOnly)
         for slot = 1, slots do
             local queuedDelete = false
             if deletionOn then
-                local id = GetContainerItemID(bag, slot)
-                -- v2.13.8: dropped the IsEquippedItem(id) guard from
-                -- this path. The original intent was "don't auto-
-                -- destroy items currently worn," but IsEquippedItem
-                -- checks by item ID, not by slot - so for any item
-                -- where the user has one copy equipped AND has
-                -- duplicates in bags (e.g. tabards, off-spec armor,
-                -- BoE accessories with multiple copies), all the bag
-                -- duplicates were silently kept. The iteration only
-                -- visits bag slots; equipped items live in inventory
-                -- slots 1-19 by definition, so a bag-slot copy is by
-                -- definition NOT the worn instance. The check was
-                -- never actually protecting the right thing - it was
-                -- conflating "this item ID is worn" with "this
-                -- specific bag copy is the worn instance." Following
-                -- the same principle as v2.13.x's quest-item safety-
-                -- net narrowing: explicit user lists override safety
-                -- nets. Delete-list entries are explicit user intent;
-                -- respect them.
-                if id and IsInSet(DB.deleteList, id) then
-                    local _, count, locked = GetContainerItemInfo(bag, slot)
-                    if count and count > 0 and not locked then
-                        -- v2.19.0: PE roguelite affix protection on
-                        -- the Delete List path. Same gate as
-                        -- EC_IsSellable's sell-time check: a user
-                        -- with the base itemID on Delete must not
-                        -- accidentally destroy a randomly-affixed
-                        -- Rare/Epic copy. The toggle's default ON.
-                        -- v2.20.1: chance-on-hit protection NO LONGER
-                        -- applies on the delete path. Delete List
-                        -- entries are always explicit user intent
-                        -- (added via Alt+Right-Click, manual entry,
-                        -- or the Delete List panel) - the user has
-                        -- said "destroy items with this ID". Don't
-                        -- override explicit destruction. Affix
-                        -- protection KEEPS protecting the delete path
-                        -- because affixed-instance detection is per-
-                        -- link and the user can't anticipate which
-                        -- specific bag copy will roll an affix.
-                        -- v2.23.0: same exact-rank dupe gate as the
-                        -- sell path. When the user opted in AND owns
-                        -- the same (affix, rank) pair, the affix
-                        -- protection releases the item to be deleted.
-                        -- v2.32.x: also honour the per-affix manual
-                        -- Allow Sell mark (ADB.allowedAffixes). The
-                        -- sell-path affix gate releases the item when
-                        -- the user has explicitly Alt+Right-Clicked ->
-                        -- Allow Sell on the affix description; the
-                        -- delete path was missing the same bypass, so
-                        -- items with no vendor value AND an Allow-Sell-
-                        -- marked affix had no escape from the bag - the
-                        -- delete-list path silently kept them. Mirror
-                        -- the sell path's `manualAllow or autoDupe`
-                        -- shape so explicit user intent (whether sell
-                        -- or delete) wins over the safety net.
-                        local _, _, quality = GetItemInfo(id)
-                        local affixProtected = false
-                        if DB.protectAffixedRareItems and quality and quality >= 3 then
-                            local affix = EC_compCache.bagSlotAffixData(bag, slot)
-                            if affix then
-                                local affixKey = affix.description
-                                    and EC_compCache.normaliseAffixDesc
-                                    and EC_compCache.normaliseAffixDesc(affix.description)
-                                local manualAllow = affixKey
-                                    and ADB
-                                    and ADB.allowedAffixes
-                                    and ADB.allowedAffixes[affixKey]
-                                local isDupe = DB.affixAllowExactDupes
-                                    and EC_compCache.playerHasAffixDescription(affix.description)
-                                affixProtected = not (manualAllow or isDupe)
-                            end
-                        end
-                        if not affixProtected then
-                            queue[#queue + 1] = {
-                                type = "delete",
-                                bag = bag,
-                                slot = slot,
-                                itemID = id,
-                                count = count,
-                                quality = quality,
-                            }
-                            queuedDelete = true
-                        end
-                    end
+                -- v2.42.0: policy now lives in the shared helper (also used by
+                -- the auto-delete-on-pickup scan) so the two never drift.
+                local id, count, quality = EC_compCache.deleteListSlotEligible(bag, slot)
+                if id then
+                    queue[#queue + 1] = {
+                        type = "delete",
+                        bag = bag,
+                        slot = slot,
+                        itemID = id,
+                        count = count,
+                        quality = quality,
+                    }
+                    queuedDelete = true
                 end
             end
             if not queuedDelete then
@@ -4610,28 +4667,7 @@ local function DoNextAction()
             EC_BumpStatBucket("soldCopperByQuality", action.quality, copper)
         end
     elseif action.type == "delete" then
-        ClearCursor()
-        PickupContainerItem(action.bag, action.slot)
-        local cursorType = GetCursorInfo()
-
-        if cursorType == "item" then
-            EC_compCache.pendingDelete = { bag = action.bag, slot = action.slot, itemID = action.itemID }
-            DeleteCursorItem()
-            ClearCursor()
-            -- v2.38.1: helpers write to DB + ADB.accountStats.
-            local delCount = action.count or 1
-            EC_BumpStat("totalItemsDeleted", delCount)
-            EC_session.deleted = EC_session.deleted + delCount
-            if action.itemID then
-                EC_BumpStatBucket("deletedItemCounts", action.itemID, delCount)
-            end
-            if action.quality then
-                EC_BumpStatBucket("deletedItemsByQuality", action.quality, delCount)
-            end
-        else
-            ClearCursor()
-            EC_compCache.pendingDelete = nil
-        end
+        EC_compCache.executeBagSlotDelete(action.bag, action.slot, action.itemID, action.count, action.quality, false)
     end
 
     queueIndex = queueIndex + 1
@@ -4939,6 +4975,22 @@ StaticPopupDialogs["EC_CONFIRM_CLEAR_PROFILE"] = {
 -- The %s slot is filled with the list's user-facing title.
 StaticPopupDialogs["EC_CONFIRM_CLEAR_LIST"] = {
     text = 'Remove every item from "|cffffff00%s|r"?\n|cffaaaaaaThis cannot be undone.|r',
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function(self, data)
+        if type(data) == "function" then
+            data()
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- v2.42.0: confirm enabling auto-delete-on-pickup (irreversible behaviour).
+StaticPopupDialogs["EC_CONFIRM_AUTODELETE"] = {
+    text = "Auto-delete permanently destroys Delete List items the instant they're looted - no vendor step, no undo. Turn it on?",
     button1 = YES,
     button2 = NO,
     OnAccept = function(self, data)

@@ -18,7 +18,7 @@ Let a player opt in (default OFF) to having Delete-List items destroyed the mome
 ## Architecture
 
 ### DB
-- New per-character boolean `DB.autoDeleteOnPickup` (default `false`). Add the nil-default in `EnsureDB` next to `enableDeletion` (`EbonClearance_Events.lua`), and add the key to `PER_CHAR_FIELDS` so it partitions per character like `deleteList` / `enableDeletion`.
+- New **account-wide** boolean `DB.autoDeleteOnPickup` (default `false`), to match its gate `enableDeletion` (which is top-level, NOT in `PER_CHAR_FIELDS`). Add the nil-default in `EnsureDB` next to `enableDeletion` (`EbonClearance_Events.lua`). Do NOT add it to `PER_CHAR_FIELDS`: the Delete List items stay per-character, but the toggle is global, exactly like `enableDeletion`.
 
 ### Shared eligibility helper (DRY)
 - The Delete-List eligibility decision is currently inline in `BuildQueue` (`EbonClearance_Events.lua`: delete-list membership + not-locked + the affix-protection veto block). Extract it into one helper, e.g. `EC_compCache.deleteListSlotEligible(bag, slot, itemID)`, and route both `BuildQueue`'s delete branch and the new auto-delete scan through it. This makes vendor-delete and auto-delete policy identical by construction. Keep `BuildQueue`'s observable behaviour byte-identical.

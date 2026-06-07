@@ -3588,31 +3588,32 @@ do
 end
 
 -- ---------------------------------------------------------------------------
--- Test 58: BuildQueue delete-path affix gate honours manual Allow Sell.
+-- Test 58: Delete-List affix gate honours manual Allow Sell.
 -- ---------------------------------------------------------------------------
 -- Pre-v2.32.x bug: a Rare/Epic item with an affix that the user had
 -- explicitly Alt+Right-Click -> Allow Sell'd (so ADB.allowedAffixes[key]
 -- was set) could not be deleted via the Delete List. The sell-path gate
 -- in EC_IsSellable releases the item on `manualAllow or autoDupe`; the
--- delete-path gate in BuildQueue only checked `isDupe` (autoDupe only).
--- Items with no vendor value and an Allow-Sell-marked affix had no
--- escape from the bag - Delete List entries silently kept them.
+-- delete-path gate only checked `isDupe` (autoDupe only). Items with no
+-- vendor value and an Allow-Sell-marked affix had no escape from the bag.
 --
--- Fix: the delete-path affix gate now also checks ADB.allowedAffixes
--- (the manual Allow Sell mark). Explicit user intent wins, matching the
--- sell-path semantics.
+-- Fix: the affix gate also checks ADB.allowedAffixes (the manual Allow
+-- Sell mark). Explicit user intent wins, matching the sell-path semantics.
 --
--- This test locks the new shape: any future refactor that drops the
--- manualAllow check from BuildQueue's delete-path affix gate will fail.
+-- v2.42.0: the affix gate moved from BuildQueue's inline delete branch
+-- into the shared deleteListSlotEligible helper (EC_compCache method).
+-- This test now locates the gate in the helper body.
+--
+-- This test locks the shape: any future refactor that drops the
+-- manualAllow check from the delete-path affix gate will fail.
 do
     local eventsFile = io.open("EbonClearance_Events.lua", "rb")
     if eventsFile then
         local eventsSrc = eventsFile:read("*a") or ""
         eventsFile:close()
-        -- Locate the delete-path affix block. Marker: the BuildQueue's
-        -- delete-list branch sets `affixProtected` local. Grab the
-        -- surrounding ~1500 chars and pattern-match the gate logic.
-        local blockStart = eventsSrc:find("local affixProtected = false")
+        -- v2.42.0: the affix gate is in deleteListSlotEligible. Locate
+        -- it by the function signature and grab the surrounding ~1500 chars.
+        local blockStart = eventsSrc:find("function EC_compCache%.deleteListSlotEligible%(")
         if blockStart then
             local block = eventsSrc:sub(blockStart, blockStart + 1500)
             check(
@@ -4831,20 +4832,25 @@ do
         local bdSrc = bdf:read("*a") or ""
         bdf:close()
 
-        -- BuildQueue: the Delete-List `IsInSet(DB.deleteList, id)` check
-        -- must appear before the `EC_IsSellable(bag, slot,` call inside
-        -- the bag-walk loop.
+        -- BuildQueue: the Delete-List check (now delegated to
+        -- EC_compCache.deleteListSlotEligible) must appear before the
+        -- `EC_IsSellable(bag, slot,` call inside the bag-walk loop.
+        -- v2.42.0: the inline IsInSet(DB.deleteList, id) check moved into the
+        -- shared deleteListSlotEligible helper so vendor-delete and
+        -- auto-delete-on-pickup apply identical policy. BuildQueue now
+        -- calls deleteListSlotEligible; the ordering invariant is verified
+        -- by finding the helper call before EC_IsSellable in the function body.
         local fnStart = evSrc:find("local function BuildQueue%(")
         local fnEnd = fnStart and evSrc:find("\nend\n", fnStart) or nil
         local body = fnStart and fnEnd and evSrc:sub(fnStart, fnEnd) or ""
-        local deleteCheckPos = body:find('IsInSet%(DB%.deleteList,')
+        local deleteCheckPos = body:find('deleteListSlotEligible%(bag, slot%)')
         local sellableCheckPos = body:find("EC_IsSellable%(bag, slot,")
         check(
             "Test 86: BuildQueue checks Delete List BEFORE EC_IsSellable",
             deleteCheckPos ~= nil
                 and sellableCheckPos ~= nil
                 and deleteCheckPos < sellableCheckPos,
-            "BuildQueue must check IsInSet(DB.deleteList, id) before calling EC_IsSellable so explicit destructive intent wins over sell signals (greyAutoSell, Sell List, quality rules). Pre-v2.37.0 had the order reversed and the Delete List silently lost to greyAutoSell on grey items."
+            "BuildQueue must call deleteListSlotEligible(bag, slot) before EC_IsSellable so explicit destructive intent wins over sell signals (greyAutoSell, Sell List, quality rules). Pre-v2.37.0 had the order reversed and the Delete List silently lost to greyAutoSell on grey items."
         )
 
         check(
@@ -5687,6 +5693,48 @@ do
                 "Removing the last list entry for an itemID must clear ADB.affixedListedItems[id] and ADB.chanceOnHitListedItems[id] so the side meta doesn't accumulate orphans. Clear All must snapshot itemIDs before wipe and prune per id."
             )
         end
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- Test 88aa (v2.42.0): auto-delete-on-pickup is gated + debounce-sourced and
+-- shares the delete-eligibility + delete-execution helpers with the vendor
+-- path. Locks the two EC-TRAP decisions (no combat gate is fine BECAUSE the
+-- scan is gated + cursor-guarded + vendor-exclusive; one-per-cycle relies on
+-- running from the coalesced debounce, never the raw BAG_UPDATE branch).
+-- ---------------------------------------------------------------------------
+do
+    local f = io.open("EbonClearance_Events.lua", "rb")
+    if f then
+        local s = f:read("*a") or ""
+        f:close()
+        local fnStart = s:find("function EC_compCache%.runAutoDeleteOnPickup%(")
+        check("Test 88aa: runAutoDeleteOnPickup is defined", fnStart ~= nil,
+            "the auto-delete-on-pickup scan must exist on EC_compCache")
+        if fnStart then
+            local body = s:sub(fnStart, fnStart + 1400)
+            check("Test 88aa: scan gates on autoDeleteOnPickup + enableDeletion",
+                body:find("autoDeleteOnPickup") ~= nil and body:find("enableDeletion") ~= nil,
+                "both toggles must gate the scan")
+            check("Test 88aa: scan skips during a vendor cycle",
+                body:find("vendorRunning") ~= nil,
+                "must not fight an active vendor cycle")
+            check("Test 88aa: scan guards free cursor + a visible delete popup",
+                body:find("GetCursorInfo") ~= nil and body:find("StaticPopup1") ~= nil,
+                "must not clobber the cursor or start a delete while a DELETE_* popup is up (gating on a visible popup, not pendingDelete, so non-popup deletes don't wedge the cascade)")
+            check("Test 88aa: scan uses the shared eligibility helper",
+                body:find("deleteListSlotEligible") ~= nil,
+                "must share delete policy with BuildQueue, not duplicate it")
+        end
+        local dbStart = s:find('EC_compCache%.bagUpdateFrame:SetScript%("OnUpdate"')
+        local dbBody = dbStart and s:sub(dbStart, dbStart + 2600) or ""
+        check("Test 88aa: auto-delete runs from the BAG_UPDATE debounce frame",
+            dbBody:find("runAutoDeleteOnPickup") ~= nil,
+            "the scan must be called from the 120ms debounce OnUpdate, not the raw BAG_UPDATE branch (coalescing)")
+        local _, execCount = s:gsub("executeBagSlotDelete%(", "")
+        check("Test 88aa: vendor + auto delete share executeBagSlotDelete",
+            s:find("function EC_compCache%.executeBagSlotDelete%(") ~= nil and execCount >= 3,
+            "DoNextAction and runAutoDeleteOnPickup must both call the shared executeBagSlotDelete (defn + 2 call sites)")
     end
 end
 

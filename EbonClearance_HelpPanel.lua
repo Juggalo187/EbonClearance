@@ -61,6 +61,12 @@ local EC_HELP_ENTRIES = {
         panel = nil,
     },
     {
+        id = "auto-delete-on-pickup",
+        q = "What does auto-delete on pickup do?",
+        a = "Off by default. When you turn it on (Delete List panel, under 'Allow items to be deleted'), items on your Delete List are destroyed the moment they enter your bags, instead of waiting for a vendor - handy for cutting vendor trips while farming. It uses the same protections as deleting at a vendor: affixed Rare/Epic drops are still shielded, but quest items, tomes, and tools are not (the Delete List is your explicit choice). Each deletion prints one chat line. It is instant and cannot be undone, so enabling asks you to confirm first.",
+        panel = "EbonClearanceOptionsDeletion",
+    },
+    {
         id = "see-item-decision",
         q = "How do I see what will happen to an item?",
         a = "Hover any bag item with EbonClearance enabled and the tooltip shows what the addon will do: 'Keep', 'Will Sell', 'Will Delete', or 'Won't Sell' with a reason. For a full step-by-step, Alt+Shift+Right-Click the item, or type /ec sellinfo.",

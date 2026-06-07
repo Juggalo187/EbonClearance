@@ -5,6 +5,17 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.42.0
+
+New option: auto-delete Delete List items the moment they enter your bags, instead of only at a vendor, to cut vendor trips while farming. Off by default. Suggested by Sanavesa.
+
+- **Auto-delete on pickup (opt-in, default off).** A new "Auto-delete these items the moment they enter your bags" toggle on the Delete List panel (under "Allow items to be deleted", and greyed until that's on). When enabled, any item on your Delete List is destroyed as soon as it's looted, with one chat line per item ("Auto-deleted ..."). It uses the SAME protections as the vendor delete: affix protection still shields Rare/Epic affixed drops; quest items, tomes, and profession tools are not protected (the Delete List is explicit intent). It works in combat, which is the point for farming.
+- **Enabling asks first.** A confirmation popup spells out that it permanently destroys items instantly with no vendor step and no undo. Enabling also sweeps items already in your bags.
+- **Schema:** one additive account-wide field `EbonClearanceDB.autoDeleteOnPickup` (default false), downgrade-safe.
+- **Internal:** the Delete-List eligibility check and the destructive delete were extracted into shared helpers (`deleteListSlotEligible`, `executeBagSlotDelete`) so vendor-delete and auto-delete apply identical policy + stat accounting; the scan runs from the existing BAG_UPDATE debounce, one item per cycle. Test 88aa locks the gating + shared helpers.
+
+Safe overwrite from v2.41.x.
+
 ### v2.41.3
 
 Patch release. Clearer empty states across the UI.
