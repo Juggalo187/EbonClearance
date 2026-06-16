@@ -1,9 +1,9 @@
 ## Interface: 30300
-## Title: |cff66ccffEbonClearance|r |cffFFFF00[v2.42.1]|r
+## Title: |cff66ccffEbonClearance|r |cffFFFF00[v2.43.0]|r
 ## Notes: |cffffb84dProject Ebonhold bag manager|r. Vendoring, deletion, looting, protection rules, and profession processing (disenchant / mill / prospect).
 ## Author: Serv
 ## X-Website: https://github.com/powerfulqa/EbonClearance
-## Version: v2.42.1
+## Version: v2.43.0
 ## SavedVariables: EbonClearanceDB, EbonClearanceAccountDB
 
 Bindings.xml
