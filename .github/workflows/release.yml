@@ -63,14 +63,13 @@ jobs:
       - name: Verify before packaging (syntax + all test suites)
         # v2.39.0: gate the release on the same checks CI runs on master, so a
         # tag can never ship red. luac is globbed so new split files are
-        # covered automatically; the four suites mirror test.yml.
+        # covered automatically; tests/run_all.lua runs every invariant suite
+        # (its list is the single source of truth, shared with test.yml).
+        # Luacheck is not re-run here: master CI gates it on every push, so a
+        # tag cut from green master is already luacheck-clean.
         run: |
           for f in EbonClearance*.lua; do luac5.1 -p "$f"; done
-          lua5.1 tests/test_layout_reactivity.lua
-          lua5.1 tests/test_perf_guardrails.lua
-          lua5.1 tests/test_comment_hygiene.lua
-          lua5.1 tests/test_comms_version.lua
-          lua5.1 tests/test_guildshare.lua
+          lua5.1 tests/run_all.lua
 
       - name: Package addon
         run: |

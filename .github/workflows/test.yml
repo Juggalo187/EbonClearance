@@ -39,6 +39,9 @@ jobs:
           luac5.1 -p EbonClearance_GuildShare.lua
           luac5.1 -p EbonClearance_GuildPanel.lua
           luac5.1 -p EbonClearance_Core.lua
+          luac5.1 -p EbonClearance_Locale.lua
+          luac5.1 -p EbonClearance_Locale_frFR.lua
+          luac5.1 -p EbonClearance_Locale_deDE.lua
           luac5.1 -p EbonClearance_Companion.lua
           luac5.1 -p EbonClearance_Protection.lua
           luac5.1 -p EbonClearance_Vendor.lua
@@ -61,17 +64,24 @@ jobs:
           luac5.1 -p EbonClearance_Tooltip.lua
           luac5.1 -p EbonClearance_BagContextMenu.lua
 
-      - name: Layout-reactivity regression tests
-        run: lua5.1 tests/test_layout_reactivity.lua
+      - name: Install luacheck
+        # Same retry shape as the Lua install: the apt mirror occasionally
+        # returns a transient fetch failure. liblua5.1-0-dev is needed so
+        # luacheck's luafilesystem dependency compiles against the 5.1 headers.
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y luarocks liblua5.1-0-dev && break
+            echo "apt attempt $i failed; retrying in 5s..." && sleep 5
+          done
+          sudo luarocks install luacheck
+          luacheck --version
 
-      - name: Perf guardrail regression tests
-        run: lua5.1 tests/test_perf_guardrails.lua
+      - name: Luacheck (0 warnings expected)
+        # Lints every shipped source file at the repo root, honouring
+        # .luacheckrc. Matches the documented pre-commit command in CLAUDE.md.
+        run: luacheck EbonClearance_*.lua
 
-      - name: Comment hygiene check
-        run: lua5.1 tests/test_comment_hygiene.lua
-
-      - name: Comms / version regression tests
-        run: lua5.1 tests/test_comms_version.lua
-
-      - name: Guild-share regression tests
-        run: lua5.1 tests/test_guildshare.lua
+      - name: Invariant test suites
+        # Single entry point; tests/run_all.lua is the source of truth for
+        # the suite list. Add a new suite there and it runs here automatically.
+        run: lua5.1 tests/run_all.lua
