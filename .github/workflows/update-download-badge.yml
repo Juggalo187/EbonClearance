@@ -19,27 +19,44 @@ jobs:
         with:
           ref: badge-data
 
-      - name: Compute total downloads
-        id: count
+      - name: Compute badge data
+        id: data
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TOTAL=$(gh api "repos/${{ github.repository }}/releases" --paginate --jq '.[].assets[].download_count' | awk '{s+=$1} END {print s+0}')
+          VERSION=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
           echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
-          echo "Total downloads across all releases: $TOTAL"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Downloads: $TOTAL   Latest version: $VERSION"
 
       - name: Update JSON if changed
+        # Self-hosted shields endpoints on the badge-data branch. Both the
+        # Download (version) and Downloads (count) badges read these static
+        # JSON files, so neither depends on shields.io's shared GitHub token
+        # pool (which intermittently fails with "unable to select next GitHub
+        # token from pool"). Updated on each release + every 6h.
         env:
-          TOTAL: ${{ steps.count.outputs.total }}
+          TOTAL: ${{ steps.data.outputs.total }}
+          VERSION: ${{ steps.data.outputs.version }}
         run: |
-          NEW="{\"schemaVersion\":1,\"label\":\"Downloads\",\"message\":\"$TOTAL\",\"color\":\"blue\"}"
-          if [ -f downloads.json ] && [ "$(cat downloads.json)" = "$NEW" ]; then
-            echo "No change ($TOTAL); skipping commit."
+          DL="{\"schemaVersion\":1,\"label\":\"Downloads\",\"message\":\"$TOTAL\",\"color\":\"blue\"}"
+          VER="{\"schemaVersion\":1,\"label\":\"Download\",\"message\":\"$VERSION\",\"color\":\"orange\"}"
+          changed=0
+          if [ ! -f downloads.json ] || [ "$(cat downloads.json)" != "$DL" ]; then
+            echo "$DL" > downloads.json
+            changed=1
+          fi
+          if [ ! -f version.json ] || [ "$(cat version.json)" != "$VER" ]; then
+            echo "$VER" > version.json
+            changed=1
+          fi
+          if [ "$changed" = "0" ]; then
+            echo "No change (downloads=$TOTAL, version=$VERSION); skipping commit."
             exit 0
           fi
-          echo "$NEW" > downloads.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads.json
-          git commit -m "Update downloads count to $TOTAL"
+          git add downloads.json version.json
+          git commit -m "Update badge data (downloads=$TOTAL, version=$VERSION)"
           git push origin badge-data
