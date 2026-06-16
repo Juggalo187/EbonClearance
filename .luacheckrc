@@ -1,7 +1,8 @@
 -- Luacheck configuration for EbonClearance (WoW 3.3.5a / WotLK / Lua 5.1)
 -- Run:  luacheck *.lua
--- (After Stage 9 of the file split the addon ships as 23 .lua files; the
--- original monolith EbonClearance.lua was renamed to EbonClearance_Events.lua.)
+-- (The addon ships as 32 .lua files after the file split plus the later
+-- panel / comms / guild-share / localization additions; the original monolith
+-- EbonClearance.lua was renamed to EbonClearance_Events.lua.)
 -- See docs/ADDON_GUIDE.md for the rationale behind these settings.
 
 std = "lua51"

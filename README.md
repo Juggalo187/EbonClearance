@@ -16,7 +16,7 @@ A **Project Ebonhold-aware** bag manager. Out of the box it sells your junk and 
 - **Process Bags panel** for disenchant / mill / prospect / pick-lock. One button drives the casts; bind a key and hold to drain a stack. Honours every protection.
 - **Tooltip annotations** show what the addon will do *before* it does it: `Will Sell (<reason>)`, `Keep (<reason>)`, `Won't Sell (<reason>)`, `Will Delete`. No surprises at the merchant.
 - **Per-item sellability inspector** (`/ec sellinfo` or Alt+Shift+Right-Click) traces the entire decision chain in chat. "Why isn't this selling?" is always one click away.
-- **Per-category bag-slot border tints** in six colours (Delete / Keep / Account Sell / Character Sell / Junk / Rule-match), with per-category enable + colour picker. Slot-frame ring only.
+- **Per-category bag-slot border tints** in seven colours (Delete / Keep / Account Sell / Character Sell / Random affix / Junk / Rule-match), with per-category enable + colour picker. Slot-frame ring only.
 - **Item-level overlay** (opt-in). Quality-coloured iLvl in the bottom-right corner of equippable gear slots, with player-adjustable font size. Three independently togglable surfaces: bags, character sheet & inspect, merchant.
 - **Profile import/export** for sharing whole settings packs (lists + per-rarity rules) between characters or with other players.
 - **Update nudge** (on by default). Tells you when a newer version is out. WoW 3.3.5a addons can't check the web, so EbonClearance learns the latest version from other users in your guild or group, then shows one chat line per session with a clickable copy-link to the latest release. Toggle it off on the main panel.
@@ -72,6 +72,8 @@ All settings live under `/ec`, which opens the scrollable config panel. Highligh
 | `/ec bugreport` | Generate a diagnostic report you can copy and paste into a bug report (includes a list of your loaded addons for conflict diagnosis) |
 | `/ec sellinfo [bag slot]` | Trace why a bag item will or won't sell - per-predicate chain trace (also available via Alt+Shift+Right-Click on the item) |
 | `/ec affixdebug on\|off\|status\|dump\|clear` | Record affix-detection events for bug reports; `dump` opens a copyable window with the event log |
+| `/ec processdebug` | Diagnostic: open a copyable window listing every Process Bags gate (recognised profession spells, per-slot scan results) for bug reports |
+| `/ec perf` | Show EbonClearance's memory, CPU, cache and list sizes |
 | `/ec commtest` | Diagnostic: check that addon messages are delivered on this server and preview the update nudge (works solo) |
 | `/ec guildtest` | Diagnostic: preview the Stats - Guild panel with simulated members (works solo) |
 | `/ec locale [auto\|frFR\|deDE]` | Show or force the addon's display language. `auto` follows your client; a code forces that language (handy when your client is locked to one language). `/reload` to apply fully |

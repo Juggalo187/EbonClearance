@@ -120,7 +120,7 @@ them in XML at addon-load time.
 
 ## Architecture
 
-> For the multi-file map (which of the 29 `.lua` files owns what, the
+> For the multi-file map (which of the 32 `.lua` files owns what, the
 > cross-file boundaries, and a "where do I change X?" table), see
 > [ARCHITECTURE.md](ARCHITECTURE.md). The per-file ordering notes below
 > describe the rough layout *within* the larger files (Core, Events, etc.)
