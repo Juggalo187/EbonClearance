@@ -1143,6 +1143,41 @@ function EC_compCache.itemHasChanceOnHit(bag, slot, itemID)
     return result
 end
 
+-- v2.44.0: Resilience-stat detection. Mirrors itemHasChanceOnHit's
+-- pattern. PvP gear on most 3.3.5a servers has a "Resilience" /
+-- "Resilience Rating" stat line and sellPrice = 0, so it can't be
+-- sold and just clutters bags. Murlocked asked for an option to
+-- auto-mark these for deletion; the toggle that drives the sweep
+-- lives on the Item Protection panel. Detection is per-itemID,
+-- locale-tolerant (matches the substring "Resilience" which is the
+-- common root for both the bare stat and the rating variant).
+function EC_compCache.itemHasResilience(bag, slot, itemID)
+    if not itemID then
+        return false
+    end
+    if EC_compCache.resilienceCache[itemID] ~= nil then
+        return EC_compCache.resilienceCache[itemID]
+    end
+    if not bag or not slot then
+        return false
+    end
+    EC_compCache.scanBagItem(bag, slot)
+    local result = false
+    for i = 1, 30 do
+        local line = _G["EbonClearanceScanTooltipTextLeft" .. i]
+        if not line then
+            break
+        end
+        local txt = line:GetText()
+        if txt and txt:find("Resilience", 1, true) then
+            result = true
+            break
+        end
+    end
+    EC_compCache.resilienceCache[itemID] = result
+    return result
+end
+
 function EC_compCache.liveTooltipHasChanceOnHit(tooltip, itemID)
     if itemID and EC_compCache.chanceOnHitCache[itemID] ~= nil then
         return EC_compCache.chanceOnHitCache[itemID]

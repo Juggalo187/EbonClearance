@@ -5,6 +5,54 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.44.0
+
+Three Murlocked-reported items rolled into one minor: a bug fix and two new opt-in controls for affix-heavy and PvP-loot farming.
+
+**Bug fix: upgrade-protect no longer flags items the player can't equip.**
+
+Reported by Murlocked: items in equip-slots their class can't use - bows on Druids, relics on Mages, plate on cloth classes - were being added to the Keep List as "Keep (upgrade)" because `checkBagsForUpgrades` only compared iLvl against the corresponding slot, never checked whether the player could actually equip the item.
+
+- **New entries gate on `IsUsableItem`.** Items the player's class can't equip are skipped over instead of stamped as upgrades. Only an explicit `false` (class veto) disqualifies; `nil` (uncached) lets GetItemInfo logic still run during item-cache warmup.
+- **Self-heal for already-polluted Keep Lists.** The stale-cleanup pass also removes entries where `IsUsableItem` returns false. Players with bows / relics / wrong-armor pieces stuck on their Keep List from pre-v2.44.0 see them clear automatically on the next sweep - no `/ec clean upgrades` needed.
+
+**New: affix rank threshold as a standalone sell rule.** Plus a symmetric reframe of "Allow selling affixes you already have" so the two affix-sell toggles behave the same way.
+
+Asked for by Murlocked: "set an affix level to sell, e.g. under tier 4". The slider IS the sell rule - if an affixed Rare/Epic item's rank is below the floor, it sells, regardless of your other quality rules / Sell List entries.
+
+- **New slider on the Item Protection panel:** "Sell affixes below rank". Off (0) by default; pick 1-5 to set the floor. Affixes at or above the floor stay protected; anything below is selected for sale by the slider alone - no quality-rule pre-condition, no Sell List entry needed. Keep List entries still veto (your overrides win).
+- **"Allow selling affixes you already have" is now a real sell rule too.** Pre-v2.44.0 it was a release-only lever: turning it on lifted the affix veto, but the item still needed a quality rule or Sell List entry to actually sell. Players hit this gap repeatedly ("I turned it on, why didn't it sell?"). Both affix-sell toggles now act symmetrically: if either fires (rank below floor, OR you've extracted this exact affix), the item sells without needing another rule. Mirror change: tooltip flips from the older "Affix released - add to a list to sell" hint to a plain `Will Sell (you have this affix)`.
+- **Standalone positive signals.** Both `affixRankPass` and `autoDupePass` are hoisted into `EC_IsSellable`'s `isJunk or qualityPass or whitelistPass` check so the affix toggles can fire a sale even when the quality rule for that rarity is disabled. The same conditions still release the affix veto downstream so the protection doesn't override its own rules.
+- **Symmetric across every surface:** sell-path, delete-path (deleteListSlotEligible), Process Bags canDisenchant guard, tooltip annotation, and `/ec sellinfo` trace all agree on the verdict.
+- **Tooltip says it plainly.** When the rank floor is the sell reason, the tooltip reads `Will Sell (rank N below floor M)`. When the "you have this affix" toggle is the sell reason, it reads `Will Sell (you have this affix)`.
+- **Item Protection panel: slider alignment fixed.** The slider was double-indented under the dupe-allow checkbox; it now lines up at the same column as its sibling toggle. Visual hierarchy under the parent "Keep blue/purple items with affixes" toggle is uniform.
+- **New Help FAQ entry** "Sell affixes below rank N" explains the threshold. Existing "Allow exact-rank duplicates" entry is reworded to reflect the new positive-signal semantics.
+- **Quickstart wizard:** new question Q8b "Auto-sell low-rank affixed items?" with four options (Off / sell ranks I-II / sell I-III / sell only-keep-V). Maps to `DB.affixMinSellRank`. The "Power" preset opts into the most aggressive value; all other presets default to "off" so new players keep every affix while learning to extract them.
+
+**New: Current Rules button + `/ec rules` slash command.**
+
+Affix-rank slider on top of dupe-allow on top of quality rules on top of Sell List on top of Keep List - even the addon author needed a single screen to see how every toggle composes. The new "Current Rules" button on the Main panel (next to "Open Quickstart") opens a plain-English summary in a copyable window. Equivalent slash command `/ec rules`.
+
+- **Plain-English step-by-step.** Walks through the actual order EC uses: "Step 1: Should I DELETE this? Yes, if ALL of these apply: ... Step 2: Should I SELL this? Yes, if at least ONE reason to sell applies: ..." Each toggle is shown ON or OFF in colour next to its real in-game label, so the player can match the summary to the panel checkboxes directly.
+- **Settings glance section** dumps every toggle in one column so a screenshot or a Discord paste captures the player's whole config at once. Includes the four quality-rule states, the per-list entry counts, and the master Enable.
+- **Cross-references** to `/ec sellinfo` (per-item trace) and `/ec bugreport` (full diagnostic) so the player knows which surface to reach for next.
+- **New Help FAQ entry** "What rules does EC currently have configured?" deep-links to the new button.
+
+Upgrade note: if you had "Allow selling affixes you already have" on in v2.43.x and were relying on the release-only behaviour (e.g. only Blue items sold because Blue quality rule was the gate), expect more items to sell after upgrading. Turn the toggle off to revert to "no auto-sell from already-known affixes" behaviour.
+
+**New: auto-mark unsellable PvP gear with Resilience for deletion.**
+
+Asked for by Murlocked: PvP items with Resilience that the vendor refuses (no sell price) just clutter bags after farming.
+
+- **Toggle on the Delete List panel:** "Auto-mark PvP gear (Resilience) for deletion". Off by default; gated on "Allow items to be deleted" the same way `Auto-delete on pickup` is. When on, every BAG_UPDATE scans for items with a Resilience tooltip line **AND no vendor price**, and adds them to the Delete List (one chat line per add).
+- **Sellable Resilience gear is left alone.** Items with a vendor price (even green-quality PvP pieces) skip the auto-mark - they'll sell through your normal rules and you keep the gold. The auto-mark only targets gear the vendor would actually refuse. This was tightened mid-iteration after a player reported sellable green PvP pieces (Slippers of Serenity, Pauldrons of Sufferance with 2g+ vendor prices) getting unexpectedly destroyed.
+- **Items already on the Keep List are skipped**, so you can still keep specific PvP pieces by adding them to Keep List first.
+- **Destruction flows through the existing pipeline**: the next vendor visit destroys the marked items, or if you also have "Auto-delete on pickup" on they go instantly. The new toggle is purely an "auto-add to the Delete List" feature; it doesn't bypass any existing safety gates.
+- **Detection is cached per itemID** (mirrors the chance-on-hit cache pattern from v2.20.0) so the BAG_UPDATE sweep doesn't re-scan tooltips when bags shuffle.
+- **New Help FAQ entry** "Auto-mark PvP gear for deletion" explains the flow + the Keep List interaction.
+
+Schema additions (all account-wide, additive, downgrade-safe via the nil-default pattern): `DB.affixMinSellRank` (number, default 0), `DB.autoMarkResilience` (boolean, default false). Safe overwrite from v2.43.1.
+
 ### v2.43.1
 
 Adds an in-game language picker so you can read EbonClearance in French or German even when your client can't switch languages.

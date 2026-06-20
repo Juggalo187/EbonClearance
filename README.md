@@ -17,6 +17,8 @@ A **Project Ebonhold-aware** bag manager. Out of the box it sells your junk and 
 - **Process Bags panel** for disenchant / mill / prospect / pick-lock. One button drives the casts; bind a key and hold to drain a stack. Honours every protection.
 - **Tooltip annotations** show what the addon will do *before* it does it: `Will Sell (<reason>)`, `Keep (<reason>)`, `Won't Sell (<reason>)`, `Will Delete`. No surprises at the merchant.
 - **Per-item sellability inspector** (`/ec sellinfo` or Alt+Shift+Right-Click) traces the entire decision chain in chat. "Why isn't this selling?" is always one click away.
+- **Rule summary at a glance** (`/ec rules` or the **Current Rules** button on the Main panel). Plain-English step-by-step of every active toggle + the order EC uses to decide DELETE / SELL / KEEP, in a copyable window.
+- **Affix-rank floor + smarter affix-protection.** A slider on the Item Protection panel sells affixed Rare/Epic items below the rank you pick (handy when low-rank affixes saturate your bag). Composes with the "Allow selling affixes you already have" toggle, which now sells extracted-rank dupes directly without needing a Sell List entry. Inline grey notes under each toggle spell out their scope.
 - **Per-category bag-slot border tints** in seven colours (Delete / Keep / Account Sell / Character Sell / Random affix / Junk / Rule-match), with per-category enable + colour picker. Slot-frame ring only.
 - **Item-level overlay** (opt-in). Quality-coloured iLvl in the bottom-right corner of equippable gear slots, with player-adjustable font size. Three independently togglable surfaces: bags, character sheet & inspect, merchant.
 - **Profile import/export** for sharing whole settings packs (lists + per-rarity rules) between characters or with other players.
@@ -72,6 +74,7 @@ All settings live under `/ec`, which opens the scrollable config panel. Highligh
 | `/ec clean upgrades apply` | Manually remove stale `Keep (upgrade)` entries (with confirmation) |
 | `/ec bugreport` | Generate a diagnostic report you can copy and paste into a bug report (includes a list of your loaded addons for conflict diagnosis) |
 | `/ec sellinfo [bag slot]` | Trace why a bag item will or won't sell - per-predicate chain trace (also available via Alt+Shift+Right-Click on the item) |
+| `/ec rules` | Open a plain-English summary of every active rule + the order EC applies them (also the "Current Rules" button on the Main panel) |
 | `/ec affixdebug on\|off\|status\|dump\|clear` | Record affix-detection events for bug reports; `dump` opens a copyable window with the event log |
 | `/ec processdebug` | Diagnostic: open a copyable window listing every Process Bags gate (recognised profession spells, per-slot scan results) for bug reports |
 | `/ec perf` | Show EbonClearance's memory, CPU, cache and list sizes |

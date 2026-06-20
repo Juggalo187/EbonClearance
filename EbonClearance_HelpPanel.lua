@@ -292,7 +292,13 @@ local EC_HELP_ENTRIES = {
     {
         id = "gate-allow-rank-dupes",
         q = L["Allow exact-rank duplicates"],
-        a = L["Once you've extracted an affix at a certain rank, duplicates aren't useful. Turn this on and EbonClearance allows selling extras of affixes you already own at that rank. The item still needs a Sell List entry or matching quality rule to actually sell - this just removes the affix protection."],
+        a = L["Once you've extracted an affix at a specific rank, duplicates of that exact (affix, rank) aren't useful. Turn this on and EbonClearance sells those exact duplicates automatically - no Sell List entry or quality rule required. Different ranks of the same affix family stay protected so you can still collect them. Keep List entries still override (your manual choices win)."],
+        panel = "EbonClearanceOptionsBlacklistSettings",
+    },
+    {
+        id = "gate-affix-rank-floor",
+        q = L["Sell affixes below rank N"],
+        a = L["A standalone sell rule for affixed Rare/Epic gear. Set a minimum rank; any affixed item at a lower rank sells automatically - regardless of whether the quality rule for its rarity is enabled, regardless of whether it's on a Sell List. Items at or above the floor stay protected. Useful when low-rank affixes (I, II) saturate your bags and you have no use for them, but you still want the protection to hold for the high-rank drops you might extract. 0 = off (no threshold). Keep List entries still override (your manual choices win)."],
         panel = "EbonClearanceOptionsBlacklistSettings",
     },
     {
@@ -329,6 +335,12 @@ local EC_HELP_ENTRIES = {
         id = "gate-delete-list",
         q = L["Delete List path"],
         a = L["Items on the Delete List are destroyed at your next merchant visit (when 'Enable Deletion' is turned on). The same affix, chance-on-hit, and tome protections apply on the delete path - use Alt+Right-Click 'Allow Sell' to override."],
+        panel = "EbonClearanceOptionsDeletion",
+    },
+    {
+        id = "gate-auto-mark-resilience",
+        q = L["Auto-mark PvP gear for deletion"],
+        a = L["Some PvP gear with Resilience can't be vendored (no sell price), so unwanted pieces just sit in your bags. Turn this on and EbonClearance scans your bags for items with a Resilience tooltip line AND no vendor price, and adds them to the Delete List automatically. Resilience items that DO have a vendor price are left alone - they'll sell through your normal rules instead, so you keep the gold. From there, the existing deletion pipeline handles the marked items: the next vendor visit destroys them (if 'Enable Deletion' is on), or they go instantly if you also have 'Auto-delete on pickup' on. The toggle requires deletion to be enabled. Items already on the Keep List are skipped so you can still keep a specific piece if needed."],
         panel = "EbonClearanceOptionsDeletion",
     },
 
@@ -547,6 +559,12 @@ local EC_HELP_ENTRIES = {
     -- ===================================================================
     { section = "discord", title = L["Reporting bugs"] },
 
+    {
+        id = "rule-summary",
+        q = L["What rules does EC currently have configured?"],
+        a = L["The Main panel has a 'Current Rules' button next to 'Open Quickstart' that opens a plain-English summary of every active toggle + the order EC uses to decide DELETE / SELL / KEEP for each item. The same window is reachable from /ec rules. Useful for spotting accidentally-disabled rules, understanding how the affix toggles compose, or pasting the summary into a Discord thread when asking for help."],
+        panel = "EbonClearanceOptionsMain",
+    },
     {
         id = "bug-report-flow",
         q = L["Found a bug? Here's how to report it"],

@@ -112,16 +112,42 @@ DeletePanel:SetScript("OnShow", function(self)
             autoText:SetWidth(420)
             autoText:SetJustifyH("LEFT")
         end
+        -- v2.44.0: Resilience auto-mark sub-toggle. Adds PvP gear with
+        -- the "Resilience" tooltip line to this Delete List on the
+        -- next BAG_UPDATE - the existing vendor / auto-delete-on-
+        -- pickup pipelines then destroy it. Same enabled-state rule
+        -- as autoCB: greyed when "Allow items to be deleted" is off.
+        -- Asked for by Murlocked: PvP gear on PE has sellPrice = 0
+        -- and clutters bags after farming.
+        local resilienceCB =
+            CreateFrame("CheckButton", "EbonClearanceAutoMarkResilienceCB", self, "InterfaceOptionsCheckButtonTemplate")
+        resilienceCB:SetPoint("TOPLEFT", autoCB, "BOTTOMLEFT", 0, -2)
+        resilienceCB:SetChecked(DB.autoMarkResilience)
+        local resilienceText = _G[resilienceCB:GetName() .. "Text"]
+        if resilienceText then
+            resilienceText:SetText(L["Auto-mark PvP gear (Resilience) for deletion"])
+            resilienceText:SetWidth(420)
+            resilienceText:SetJustifyH("LEFT")
+        end
+
         refreshAutoCBEnabled = function()
             if DB.enableDeletion then
                 autoCB:Enable()
+                resilienceCB:Enable()
                 if autoText then
                     autoText:SetTextColor(1, 1, 1)
                 end
+                if resilienceText then
+                    resilienceText:SetTextColor(1, 1, 1)
+                end
             else
                 autoCB:Disable()
+                resilienceCB:Disable()
                 if autoText then
                     autoText:SetTextColor(0.5, 0.5, 0.5)
+                end
+                if resilienceText then
+                    resilienceText:SetTextColor(0.5, 0.5, 0.5)
                 end
             end
         end
@@ -148,6 +174,23 @@ DeletePanel:SetScript("OnShow", function(self)
             end
         end)
 
+        -- v2.44.0: Resilience auto-mark OnClick. No confirmation
+        -- popup - this only adds items to the Delete List (a
+        -- reversible, non-destructive action). The actual deletion
+        -- still flows through enableDeletion + the user's vendor
+        -- visit or autoDeleteOnPickup, both of which are gated.
+        -- Kicks one debounce scan so items already in bags get
+        -- marked the moment the toggle goes on.
+        resilienceCB:SetScript("OnClick", function()
+            DB.autoMarkResilience = resilienceCB:GetChecked() and true or false
+            PlaySound(DB.autoMarkResilience and "igMainMenuOptionCheckBoxOn" or "igMainMenuOptionCheckBoxOff")
+            if DB.autoMarkResilience and EC_compCache.bagUpdateFrame then
+                EC_compCache.bagUpdatePending = true
+                EC_compCache.bagUpdateAccum = 0
+                EC_compCache.bagUpdateFrame:Show()
+            end
+        end)
+
         self.listUI = NS.CreateListUI(self, L["Delete List"], "deleteList", 16, -130)
         -- v2.11.0: anchor BOTTOMRIGHT so the list stretches with the panel
         -- on Interface Options frame resize - mirrors the Whitelist /
@@ -159,7 +202,10 @@ DeletePanel:SetScript("OnShow", function(self)
         -- y-offset) so the list always clears the checkboxes even as the
         -- description / hint text wraps. Mirrors the Keep List panel's
         -- anchor-to-hint approach.
-        self.listUI:SetPoint("TOPLEFT", autoCB, "BOTTOMLEFT", 0, -12)
+        -- v2.44.0: re-anchored below the new resilience auto-mark
+        -- toggle so the list still clears every checkbox in the
+        -- header strip.
+        self.listUI:SetPoint("TOPLEFT", resilienceCB, "BOTTOMLEFT", 0, -12)
         self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
         self.listUI:Refresh()
     end)

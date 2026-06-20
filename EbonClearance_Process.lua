@@ -364,7 +364,16 @@ function EC_compCache.buildProcessSummary()
                                 local manualAllow = affixKey and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
                                 local autoDupe = DB.affixAllowExactDupes
                                     and EC_compCache.playerHasAffixDescription(affix.description)
-                                affixGuarded = not (manualAllow or autoDupe)
+                                -- v2.44.0: rank-floor opt-out. Mirrors
+                                -- the sell-path + delete-path so an
+                                -- affixed item below the user's
+                                -- chosen rank is also free to be
+                                -- disenchanted from Process Bags.
+                                local rankBelow = DB.affixMinSellRank
+                                    and DB.affixMinSellRank > 0
+                                    and affix.rank
+                                    and affix.rank < DB.affixMinSellRank
+                                affixGuarded = not (manualAllow or autoDupe or rankBelow)
                             end
                         end
                         if quality and quality <= maxQ and not affixGuarded then

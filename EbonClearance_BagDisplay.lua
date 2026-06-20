@@ -1146,6 +1146,55 @@ function EC_compCache.describeSellability(bag, slot)
     end
     step("qualityRule", qualityPass, qualityDetail)
 
+    -- v2.44.0: affix-rank floor + "Allow selling affixes you already
+    -- have" are both standalone sell rules now (hoisted into
+    -- EC_IsSellable's positive-signal check). Mirror them here so
+    -- /ec sellinfo agrees with the merchant cycle's verdict.
+    local affixDataForTrace = (quality and quality >= 3) and EC_compCache.bagSlotAffixData(bag, slot) or nil
+    local affixRankPass = DB and DB.affixMinSellRank
+        and DB.affixMinSellRank > 0
+        and affixDataForTrace
+        and affixDataForTrace.rank
+        and affixDataForTrace.rank < DB.affixMinSellRank
+        or false
+    if affixRankPass then
+        step("affixRankRule", true, string.format(
+            "rank %d is below your 'Sell affixes below rank %d' setting",
+            affixDataForTrace.rank,
+            DB.affixMinSellRank
+        ))
+    elseif DB and DB.affixMinSellRank and DB.affixMinSellRank > 0 then
+        if affixDataForTrace and affixDataForTrace.rank then
+            step("affixRankRule", false, string.format(
+                "rank %d - kept (your setting only sells ranks below %d)",
+                affixDataForTrace.rank,
+                DB.affixMinSellRank
+            ))
+        else
+            step("affixRankRule", false, L["n/a (item has no random affix)"])
+        end
+    end
+    local autoDupePass = false
+    if DB and DB.affixAllowExactDupes and affixDataForTrace then
+        local descKnown = affixDataForTrace.description
+            and EC_compCache.playerHasAffixDescription
+            and EC_compCache.playerHasAffixDescription(affixDataForTrace.description)
+        local rankKnown = (not descKnown)
+            and affixDataForTrace.name
+            and affixDataForTrace.rank
+            and EC_compCache.playerHasAffixRank
+            and EC_compCache.playerHasAffixRank(affixDataForTrace.name, affixDataForTrace.rank)
+        autoDupePass = (descKnown or rankKnown) and true or false
+        if autoDupePass then
+            step(
+                "alreadyHaveAffixRule",
+                true,
+                descKnown and "you have this exact affix (description match)"
+                    or "you have this affix family at this rank"
+            )
+        end
+    end
+
     if qualityPass and EC_compCache.isQuestItem and EC_compCache.isQuestItem(itemID) then
         qualityPass = false
         step("questSafetyNet", false, L["vetoed - quest item; explicit Sell List entry would override this"])
@@ -1203,6 +1252,13 @@ function EC_compCache.describeSellability(bag, slot)
                 and EC_compCache.playerHasAffixRank(affix.name, affix.rank)
                 or false
             local autoDupe = DB.affixAllowExactDupes and (descKnown or rankKnown)
+            -- v2.44.0: rank-floor opt-out. Match the sell-path veto
+            -- so /ec sellinfo reflects the same verdict the merchant
+            -- cycle would produce.
+            local rankBelow = DB.affixMinSellRank
+                and DB.affixMinSellRank > 0
+                and affix.rank
+                and affix.rank < DB.affixMinSellRank
             if manualAllow then
                 step("affixProtection", true, L["affix present, manually allow-listed via Alt+Right-Click"])
             elseif autoDupe then
@@ -1210,6 +1266,12 @@ function EC_compCache.describeSellability(bag, slot)
                     and L["you already have this affix"]
                     or L["you already have this affix family at this rank"]
                 step("affixProtection", true, "affix present, selling allowed (" .. how .. ")")
+            elseif rankBelow then
+                step("affixProtection", true, string.format(
+                    "affix present, selling allowed (rank %s below your floor of %d)",
+                    tostring(affix.rank or "?"),
+                    DB.affixMinSellRank
+                ))
             else
                 affixProtected = true
                 step("affixProtection", false, L["VETO - Rare/Epic random affix detected"])
@@ -1254,7 +1316,7 @@ function EC_compCache.describeSellability(bag, slot)
         step("chanceOnHitProtection", true, L["n/a"])
     end
 
-    local positiveSignal = isJunk or qualityPass or whitelistPass
+    local positiveSignal = isJunk or qualityPass or whitelistPass or affixRankPass or autoDupePass
     local vetoed = equipped or blacklisted or affixProtected
     local wouldSell = positiveSignal and not vetoed and not locked
 

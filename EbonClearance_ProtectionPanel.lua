@@ -286,18 +286,25 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             if NS.RefreshSellBorders then
                 NS.RefreshSellBorders()
             end
+            -- v2.44.0: re-evaluate the active-state explainer so the
+            -- note shows / clears the moment the toggle flips.
+            if self.UpdateDupeAffixEnabled then
+                self.UpdateDupeAffixEnabled()
+            end
         end)
         self.dupeAffixCB = dupeAffixCB
         if daText then
             NS.AddHelpIcon(content, daText, "LEFT", "RIGHT", 6, 0, "gate-allow-rank-dupes")
         end
 
-        -- Status-feedback FontString. After Task 15 the explanatory text
-        -- for the active case lives in the Help panel ([?] icon above);
-        -- this note now only carries the disabled-state status messages
-        -- ("PE not detected" / "Turn on affix protection above"). The
-        -- procCB below still anchors to its BOTTOMLEFT so the layout
-        -- shifts up when the note is empty in the active case.
+        -- Status / explainer FontString. Carries both:
+        --   * The disabled-state status messages ("PE not detected" /
+        --     "Turn on affix protection above").
+        --   * v2.44.0 active-state explainer that the toggle is an
+        --     independent sell rule (real player feedback: the
+        --     toggle and the rank slider felt like they were
+        --     fighting; making each one's note explain its scope
+        --     resolves the confusion at the point of toggling).
         local dupeAffixNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
         dupeAffixNote:SetPoint("TOPLEFT", dupeAffixCB, "BOTTOMLEFT", 26, -2)
         EC_compCache.setPanelWidth(dupeAffixNote, 86)
@@ -306,6 +313,110 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             dupeAffixNote:SetWordWrap(true)
         end
         self.dupeAffixNote = dupeAffixNote
+
+        -- v2.44.0: affix-rank floor slider. Asked for by Murlocked - on
+        -- servers like PE where affixed Rare/Epic items saturate the
+        -- bag, the player typically wants to keep only high-rank
+        -- drops and sell the rest. The slider sets a minimum rank;
+        -- anything below the threshold falls through the affix
+        -- protection and is eligible for normal sell / delete /
+        -- process rules. 0 means "off" (no threshold), 1-5 maps to
+        -- rank I through V. Cleaning up the slider label below
+        -- replaces the default "Sell affixes below rank: N" with
+        -- "Off" when the value is 0 (a numeric "0" alongside ranks
+        -- I-V reads as confusing).
+        local rankSlider = NS.AddSlider(
+            content,
+            "EbonClearanceAffixMinSellRankSlider",
+            dupeAffixNote,
+            L["Sell affixes below rank"],
+            0,
+            5,
+            1,
+            function()
+                return DB.affixMinSellRank or 0
+            end,
+            function(v)
+                DB.affixMinSellRank = v
+                -- Repaint the sell-border tints: changing the floor
+                -- flips EC_IsSellable's verdict for every affixed
+                -- Rare/Epic item in bags. Matches the dupeAffixCB /
+                -- autoAffixCB OnClick patterns above.
+                if NS.RefreshSellBorders then
+                    NS.RefreshSellBorders()
+                end
+            end,
+            -14,
+            "%d"
+        )
+        -- v2.44.0: align the slider with dupeAffixCB. AddSlider anchors
+        -- to its anchor's BOTTOMLEFT at the anchor's x position;
+        -- dupeAffixNote sits at +26 from dupeAffixCB (its own indent
+        -- under the parent toggle), which would put the slider at
+        -- double the indent. Shift left by 26 px so the slider lines
+        -- up with dupeAffixCB visually - both are siblings under the
+        -- parent affix-protection toggle.
+        rankSlider:ClearAllPoints()
+        rankSlider:SetPoint("TOPLEFT", dupeAffixNote, "BOTTOMLEFT", -26, -14)
+        EC_compCache.setPanelWidth(rankSlider, 100)
+        local function refreshRankSliderLabel(value)
+            local txt = _G["EbonClearanceAffixMinSellRankSliderText"]
+            if not txt then
+                return
+            end
+            if value == 0 then
+                txt:SetText(L["Sell affixes below rank"] .. ": " .. L["Off"])
+            else
+                txt:SetText(L["Sell affixes below rank"] .. ": " .. tostring(value))
+            end
+        end
+        rankSlider:HookScript("OnValueChanged", function(_, v)
+            refreshRankSliderLabel(v)
+        end)
+        refreshRankSliderLabel(DB.affixMinSellRank or 0)
+        local rankLow = _G["EbonClearanceAffixMinSellRankSliderLow"]
+        if rankLow then
+            rankLow:SetText(L["Off"])
+        end
+        local rankHigh = _G["EbonClearanceAffixMinSellRankSliderHigh"]
+        if rankHigh then
+            rankHigh:SetText("5")
+        end
+        self.rankSlider = rankSlider
+        if NS.AddHelpIcon then
+            local sliderText = _G["EbonClearanceAffixMinSellRankSliderText"]
+            if sliderText then
+                NS.AddHelpIcon(content, sliderText, "LEFT", "RIGHT", 6, 0, "gate-affix-rank-floor")
+            end
+        end
+
+        -- v2.44.0: explainer note under the rank slider. Mirrors the
+        -- dupeAffixNote's active-state explainer so the OR-relationship
+        -- between the two affix-sell rules is visible at both points
+        -- of toggling, not only in the Rule Summary. Hidden when the
+        -- slider is Off (0) since there's nothing to explain.
+        local rankSliderNote = content:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        rankSliderNote:SetPoint("TOPLEFT", rankSlider, "BOTTOMLEFT", 0, -6)
+        EC_compCache.setPanelWidth(rankSliderNote, 86)
+        rankSliderNote:SetJustifyH("LEFT")
+        if rankSliderNote.SetWordWrap then
+            rankSliderNote:SetWordWrap(true)
+        end
+        rankSliderNote:SetText("")
+        self.rankSliderNote = rankSliderNote
+        local function refreshRankSliderNote(value)
+            if (value or 0) > 0 then
+                rankSliderNote:SetText(
+                    L["|cff888888Sells affixes below this rank, even ones you haven't extracted. Independent of the toggle above.|r"]
+                )
+            else
+                rankSliderNote:SetText("")
+            end
+        end
+        rankSlider:HookScript("OnValueChanged", function(_, v)
+            refreshRankSliderNote(v)
+        end)
+        refreshRankSliderNote(DB.affixMinSellRank or 0)
 
         -- Greys-out the child CB when the parent toggle is off OR when PE
         -- isn't detected, and swaps in a status line for that case.
@@ -316,12 +427,38 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
             local parentOn = DB.protectAffixedRareItems == true
             if peOn and parentOn then
                 dupeAffixCB:Enable()
+                if rankSlider and rankSlider.Enable then
+                    rankSlider:Enable()
+                end
                 if daText then
                     daText:SetTextColor(1, 1, 1)
                 end
-                dupeAffixNote:SetText("")
+                -- v2.44.0: active-state explainer. Tells the player
+                -- this toggle is its own rule, independent of the
+                -- rank slider directly below. The two are an OR -
+                -- without this note, players hit the confusion that
+                -- "I set the slider to 3 but rank-IV items still
+                -- sell because I have this on too." Real player
+                -- feedback (Serv): toggles felt like they were
+                -- fighting until each one's scope was explained at
+                -- the toggle itself.
+                if DB.affixAllowExactDupes then
+                    dupeAffixNote:SetText(
+                        L["|cff888888Sells affixes at ranks you already own. Independent of the rank slider below.|r"]
+                    )
+                else
+                    dupeAffixNote:SetText("")
+                end
+                -- v2.44.0: keep the rank-slider note in sync with the
+                -- parent / slider state too.
+                if refreshRankSliderNote then
+                    refreshRankSliderNote(DB.affixMinSellRank or 0)
+                end
             else
                 dupeAffixCB:Disable()
+                if rankSlider and rankSlider.Disable then
+                    rankSlider:Disable()
+                end
                 if daText then
                     daText:SetTextColor(0.5, 0.5, 0.5)
                 end
@@ -331,6 +468,11 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
                     )
                 else
                     dupeAffixNote:SetText(L["|cff888888Turn on the affix protection above to use this option.|r"])
+                end
+                -- v2.44.0: collapse the rank-slider explainer when
+                -- the parent toggle is off (the slider has no effect).
+                if rankSliderNote then
+                    rankSliderNote:SetText("")
                 end
             end
         end
@@ -369,10 +511,15 @@ BlacklistSettingsPanel:SetScript("OnShow", function(self)
         -- new child toggle sits between the affix toggle and the chance-
         -- on-hit toggle visually.
         -- v2.26.0: x-offset corrected to -52 so procCB returns to the
-        -- parent toggle's indent column (dupeAffixNote sits at +52 from
-        -- the parent toggle column: +26 for the dupeAffixCB indent, +26
-        -- for the note's indent under that). -26 only un-did one of those.
-        procCB:SetPoint("TOPLEFT", dupeAffixNote, "BOTTOMLEFT", -52, -10)
+        -- parent toggle's indent column.
+        -- v2.44.0: re-anchored to the new rankSlider (which now sits
+        -- between dupeAffixNote and procCB). Slider sits at the
+        -- dupeAffixNote's +26 indent; procCB returns to the parent
+        -- toggle column via -26 (slider was already indented).
+        -- v2.44.0: re-anchored from rankSlider to rankSliderNote so the
+        -- procCB shifts down when the explainer note is visible (and
+        -- back up when the slider is Off and the note collapses).
+        procCB:SetPoint("TOPLEFT", rankSliderNote, "BOTTOMLEFT", -26, -10)
         procCB:SetChecked(DB.protectChanceOnHitItems)
         local pcText = _G[procCB:GetName() .. "Text"]
         if pcText then

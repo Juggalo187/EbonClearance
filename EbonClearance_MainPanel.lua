@@ -653,10 +653,37 @@ local function BuildMainPanel(panel, content)
     EC_compCache.setPanelWidth(quickstartHint, 180)
     quickstartHint:SetText(L["|cff888888New here? Pick a preset or answer 15 questions for a guided setup.|r"])
 
+    -- v2.44.0: Current Rules button. Surfaces every active toggle +
+    -- the precedence order EC uses to decide DELETE / SELL / KEEP,
+    -- in plain English with the player's labels. Sits directly under
+    -- Open Quickstart so the two complementary entry points (set up
+    -- vs. inspect) are visually grouped. Opens the same copy-frame
+    -- pattern /ec bugreport / /ec processdebug / /ec affixdebug dump
+    -- use, so the player can also paste the summary into chat or
+    -- Discord when asking for help.
+    local rulesBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    rulesBtn:SetSize(140, 26)
+    rulesBtn:SetPoint("TOPLEFT", quickstartBtn, "BOTTOMLEFT", 0, -8)
+    rulesBtn:SetText(L["Current Rules"])
+    rulesBtn:SetScript("OnClick", function()
+        if NS.ShowRuleSummary then
+            NS.ShowRuleSummary()
+        end
+        PlaySound("igMainMenuOptionCheckBoxOn")
+    end)
+    local rulesHint = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    rulesHint:SetPoint("LEFT", rulesBtn, "RIGHT", 10, 0)
+    rulesHint:SetJustifyH("LEFT")
+    if rulesHint.SetWordWrap then
+        rulesHint:SetWordWrap(true)
+    end
+    EC_compCache.setPanelWidth(rulesHint, 180)
+    rulesHint:SetText(L["|cff888888See every active rule + the order EC applies them.|r"])
+
     -- Tip on its own line, in grey, so it reads as a hint rather than
     -- another sentence in the main description block.
     local mainTip = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    mainTip:SetPoint("TOPLEFT", quickstartBtn, "BOTTOMLEFT", 0, -14)
+    mainTip:SetPoint("TOPLEFT", rulesBtn, "BOTTOMLEFT", 0, -14)
     EC_compCache.setPanelWidth(mainTip, 16)
     mainTip:SetJustifyH("LEFT")
     mainTip:SetJustifyV("TOP")
@@ -744,6 +771,11 @@ local function BuildMainPanel(panel, content)
             run = "sellinfo",
             label = "|cffffff00/ec sellinfo|r  "
                 .. L["Explain why an item will or won't sell |cffaaaaaa(or Alt+Shift+Right-Click)|r"],
+        },
+        {
+            run = "rules",
+            label = "|cffffff00/ec rules|r  "
+                .. L["See every active rule + the order EC applies them"],
         },
         {
             run = "bugreport",

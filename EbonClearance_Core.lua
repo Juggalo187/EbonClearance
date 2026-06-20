@@ -148,6 +148,14 @@ local EC_compCache = {
     -- this table lives in the module-local EC_compCache and isn't
     -- persisted. Filled lazily by EC_compCache.itemHasChanceOnHit.
     chanceOnHitCache = {},
+    -- v2.44.0: Resilience-detection cache. PvP gear on most servers
+    -- has Resilience as a stat line and `sellPrice = 0` (unsellable
+    -- at vendors). Murlocked asked for an option to auto-mark such
+    -- items for deletion. Like the chance-on-hit cache, the property
+    -- is stable per itemID (an item either has the stat or doesn't),
+    -- so we cache lazily and never need to invalidate. Filled by
+    -- EC_compCache.itemHasResilience.
+    resilienceCache = {},
     -- Tome caches. Two tables because the two properties decay at
     -- different rates:
     --   * tomeCache - is-a-tome boolean. Stable per itemID (an item

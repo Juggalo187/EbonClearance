@@ -3617,7 +3617,7 @@ do
         -- it by the function signature and grab the surrounding ~1500 chars.
         local blockStart = eventsSrc:find("function EC_compCache%.deleteListSlotEligible%(")
         if blockStart then
-            local block = eventsSrc:sub(blockStart, blockStart + 1500)
+            local block = eventsSrc:sub(blockStart, blockStart + 2500)
             check(
                 "BuildQueue delete-path affix gate references ADB.allowedAffixes",
                 block:find("ADB%.allowedAffixes") ~= nil,
@@ -3955,6 +3955,137 @@ do
         body ~= nil and body:find("if lowestEquipped and iLvl <= lowestEquipped then") ~= nil,
         "must only remove when lowestEquipped is non-nil (a slot is populated); when every candidate slot is empty, keep the entry rather than mass-clearing the Keep List on a temporary un-equip"
     )
+    -- v2.44.0: class-restriction gate. Pre-v2.44.0 the upgrade sweep
+    -- compared iLvl-vs-slot without ever checking whether the player's
+    -- class could equip the item. Real player report (Murlocked): Mage
+    -- with a relic in slot 18 was getting bows / relics flagged as
+    -- "Keep (upgrade)" - items the class will never equip. Both the
+    -- new-entry path and the stale-cleanup path must gate on
+    -- IsUsableItem(itemID) == false (the false literal is the class
+    -- veto; nil means uncached, which we must NOT treat as a veto
+    -- because GetItemInfo / IsUsableItem race against item-cache
+    -- warmup at /reload).
+    check(
+        "checkBagsForUpgrades gates new entries on IsUsableItem (class restriction)",
+        body ~= nil and body:find("IsUsableItem%(itemID%)%s*==%s*false") ~= nil,
+        "the new-entry path must skip items where IsUsableItem(itemID) returns false (class veto). Without this, bows on druids / relics on mages / plate on cloth classes get added to the Keep List as 'upgrade' candidates the player can never equip."
+    )
+    check(
+        "checkBagsForUpgrades cleanup also self-heals wrong-class entries",
+        body ~= nil
+            and body:find("local unusable = IsUsableItem and IsUsableItem%(itemID%) == false") ~= nil,
+        "the stale-cleanup path must ALSO check IsUsableItem so existing wrong-class entries (added pre-v2.44.0) get cleaned automatically on subsequent sweeps. Without this, players with already-polluted Keep Lists would have to run /ec clean upgrades manually to fix them."
+    )
+end
+
+-- ---------------------------------------------------------------------------
+-- v2.44.0 Test 92: affix-rank floor opt-out (Murlocked feature).
+-- ---------------------------------------------------------------------------
+-- Player can set DB.affixMinSellRank to N; affixed Rare/Epic items with
+-- rank < N fall through the affix protection. The veto must be added
+-- SYMMETRICALLY at every affix-decision site (sell, delete, process,
+-- tooltip, sellinfo trace) or the surfaces disagree and the player sees
+-- "Will Sell" but the merchant cycle refuses the item.
+do
+    local function fileSrc(path)
+        local fh = io.open(path, "rb")
+        if not fh then return "" end
+        local s = fh:read("*a") or ""
+        fh:close()
+        return s
+    end
+    local ev = fileSrc("EbonClearance_Events.lua")
+    local proc = fileSrc("EbonClearance_Process.lua")
+    local tt = fileSrc("EbonClearance_Tooltip.lua")
+    local bd = fileSrc("EbonClearance_BagDisplay.lua")
+    local pp = fileSrc("EbonClearance_ProtectionPanel.lua")
+    check("Test 92a: DB.affixMinSellRank is seeded in EnsureDB with default 0",
+        ev:find("DB%.affixMinSellRank%s*=%s*0") ~= nil,
+        "the schema must default to 0 (off) so existing v2.43.x saves see no behaviour change on upgrade")
+    check("Test 92b: EC_IsSellable adds rankBelow to the affix veto",
+        ev:find("if not %(manualAllow or autoDupe or rankBelow%) then") ~= nil,
+        "the sell-path veto must accept rankBelow as a third release condition alongside manualAllow and autoDupe; without this the slider has no effect on the auto-rule sweep")
+    check("Test 92c: worker delete path mirrors the rankBelow veto",
+        ev:find("if not %(manualAllow or isDupe or rankBelow%) then") ~= nil,
+        "the delete-path (deleteListSlotEligible) must accept rankBelow too. If sell and delete diverge on the same item the player sees the tooltip flip mid-session")
+    check("Test 92d: canDisenchant adds rankBelow to the Process Bags affix-guard",
+        proc:find("affixGuarded = not %(manualAllow or autoDupe or rankBelow%)") ~= nil,
+        "Process Bags must also honour the rank floor so DE / Mill / Prospect see the same eligibility set the vendor cycle sees")
+    check("Test 92e: tooltip annotation accepts rankBelow",
+        tt:find("if manualAllow or autoDupe or rankBelow then") ~= nil,
+        "EC_AnnotateTooltip must reflect the same verdict the vendor produces; otherwise an item shows 'Keep (affix protected)' on the tooltip then sells at the merchant")
+    check("Test 92f: sellinfo trace step for rankBelow",
+        bd:find("elseif rankBelow then") ~= nil
+            and bd:find("rank %%s below your floor of %%d") ~= nil,
+        "/ec sellinfo must show a distinct 'rank below floor' step so the player can trace why the protection released")
+    check("Test 92g: ProtectionPanel renders the rank-floor slider",
+        pp:find("EbonClearanceAffixMinSellRankSlider") ~= nil
+            and pp:find("DB%.affixMinSellRank = v") ~= nil,
+        "the Item Protection panel must surface DB.affixMinSellRank via an NS.AddSlider widget with the setter writing the new value; without this UI the player has no way to change the floor")
+    check("Test 92i: EC_IsSellable adds affixRankPass + autoDupePass to the positive-signal check",
+        ev:find("affixRankPass") ~= nil
+            and ev:find("autoDupePass") ~= nil
+            and ev:find("isJunk or qualityPass or whitelistPass or affixRankPass or autoDupePass") ~= nil,
+        "BOTH the slider and the 'Allow selling affixes you already have' toggle must be standalone sell rules, not release-only levers. Without affixRankPass + autoDupePass in the positive-signal check, affixed Rare/Epic items would still need isJunk / qualityPass / whitelistPass to fire - which broke the user's mental model (Murlocked iterations: the slider IS the sell rule; 'Allow selling' IS the sell rule). Both must appear together so the two toggles behave symmetrically.")
+    check("Test 92j: tooltip distinguishes rankBelowOnly with a Will Sell label",
+        tt:find("rankBelowOnly") ~= nil
+            and tt:find('Will Sell %(low%-rank affix%)') ~= nil
+            and tt:find('statusTag = "willsell"') ~= nil,
+        "when the rank floor is the only release path (no manualAllow, no autoDupe), the tooltip must say 'Will Sell (low-rank affix)' to match the addon's existing brief label style (compare 'Will Sell (junk)', 'Will Sell (Blue)'). The slider provides the sell signal directly via affixRankPass.")
+    check("Test 92k: sellinfo trace exposes the affixRankRule step",
+        bd:find("affixRankRule") ~= nil
+            and bd:find("is below your 'Sell affixes below rank") ~= nil,
+        "the trace must surface the rank rule as a distinct step alongside qualityRule / onSellList so /ec sellinfo correctly reports WHY a low-rank affixed item is selling. The wording mirrors the in-game slider label for player recognisability.")
+    check("Test 92h: rank slider Help entry exists",
+        (function()
+            local hp = fileSrc("EbonClearance_HelpPanel.lua")
+            return hp:find('id = "gate%-affix%-rank%-floor"') ~= nil
+        end)(),
+        "the slider's [?] icon deep-links to this entry; without it Test 78 (every help icon must resolve to a real entry) breaks AND the player has no in-game explanation of what the slider does")
+end
+
+-- ---------------------------------------------------------------------------
+-- v2.44.0 Test 93: Resilience auto-mark (Murlocked feature).
+-- ---------------------------------------------------------------------------
+-- DB.autoMarkResilience opts the player into a BAG_UPDATE-driven sweep
+-- that adds items with a "Resilience" tooltip line to DB.deleteList.
+-- Actual destruction still flows through the existing vendor / auto-
+-- delete-on-pickup pipelines (both master-Enable-gated since v2.42.1).
+do
+    local function fileSrc(path)
+        local fh = io.open(path, "rb")
+        if not fh then return "" end
+        local s = fh:read("*a") or ""
+        fh:close()
+        return s
+    end
+    local ev = fileSrc("EbonClearance_Events.lua")
+    local prot = fileSrc("EbonClearance_Protection.lua")
+    local core = fileSrc("EbonClearance_Core.lua")
+    local kdp = fileSrc("EbonClearance_KeepDeletePanels.lua")
+    check("Test 93a: DB.autoMarkResilience seeded in EnsureDB with default false",
+        ev:find("DB%.autoMarkResilience%s*=%s*false") ~= nil,
+        "must default OFF - the destination is the Delete List, which the player may have curated for other reasons, and an unsolicited auto-mark could surprise them")
+    check("Test 93b: resilienceCache table is declared in Core",
+        core:find("resilienceCache%s*=%s*{}") ~= nil,
+        "the per-itemID cache mirrors the chanceOnHitCache pattern - without it every BAG_UPDATE re-scans every slot's tooltip and the perf cost compounds during AOE loot")
+    check("Test 93c: itemHasResilience helper exists in Protection",
+        prot:find("function EC_compCache%.itemHasResilience%(bag, slot, itemID%)") ~= nil
+            and prot:find("Resilience") ~= nil
+            and prot:find("EC_compCache%.scanBagItem%(bag, slot%)") ~= nil,
+        "the detection must mirror itemHasChanceOnHit: cache-keyed by itemID, routed through scanBagItem (SetOwner-before-SetBagItem invariant from v2.38.3), substring-match on 'Resilience'")
+    check("Test 93d: runAutoMarkResilience exists and gates on master Enable",
+        ev:find("function EC_compCache%.runAutoMarkResilience%(%)") ~= nil
+            and ev:find("EC_IsAddonEnabledForChar") ~= nil
+            and ev:find("DB%.autoMarkResilience") ~= nil,
+        "the sweep must short-circuit when master-disabled (same precedent as v2.42.1 auto-delete) AND when the feature toggle is off")
+    check("Test 93e: runAutoMarkResilience fires from the BAG_UPDATE debounce",
+        ev:find("EC_compCache%.runAutoMarkResilience%(%)") ~= nil,
+        "must run from the coalesced 120ms debounce, not the raw BAG_UPDATE branch - otherwise AOE loot fires the sweep 5+ times in <100ms (the same anti-thrash invariant the auto-delete sweep follows)")
+    check("Test 93f: KeepDeletePanels surfaces the resilience checkbox",
+        kdp:find("EbonClearanceAutoMarkResilienceCB") ~= nil
+            and kdp:find("DB%.autoMarkResilience") ~= nil,
+        "the toggle must live on the Delete List panel next to autoDeleteOnPickup; same enabled-state rule (greyed when 'Allow items to be deleted' is off)")
 end
 
 -- ---------------------------------------------------------------------------

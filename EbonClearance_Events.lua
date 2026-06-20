@@ -740,6 +740,16 @@ local function EnsureDB()
     if type(DB.autoDeleteOnPickup) ~= "boolean" then
         DB.autoDeleteOnPickup = false
     end
+    -- v2.44.0: auto-mark PvP gear with Resilience for deletion. Adds
+    -- detected items to DB.deleteList; the existing vendor cycle (or
+    -- auto-delete-on-pickup if also enabled) destroys them. Default
+    -- OFF - the destination is the user's Delete List, which they
+    -- might have curated for other reasons, and an unsolicited
+    -- auto-mark could surprise them. Asked for by Murlocked: PvP
+    -- gear on PE has sellPrice = 0 and clutters bags after farming.
+    if type(DB.autoMarkResilience) ~= "boolean" then
+        DB.autoMarkResilience = false
+    end
     if type(DB.summonGreedy) ~= "boolean" then
         DB.summonGreedy = true
     end
@@ -813,6 +823,19 @@ local function EnsureDB()
     -- known-set is empty so nothing matches).
     if type(DB.affixAllowExactDupes) ~= "boolean" then
         DB.affixAllowExactDupes = false
+    end
+    -- v2.44.0: affix-rank floor. When set above 0, affixed Rare /
+    -- Epic items whose affix rank is BELOW this value fall through
+    -- the affix protection and are eligible for normal sell / delete
+    -- / process rules. Default 0 (off) so v2.43.x upgraders see no
+    -- behaviour change. Asked for by Murlocked - useful on private
+    -- servers like Project Ebonhold where low-tier affixes saturate
+    -- the bag and the player has no use for ranks under their
+    -- current ceiling. The rank is the integer pulled from the
+    -- title's roman-numeral suffix by parseAffixFromTitle, so the
+    -- threshold compares apples-to-apples.
+    if type(DB.affixMinSellRank) ~= "number" or DB.affixMinSellRank < 0 then
+        DB.affixMinSellRank = 0
     end
     -- v2.20.0: Chance-on-hit protection. PE lets players EXTRACT proc
     -- spells from weapons (the green `Chance on hit:` tooltip line)
@@ -2400,6 +2423,14 @@ EC_compCache.bagUpdateFrame:SetScript("OnUpdate", function(self, elapsed)
     if EC_compCache.runAutoDeleteOnPickup then
         EC_compCache.runAutoDeleteOnPickup()
     end
+    -- v2.44.0: auto-mark Resilience PvP gear for deletion. Runs from
+    -- the same debounce so the BAG_UPDATE coalescing applies. The
+    -- helper itself routes through EC_IsAddonEnabledForChar so the
+    -- master Enable toggle vetoes consistently with every other
+    -- destructive path.
+    if EC_compCache.runAutoMarkResilience then
+        EC_compCache.runAutoMarkResilience()
+    end
 end)
 
 -- True iff the slotted item shows ITEM_OPENABLE in its tooltip and is not
@@ -3459,25 +3490,44 @@ function EC_compCache.checkBagsForUpgrades()
     if DB.blacklistAuto then
         for itemID, tag in pairs(DB.blacklistAuto) do
             if tag == "upgrade" then
-                local _, _, _, iLvl, _, _, _, _, equipLoc = GetItemInfo(itemID)
-                local slots = equipLoc and EC_compCache.INVTYPE_SLOTS[equipLoc]
-                if iLvl and iLvl > 0 and slots then
-                    local lowestEquipped = EC_compCache.getLowestEquippedILvl(slots)
-                    -- Remove only when a slot is actually populated and
-                    -- the item's iLvl is at or below it. If every
-                    -- candidate slot is empty, be conservative and keep
-                    -- the entry - the next cycle will re-evaluate once
-                    -- gear comes back.
-                    if lowestEquipped and iLvl <= lowestEquipped then
-                        if DB.blacklist then
-                            DB.blacklist[itemID] = nil
-                        end
-                        DB.blacklistAuto[itemID] = nil
-                        -- Clear the per-session memo so a future gear
-                        -- downgrade can re-add this item via the
-                        -- new-entry loop below.
-                        if EC_compCache.upgradeProcessed then
-                            EC_compCache.upgradeProcessed[itemID] = nil
+                -- v2.44.0: class-restriction self-heal. Pre-v2.44.0 the
+                -- upgrade sweep didn't check IsUsableItem, so a Druid
+                -- could end up with bows / Mages with relics / etc.
+                -- stamped as "upgrade" against the relic / ranged slot.
+                -- Strip those stale entries on every sweep. Only acts on
+                -- an explicit `false` from IsUsableItem (class veto) -
+                -- `nil` (uncached) leaves the entry alone to avoid a
+                -- false self-heal during item-cache warmup.
+                local unusable = IsUsableItem and IsUsableItem(itemID) == false
+                if unusable then
+                    if DB.blacklist then
+                        DB.blacklist[itemID] = nil
+                    end
+                    DB.blacklistAuto[itemID] = nil
+                    if EC_compCache.upgradeProcessed then
+                        EC_compCache.upgradeProcessed[itemID] = nil
+                    end
+                else
+                    local _, _, _, iLvl, _, _, _, _, equipLoc = GetItemInfo(itemID)
+                    local slots = equipLoc and EC_compCache.INVTYPE_SLOTS[equipLoc]
+                    if iLvl and iLvl > 0 and slots then
+                        local lowestEquipped = EC_compCache.getLowestEquippedILvl(slots)
+                        -- Remove only when a slot is actually populated and
+                        -- the item's iLvl is at or below it. If every
+                        -- candidate slot is empty, be conservative and keep
+                        -- the entry - the next cycle will re-evaluate once
+                        -- gear comes back.
+                        if lowestEquipped and iLvl <= lowestEquipped then
+                            if DB.blacklist then
+                                DB.blacklist[itemID] = nil
+                            end
+                            DB.blacklistAuto[itemID] = nil
+                            -- Clear the per-session memo so a future gear
+                            -- downgrade can re-add this item via the
+                            -- new-entry loop below.
+                            if EC_compCache.upgradeProcessed then
+                                EC_compCache.upgradeProcessed[itemID] = nil
+                            end
                         end
                     end
                 end
@@ -3490,7 +3540,19 @@ function EC_compCache.checkBagsForUpgrades()
             local itemID = GetContainerItemID(bag, slot)
             if itemID and not EC_compCache.upgradeProcessed[itemID] then
                 EC_compCache.upgradeProcessed[itemID] = true
-                if not (DB.blacklist and DB.blacklist[itemID]) then
+                -- v2.44.0: skip items the player's class can't use. A
+                -- Druid will never equip a bow; a Mage will never use
+                -- a relic - they shouldn't be polluting the Keep List
+                -- as "upgrade" candidates. Real player report from
+                -- Murlocked. IsUsableItem returns false on a class
+                -- restriction; `nil` (uncached) doesn't match and lets
+                -- the iLvl logic still run on the warmup pass.
+                if IsUsableItem and IsUsableItem(itemID) == false then
+                    -- Intentional no-op fall-through to the next slot.
+                    -- upgradeProcessed[itemID] stays true so we don't
+                    -- re-check every BAG_UPDATE; /reload reseeds the
+                    -- cache if the player's class somehow changes.
+                elseif not (DB.blacklist and DB.blacklist[itemID]) then
                     local _, _, _, iLvl, _, _, _, _, equipLoc = GetItemInfo(itemID)
                     local slots = equipLoc and EC_compCache.INVTYPE_SLOTS[equipLoc]
                     if iLvl and iLvl > 0 and slots then
@@ -4252,7 +4314,42 @@ local function EC_IsSellable(bag, slot, junkOnly)
         qualityPass = false
     end
     local blacklisted = IsInSet(DB.blacklist, itemID)
-    if not (isJunk or qualityPass or whitelistPass) then
+    -- v2.44.0: affix-rank floor as a STANDALONE sell signal. The
+    -- slider was originally wired as a release-only lever (it lifted
+    -- the affix veto but still required isJunk / qualityPass /
+    -- whitelistPass to actually fire a sell). The original feedback
+    -- from Murlocked - "set an affix level to sell, e.g. under tier
+    -- 4" - is asking for the slider to BE the rule. So we hoist
+    -- affixRankPass into the positive-signal check next to isJunk /
+    -- qualityPass / whitelistPass: an affixed Rare/Epic item with
+    -- rank < floor is eligible to sell on the strength of the floor
+    -- alone, no other rule required.
+    local affixForRank = (quality and quality >= 3) and EC_compCache.bagSlotAffixData(bag, slot) or nil
+    local affixRankPass = DB.affixMinSellRank
+        and DB.affixMinSellRank > 0
+        and affixForRank
+        and affixForRank.rank
+        and affixForRank.rank < DB.affixMinSellRank
+        or false
+    -- v2.44.0: "Allow selling affixes you already have" is also a
+    -- standalone sell rule, not just a release-only lever. The label
+    -- says "selling," so the behaviour should sell. Matches the slider's
+    -- new semantics so the two toggles behave symmetrically: each is
+    -- a positive sell signal in EC_IsSellable AND a veto release in
+    -- the affix-protection block downstream.
+    local autoDupePass = false
+    if DB.affixAllowExactDupes and affixForRank then
+        local descKnown = affixForRank.description
+            and EC_compCache.playerHasAffixDescription
+            and EC_compCache.playerHasAffixDescription(affixForRank.description)
+        local rankKnown = (not descKnown)
+            and affixForRank.name
+            and affixForRank.rank
+            and EC_compCache.playerHasAffixRank
+            and EC_compCache.playerHasAffixRank(affixForRank.name, affixForRank.rank)
+        autoDupePass = (descKnown or rankKnown) and true or false
+    end
+    if not (isJunk or qualityPass or whitelistPass or affixRankPass or autoDupePass) then
         return false
     end
     if IsEquippedItem(itemID) or blacklisted then
@@ -4308,7 +4405,15 @@ local function EC_IsSellable(bag, slot, junkOnly)
                 and EC_compCache.playerHasAffixRank(affix.name, affix.rank)
                 or false
             local autoDupe = DB.affixAllowExactDupes and (descKnown or rankKnown)
-            if not (manualAllow or autoDupe) then
+            -- v2.44.0: rank-floor opt-out. When the player sets a
+            -- minimum sell rank, affixes BELOW that rank fall through
+            -- to normal sell rules - the protection only holds for
+            -- ranks at or above the floor.
+            local rankBelow = DB.affixMinSellRank
+                and DB.affixMinSellRank > 0
+                and affix.rank
+                and affix.rank < DB.affixMinSellRank
+            if not (manualAllow or autoDupe or rankBelow) then
                 return false
             end
         end
@@ -4395,7 +4500,16 @@ function EC_compCache.deleteListSlotEligible(bag, slot)
             local manualAllow = affixKey and ADB and ADB.allowedAffixes and ADB.allowedAffixes[affixKey]
             local isDupe = DB.affixAllowExactDupes
                 and EC_compCache.playerHasAffixDescription(affix.description)
-            if not (manualAllow or isDupe) then
+            -- v2.44.0: mirror the sell-path's rank-floor opt-out so the
+            -- Delete List path doesn't keep low-rank affixes the user
+            -- has explicitly chosen to discard. Same threshold, same
+            -- precedence (any of manualAllow / isDupe / rankBelow
+            -- releases the protection).
+            local rankBelow = DB.affixMinSellRank
+                and DB.affixMinSellRank > 0
+                and affix.rank
+                and affix.rank < DB.affixMinSellRank
+            if not (manualAllow or isDupe or rankBelow) then
                 return nil -- affix-protected
             end
         end
@@ -4490,6 +4604,80 @@ function EC_compCache.runAutoDeleteOnPickup()
             if id then
                 EC_compCache.executeBagSlotDelete(bag, slot, id, count, quality, true)
                 return
+            end
+        end
+    end
+end
+
+-- v2.44.0: auto-mark Resilience PvP gear for deletion. When the
+-- toggle is on, every BAG_UPDATE scans bags for items with a
+-- "Resilience" tooltip line and adds them to the Delete List (one
+-- chat line per add). The actual destruction is handled by the
+-- existing vendor cycle or auto-delete-on-pickup - this function
+-- only adds entries to the list. Gates symmetrically with the
+-- auto-delete sweep so the master Enable toggle vetoes the whole
+-- destructive pipeline.
+function EC_compCache.runAutoMarkResilience()
+    local DB = NS.DB
+    if not EC_IsAddonEnabledForChar() then
+        return
+    end
+    if not (DB and DB.autoMarkResilience) then
+        return
+    end
+    if EC_compCache.vendorRunning then
+        return
+    end
+    -- Skip items that are already on a curated list. Keep List wins
+    -- (the player has explicitly said "do not touch"); items already
+    -- on the Delete List are a no-op.
+    local deleteList = DB.deleteList
+    if not deleteList then
+        return
+    end
+    local keepList = DB.blacklist
+    local accountKeep = NS.ADB and NS.ADB.whitelist
+    for bag = 0, 4 do
+        local slots = GetContainerNumSlots(bag)
+        for slot = 1, slots do
+            local id = GetContainerItemID(bag, slot)
+            if id and not deleteList[id] then
+                local protectedByKeep = (keepList and keepList[id])
+                    or (accountKeep and accountKeep[id])
+                if not protectedByKeep then
+                    if EC_compCache.itemHasResilience(bag, slot, id) then
+                        -- v2.44.0 iter: only mark UNSELLABLE Resilience
+                        -- gear (sellPrice 0 / nil). The original
+                        -- feedback (Murlocked: "delete pvp item with
+                        -- resillience (they are unsellable)") was
+                        -- specifically about gear the vendor refuses.
+                        -- A real player report on this iteration: green
+                        -- Slippers of Serenity / Pauldrons of Sufferance
+                        -- with Resilience BUT a vendor price (2g+)
+                        -- were getting auto-deleted - the user
+                        -- reasonably expected those to be sold instead.
+                        -- Skip anything sellable; the normal sell rules
+                        -- handle them (Sell List, quality rule).
+                        local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(id)
+                        if sellPrice and sellPrice > 0 then
+                            -- Sellable; let the vendor cycle do its
+                            -- job. Don't fall through to the next
+                            -- slot via `return` - the BAG_UPDATE
+                            -- coalescing keeps the rest of the bag
+                            -- in scope for this same sweep.
+                        else
+                            deleteList[id] = true
+                            local link = select(2, GetItemInfo(id)) or ("item:" .. tostring(id))
+                            PrintNicef(L["|cffff4444Marked for deletion (Resilience, unsellable):|r %s"], link)
+                            -- One add per BAG_UPDATE fire keeps the
+                            -- chat tidy if the player loots multiple
+                            -- PvP pieces at once; the next BAG_UPDATE
+                            -- (any bag event re-fires the debounce)
+                            -- picks up the next one.
+                            return
+                        end
+                    end
+                end
             end
         end
     end
@@ -5724,6 +5912,18 @@ SlashCmdList["EBONCLEARANCE"] = function(msg)
             end
         else
             PrintNicef(L["|cffff4444Unknown sub-command:|r %s. Try on / off / status / dump / clear."], sub)
+        end
+        return
+    end
+
+    if cmd == "rules" then
+        -- v2.44.0: rule-summary copy frame. Plain-English breakdown
+        -- of every active toggle + the precedence order EC uses.
+        -- Same surface as the Main panel's "Current Rules" button.
+        if NS.ShowRuleSummary then
+            NS.ShowRuleSummary()
+        else
+            PrintNice("|cffff4444Rule summary is unavailable.|r")
         end
         return
     end

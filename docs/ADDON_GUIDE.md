@@ -510,6 +510,11 @@ Not wired into CI, but enforce in review:
 - `/ec clean apply` - auto-resolve list conflicts (precedence:
   blacklist > deleteList > whitelist).
 - `/ec bugreport` - diagnostic dump for issue reports.
+- `/ec rules` - plain-English summary of every active rule + the
+  precedence EC uses to decide DELETE / SELL / KEEP. Same surface as
+  the "Current Rules" button on the Main panel. Surfaces explicit
+  conflict notes when the affix-rank slider AND "Allow selling affixes
+  you already have" are both on. v2.44.0.
 - `/ecdebug` - debug info plus bag scan.
 
 Key bindings (declared in `Bindings.xml`, handlers near the slash

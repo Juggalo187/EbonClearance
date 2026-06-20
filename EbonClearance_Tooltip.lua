@@ -467,7 +467,26 @@ local function EC_AnnotateTooltip(tooltip)
                 -- (matches what the user requested when shipping the
                 -- family + rank fallback).
                 local autoDupe = DB.affixAllowExactDupes and (playerKnows or playerKnowsRank)
-                if manualAllow or autoDupe then
+                -- v2.44.0: rank-floor opt-out. Mirrors the sell-path
+                -- so the tooltip reflects the true outcome when an
+                -- affixed item is below the player's chosen rank
+                -- floor: the protection releases and the destination
+                -- / will-sell label below takes over.
+                local rankBelow = DB.affixMinSellRank
+                    and DB.affixMinSellRank > 0
+                    and affix.rank
+                    and affix.rank < DB.affixMinSellRank
+                -- v2.44.0: rankBelow IS a positive sell rule (handled
+                -- in EC_IsSellable via affixRankPass), not just a
+                -- release-only lever like manualAllow / autoDupe. So
+                -- when rankBelow is true and no upstream Will Sell
+                -- already exists, the tooltip should affirmatively
+                -- say "Will Sell (...)", not "Affix released - add
+                -- to a list". Branch detection below: rankBelowOnly
+                -- means rankBelow released the protection AND neither
+                -- manualAllow nor autoDupe did.
+                local rankBelowOnly = rankBelow and not manualAllow and not autoDupe
+                if manualAllow or autoDupe or rankBelow then
                     -- Destination-list label wins. destinationLabel walks
                     -- the explicit-list precedence chain (Keep / Delete /
                     -- Account Sell / Character Sell) and returns the
@@ -490,6 +509,24 @@ local function EC_AnnotateTooltip(tooltip)
                                 .. "|r"
                             statusTag = "override"
                         end
+                    elseif rankBelowOnly then
+                        -- v2.44.0: the rank-floor slider IS a sell
+                        -- rule (affixRankPass in EC_IsSellable). When
+                        -- it's the only release path and there's no
+                        -- upstream "Will Sell" verdict yet, the
+                        -- tooltip should say so plainly. Pre-v2.44.0
+                        -- iter shipped this case with the "Affix
+                        -- released - add to a list" label, which was
+                        -- accurate before but misleading now (the
+                        -- slider has already provided the sell
+                        -- signal; the player doesn't need to add to a
+                        -- list).
+                        if statusTag ~= "willsell" then
+                            statusLine = "|cff66ccff[EC]|r |cffb6ffb6"
+                                .. L["Will Sell (low-rank affix)"]
+                                .. "|r"
+                            statusTag = "willsell"
+                        end
                     else
                         -- autoDupe only, not on any list. v2.35.1: only
                         -- label "Will Sell (you have this affix)" if an
@@ -509,13 +546,24 @@ local function EC_AnnotateTooltip(tooltip)
                         -- is "rank known" - same as the dupe-allow-off
                         -- case, because the dupe-allow has nothing to
                         -- release.
-                        if statusTag == "willsell" then
-                            statusLine = "|cff66ccff[EC]|r |cffb6ffb6" .. L["Will Sell (you have this affix)"] .. "|r"
-                            statusTag = "willsell"
-                        else
-                            statusLine = "|cff66ccff[EC]|r |cffffb84d" .. L["Keep (affix rank known)"] .. "|r"
-                            statusTag = "affixknown"
-                        end
+                        -- v2.44.0: autoDupe is now a positive sell
+                        -- signal in EC_IsSellable (hoisted into the
+                        -- isJunk / qualityPass / whitelistPass /
+                        -- affixRankPass / autoDupePass check) - same
+                        -- shape as the slider. So when autoDupe is
+                        -- the only release path, the item DOES sell
+                        -- on the next vendor visit, regardless of
+                        -- the upstream quality-rule verdict. Label
+                        -- it unconditionally to match. Pre-v2.44.0
+                        -- this branch had to fall back to a release-
+                        -- only "Affix released - add to a list to
+                        -- sell" label because autoDupe couldn't fire
+                        -- the sell by itself; that constraint is
+                        -- gone now.
+                        statusLine = "|cff66ccff[EC]|r |cffb6ffb6"
+                            .. L["Will Sell (you have this affix)"]
+                            .. "|r"
+                        statusTag = "willsell"
                     end
                 elseif playerKnows or playerKnowsRank then
                     -- The player has this exact (family, rank) - either

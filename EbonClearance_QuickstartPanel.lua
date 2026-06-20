@@ -250,6 +250,24 @@ local ANSWER_MAP = {
             DB.affixAllowExactDupes = true
         end,
     },
+    -- v2.44.0: auto-sell low-rank affixed Rare/Epic items. New
+    -- standalone sell rule (DB.affixMinSellRank); answer maps to a
+    -- numeric floor in the 0-5 range. Defaults to 0 (off) for new
+    -- players so they keep all affixes while learning what to extract.
+    affixRankFloor = {
+        off = function(DB)
+            DB.affixMinSellRank = 0
+        end,
+        belowIII = function(DB)
+            DB.affixMinSellRank = 3
+        end,
+        belowIV = function(DB)
+            DB.affixMinSellRank = 4
+        end,
+        belowV = function(DB)
+            DB.affixMinSellRank = 5
+        end,
+    },
     tomes = {
         unlearned = function(DB)
             DB.protectUnlearnedTomes = true
@@ -354,6 +372,7 @@ local PRESETS = {
             merchants = "both",
             protect = "wearing",
             safetyNets = "all",
+            affixRankFloor = "off",
             tomes = "unlearned",
             repair = "gold",
             keepBags = "yes",
@@ -376,6 +395,7 @@ local PRESETS = {
             merchants = "both",
             protect = "wearingUpgradesSets",
             safetyNets = "all",
+            affixRankFloor = "off",
             tomes = "all",
             repair = "gold",
             keepBags = "yes",
@@ -398,6 +418,7 @@ local PRESETS = {
             merchants = "both",
             protect = "wearing",
             safetyNets = "all",
+            affixRankFloor = "off",
             tomes = "unlearned",
             repair = "guild",
             keepBags = "no",
@@ -420,6 +441,7 @@ local PRESETS = {
             merchants = "both",
             protect = "wearing",
             safetyNets = "critical",
+            affixRankFloor = "belowV",
             tomes = "unlearned",
             repair = "guild",
             keepBags = "no",
@@ -465,6 +487,7 @@ local function EC_ApplyQuickstart(answers, fixedCaps, presetKey)
         protectAffixedRareItems = DB.protectAffixedRareItems,
         protectChanceOnHitItems = DB.protectChanceOnHitItems,
         affixAllowExactDupes = DB.affixAllowExactDupes,
+        affixMinSellRank = DB.affixMinSellRank,
         protectUnlearnedTomes = DB.protectUnlearnedTomes,
         protectAllTomes = DB.protectAllTomes,
         repairGear = DB.repairGear,
@@ -646,6 +669,19 @@ local function snapshotAnswersFromDB(DB)
         a.safetyNets = "all"
     else
         a.safetyNets = "critical"
+    end
+    -- v2.44.0: Q7c affix-rank floor. Maps DB.affixMinSellRank (0-5)
+    -- onto the four Quickstart radio values. Any non-standard
+    -- numeric values (1, 2) snap to the nearest mapped tier.
+    local rank = DB.affixMinSellRank or 0
+    if rank <= 0 then
+        a.affixRankFloor = "off"
+    elseif rank <= 3 then
+        a.affixRankFloor = "belowIII"
+    elseif rank == 4 then
+        a.affixRankFloor = "belowIV"
+    else
+        a.affixRankFloor = "belowV"
     end
     -- Q7b tomes
     if DB.protectAllTomes then
@@ -1108,6 +1144,24 @@ local function buildPanel(self, content)
                 { value = "all", label = L["All on (recommended for PE)"] },
                 { value = "critical", label = L["Only critical (affix protection on, chance-on-hit off)"] },
                 { value = "off", label = L["Off - I'll decide what to keep myself"] },
+            },
+            refresh
+        )
+
+        -- v2.44.0: affix-rank floor follow-up. Lives right after the
+        -- safety-nets question because both shape affix-protection
+        -- behaviour. Default ("off") keeps everything; advanced
+        -- presets opt into selling low ranks.
+        lastAnchor = makeRadioGroup(
+            content,
+            lastAnchor,
+            "affixRankFloor",
+            L["Q8b. Auto-sell low-rank affixed items? (Useful once you've collected the high ranks.)"],
+            {
+                { value = "off", label = L["No - keep them all (default)"] },
+                { value = "belowIII", label = L["Sell ranks I and II (keep III-V)"] },
+                { value = "belowIV", label = L["Sell ranks I-III (keep IV-V)"] },
+                { value = "belowV", label = L["Sell ranks I-IV (keep only V)"] },
             },
             refresh
         )

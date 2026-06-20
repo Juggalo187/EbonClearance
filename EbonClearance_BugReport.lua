@@ -335,6 +335,9 @@ local function EC_BuildBugReport()
     add("Random-affix allow list (per-description): " .. tostring(allowedAffixCount))
     add("Known affix descriptions in session set: " .. tostring(knownAffixCount))
     add("Allow selling affixes you already have: " .. (DB.affixAllowExactDupes and "yes" or "no"))
+    add("Sell affixes below rank: " ..
+        ((DB.affixMinSellRank and DB.affixMinSellRank > 0) and tostring(DB.affixMinSellRank) or "off"))
+    add("Auto-mark PvP gear (Resilience) for deletion: " .. (DB.autoMarkResilience and "yes" or "no"))
     -- v2.37.0 (Borrow A): surface the affix debug log status. When the
     -- log has rows, prompt the reporter to also include /ec affixdebug
     -- dump so the maintainer gets the structured event trail.
@@ -426,7 +429,16 @@ local function EC_EnsureCopyFrame()
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
-    f:SetFrameStrata("DIALOG")
+    -- v2.44.0: TOOLTIP strata + SetToplevel so the copy frame
+    -- floats above the Interface Options window (DIALOG strata).
+    -- Pre-v2.44.0 the frame was at DIALOG too, which meant any
+    -- caller opening it from a panel button (the new "Current
+    -- Rules" button, or /ec rules / bugreport / affixdebug dump
+    -- typed while Interface Options was already open) saw the
+    -- copy frame land behind the panel - effectively unreachable.
+    -- Same pattern the Quickstart panel uses for the same reason.
+    f:SetFrameStrata("TOOLTIP")
+    f:SetToplevel(true)
     tinsert(UISpecialFrames, "EbonClearanceBugReportFrame")
 
     local title = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -468,6 +480,16 @@ local function EC_ShowCopyFrame(titleText, bodyText, chatHint)
     end
     f.editBox:SetText(bodyText or "")
     f:Show()
+    -- v2.44.0: re-establish TOOLTIP strata + raise above any other
+    -- TOOLTIP-strata frame on Show so callers from inside Interface
+    -- Options (Current Rules button, /ec rules typed while options
+    -- panel is up) actually see the popup in front.
+    if f.SetFrameStrata then
+        f:SetFrameStrata("TOOLTIP")
+    end
+    if f.Raise then
+        f:Raise()
+    end
     f.editBox:HighlightText()
     f.editBox:SetFocus()
     if chatHint then
@@ -534,6 +556,207 @@ local function EC_ShowAffixDebugDump()
         L["EbonClearance Affix Debug Dump"],
         EC_BuildAffixDebugDump(),
         L["Affix debug dump generated. Copy the text from the window."]
+    )
+end
+
+-- v2.44.0: rule summary in plain English. Triggered by /ec rules.
+-- Surfaces the actual order of operations EbonClearance uses to
+-- decide DELETE vs SELL vs KEEP for each bag item, alongside the
+-- player's currently active toggles. Asked for by ch (the addon
+-- author) as a one-stop reference for understanding why a specific
+-- item went the way it did - complements /ec sellinfo's per-item
+-- trace by showing the whole rule book at a glance.
+local function EC_BuildRuleSummary()
+    local DB = NS.DB
+    local lines = {}
+    local function add(s)
+        lines[#lines + 1] = s
+    end
+    local function onoff(v)
+        return v and "|cff00ff00ON|r" or "|cffff4444OFF|r"
+    end
+    local function yesno(v, yesLabel, noLabel)
+        if v then
+            return "|cff00ff00" .. (yesLabel or "yes") .. "|r"
+        else
+            return "|cffff4444" .. (noLabel or "no") .. "|r"
+        end
+    end
+
+    add("=== EbonClearance Rule Summary ===")
+    add("Generated: " .. (date and date("%Y-%m-%d %H:%M:%S") or "?"))
+    add("Player: " .. (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?"))
+    add("Addon: " .. (NS.GetVersion and NS.GetVersion() or "?"))
+    add("")
+    add("Master switch: " .. onoff(DB and DB.enabled ~= false))
+
+    -- v2.44.0: surface non-obvious rule conflicts at the top of the
+    -- summary so a player who set the rank slider in one session and
+    -- enabled "Keep blue/purple items with affixes" in another doesn't
+    -- wonder why affixed items are still selling. The slider's positive-
+    -- signal semantics correctly override the parent's keep intent, but
+    -- it's easy to forget the slider value when "keep" is what's freshest
+    -- in mind. Real player report (Serv) drove this addition.
+    local rankFloor = DB.affixMinSellRank or 0
+    local bothOn = (rankFloor > 0) and DB.affixAllowExactDupes
+    if bothOn and DB.protectAffixedRareItems then
+        add("")
+        add("|cffffea80NOTE: 'Sell affixes below rank' (currently "
+            .. rankFloor
+            .. ") and 'Allow selling affixes you already have' are BOTH on.")
+        add("  They are independent rules - each can release the affix protection on its own.")
+        add("    - Slider rule sells affixed items at rank 1 through "
+            .. (rankFloor - 1)
+            .. " (any rank, extracted or not).")
+        add("    - 'Already have' rule sells any rank you've already extracted (any rank,")
+        add("      regardless of the slider).")
+        add("  Result: an extracted rank "
+            .. rankFloor
+            .. "+ item still sells because the 'already have' rule fires for it.")
+        add("  To make ONLY the slider govern: turn 'Allow selling affixes you already have' off.")
+        add("  To make ONLY the 'already have' rule govern: set the slider to 0 (Off).|r")
+    elseif rankFloor > 0 and DB.protectAffixedRareItems then
+        add("")
+        add("|cffffea80NOTE: 'Sell affixes below rank' is set to "
+            .. rankFloor
+            .. " - affixed items at rank 1 through "
+            .. (rankFloor - 1)
+            .. " WILL sell even though 'Keep blue/purple items with affixes' is on. "
+            .. "Set the slider to 0 (Off) if you want to keep all affixed items.|r")
+    elseif DB.affixAllowExactDupes and DB.protectAffixedRareItems then
+        add("")
+        add("|cffffea80NOTE: 'Allow selling affixes you already have' is on - "
+            .. "affixed items at ranks you've already extracted WILL sell, regardless of "
+            .. "'Keep blue/purple items with affixes'. Turn it off to keep all of them.|r")
+    end
+
+    add("")
+    add("--- How EbonClearance handles each item in your bags ---")
+    add("")
+    add("Step 1: Should I DELETE this?")
+    add("  Yes, if ALL of these apply:")
+    add("    - The item is on your Delete List, AND")
+    add("    - 'Allow items to be deleted' is on (currently " .. onoff(DB.enableDeletion) .. "), AND")
+    add("    - It isn't held back by affix protection")
+    add("      (or you've allowed selling that affix)")
+    add("")
+    add("  Extras:")
+    add("    - 'Auto-delete on pickup' (" .. onoff(DB.autoDeleteOnPickup) .. ") destroys Delete List")
+    add("      items the moment they enter your bags, no vendor needed.")
+    add("    - 'Auto-mark PvP gear (Resilience)' (" .. onoff(DB.autoMarkResilience) .. ") adds items")
+    add("      with Resilience to your Delete List automatically.")
+    add("")
+    add("Step 2: Should I SELL this?")
+    add("  Yes, if ANY ONE of the reasons below matches (the rules don't")
+    add("  cancel each other - each one independently triggers a sell):")
+    add("    - It's grey junk with a vendor price")
+    add("    - It's on your Sell List or Account Sell List")
+    add("    - It matches a quality rule:")
+    if DB and DB.qualityRules then
+        local qNames = { "White", "Green", "Blue", "Purple" }
+        for q = 1, 4 do
+            local r = DB.qualityRules[q]
+            local enabled = r and r.enabled
+            local mode
+            if r and r.useEquippedILvl then
+                mode = "equipped iLvl"
+            elseif r and r.maxILvl and r.maxILvl > 0 then
+                mode = "max iLvl " .. tostring(r.maxILvl)
+            else
+                mode = "no cap"
+            end
+            local bind = (r and r.bindType) or "any"
+            add(string.format(
+                "        %s: %s  (%s, bind: %s)",
+                qNames[q],
+                yesno(enabled, "ON", "OFF"),
+                mode,
+                bind
+            ))
+        end
+    end
+    add("    - 'Allow selling affixes you already have' (" .. onoff(DB.affixAllowExactDupes) .. ")")
+    add("      and you've already extracted this exact affix at this rank")
+    add(string.format(
+        "    - 'Sell affixes below rank' (currently %s) and this rank is below it",
+        (DB.affixMinSellRank and DB.affixMinSellRank > 0) and tostring(DB.affixMinSellRank) or "off"
+    ))
+    add("")
+    add("  ...AND NOTHING blocks it:")
+    add("    - You're currently wearing it -> keep")
+    add("    - It's on your Keep List -> keep")
+    add("    - It's a quest item (auto-rule sweep only) -> keep")
+    add("    - It belongs to a saved equipment set ("
+        .. onoff(DB.autoProtectEquipmentSets) .. ") -> keep")
+    add("    - It has an affix you haven't extracted, and")
+    add("      'Keep blue/purple items with affixes' is " .. onoff(DB.protectAffixedRareItems) .. " -> keep")
+    add("    - It has a 'Chance on hit:' proc, and")
+    add("      'Keep items with chance-on-hit procs' is " .. onoff(DB.protectChanceOnHitItems) .. " -> keep")
+    add("      (unless you've Alt+Right-Clicked 'Allow Sell' on that itemID)")
+    add("    - It's an unlearned tome / recipe, and")
+    add("      'Keep unlearned tomes and recipes' is " .. onoff(DB.protectUnlearnedTomes) .. " -> keep")
+    add("")
+    add("Step 3: Otherwise, keep it (default).")
+    add("")
+    add("--- Your current settings at a glance ---")
+    add("  Master switch:                            " .. onoff(DB and DB.enabled ~= false))
+    add("  Allow deletion at vendor:                 " .. onoff(DB.enableDeletion))
+    add("  Auto-delete on pickup:                    " .. onoff(DB.autoDeleteOnPickup))
+    add("  Auto-mark PvP gear (Resilience):          " .. onoff(DB.autoMarkResilience))
+    add("  Keep gear you're wearing:                 " .. onoff(DB.autoAddEquipped))
+    add("  Keep upgrades found in bags:              " .. onoff(DB.autoProtectUpgrades))
+    add("  Keep items in saved equipment sets:       " .. onoff(DB.autoProtectEquipmentSets))
+    add("  Keep blue/purple items with affixes:      " .. onoff(DB.protectAffixedRareItems))
+    add("  Allow selling affixes you already have:   " .. onoff(DB.affixAllowExactDupes))
+    add(string.format(
+        "  Sell affixes below rank:                  %s",
+        (DB.affixMinSellRank and DB.affixMinSellRank > 0) and tostring(DB.affixMinSellRank) or "|cffff4444off|r"
+    ))
+    add("  Keep items with chance-on-hit procs:      " .. onoff(DB.protectChanceOnHitItems))
+    add("  Keep unlearned tomes and recipes:         " .. onoff(DB.protectUnlearnedTomes))
+    add("  Keep all tomes (even learned):            " .. onoff(DB.protectAllTomes))
+    local sellCount = 0
+    if DB.whitelist then
+        for _ in pairs(DB.whitelist) do
+            sellCount = sellCount + 1
+        end
+    end
+    local keepCount = 0
+    if DB.blacklist then
+        for _ in pairs(DB.blacklist) do
+            keepCount = keepCount + 1
+        end
+    end
+    local delCount = 0
+    if DB.deleteList then
+        for _ in pairs(DB.deleteList) do
+            delCount = delCount + 1
+        end
+    end
+    local acctSellCount = 0
+    if NS.ADB and NS.ADB.whitelist then
+        for _ in pairs(NS.ADB.whitelist) do
+            acctSellCount = acctSellCount + 1
+        end
+    end
+    add("")
+    add(string.format("  Sell List entries:           %d", sellCount))
+    add(string.format("  Account Sell List entries:   %d", acctSellCount))
+    add(string.format("  Keep List entries:           %d", keepCount))
+    add(string.format("  Delete List entries:         %d", delCount))
+    add("")
+    add("--- See more ---")
+    add("  /ec sellinfo  - per-item trace (or Alt+Shift+Right-Click on a bag item)")
+    add("  /ec bugreport - full diagnostic dump")
+
+    return table.concat(lines, "\n")
+end
+
+local function EC_ShowRuleSummary()
+    EC_ShowCopyFrame(
+        L["EbonClearance Rule Summary"],
+        EC_BuildRuleSummary(),
+        L["Rule summary generated. Copy the text from the window."]
     )
 end
 
@@ -754,3 +977,4 @@ end
 NS.ShowBugReport = EC_ShowBugReport
 NS.ShowAffixDebugDump = EC_ShowAffixDebugDump
 NS.ShowProcessDebugDump = EC_ShowProcessDebugDump
+NS.ShowRuleSummary = EC_ShowRuleSummary
