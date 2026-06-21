@@ -5,6 +5,33 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.44.3
+
+Three Quickstart fixes (latent crash, layout gap, editbox texture layering) + a README pruning pass.
+
+**Bug fix: Quickstart Q5b "fixed" mode crashed with `attempt to call method 'Enable'`.**
+
+Reported by Luxus/ElvinT. The cap-row visibility helper called `capBoxes[q]:Enable()` every time the player toggled to "Use a fixed item-level cap per rarity". `EditBox:Enable()` / `Disable()` are Cataclysm+ additions that don't exist on 3.3.5a - the call threw the moment the user picked fixed mode. Latent since v2.38.0 (Quickstart's initial release) because all four shipped presets default to dynamic mode, so the crash path only fires when a player manually picks the fixed radio (the wizard route).
+
+- Removed the `:Enable()` call. The editbox is enabled by default; `Show()` on the parent row is the right hook. EC-TRAP comment placed at the site and a regression test (Test 88t2) pinned so a future "let's also disable when hidden" cleanup fails CI rather than reintroducing the crash.
+
+**Bug fix: Quickstart Q5b cap rows visually collided with Q6 on low UI scales.**
+
+Same screenshot. The spacer frame between the cap rows and Q6's question label was 1px tall with a 0px Y offset, leaving only ~11 effective pixels of gap. Tight at 1.0 UI scale, collapsed at 0.66 (WoW's default).
+
+- Bumped the spacer height from 1px to 14px and added an 8px Y offset on the anchor in both dynamic and fixed modes. The gap is now ~22px, comfortably survives 0.5 UI scale.
+
+**Bug fix: Quickstart Q5b cap-row editboxes rendered with broken texture layering (White worst).**
+
+Same screenshot, third symptom. The four cap-row editboxes were created with a `nil` name. `InputBoxTemplate` references its `*Left` / `*Middle` / `*Right` child textures by global name, and `NS.StyleInputBox` uses `_G[name .. "Left"]` to normalize their draw layer. With a nil name those textures aren't reachable and the first editbox (White) rendered with stale template layering - the others happened to dodge the bug by frame-creation timing. Mirrors the working Merchant Panel pattern (`EbonClearanceQualityRowNInput`).
+
+- Cap-row editboxes now have unique names: `EbonClearanceQuickstartCap1Input` through `Cap4Input`. `StyleInputBox` reaches the textures and normalizes them. All four editboxes render identically.
+
+**README rewrite.** Slimmed the front-page copy from 18 dense feature bullets to a three-pillar pitch (How it sells / What it protects / The loop) so first-time visitors can size the addon up in seconds. The complete enumeration of every feature stays in [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md). Word count down ~25%; surface area down accordingly.
+
+---
+
+
 ### v2.44.2
 
 Tiny QoL tweak adopted from a community fork.

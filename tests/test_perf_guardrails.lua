@@ -5696,6 +5696,11 @@ do
                 "When the iLvl mode toggles between dynamic / fixed, the four cap-input rows show or hide. The stop anchor that the next question chains to must reposition so the layout doesn't leave a phantom gap below hidden rows."
             )
             check(
+                "Test 88t2: Quickstart - cap-row editboxes do NOT call :Enable() (Cataclysm+ only)",
+                qpS:find("capBoxes%[q%]:Enable%(%)") == nil,
+                "v2.44.3 bug: EditBox:Enable() / Disable() are Cataclysm+ additions. Calling them on 3.3.5a throws 'attempt to call method Enable (a nil value)' the moment the user toggles Q5b to fixed mode. The editbox is enabled by default - Show()/Hide() on the parent row is the right hook. If a future change genuinely needs enable/disable, use EnableMouse(true/false) and EnableKeyboard(true/false), which DO exist on 3.3.5a."
+            )
+            check(
                 "Test 88u: Quickstart - chat confirm includes preset name (not just 'applied')",
                 qpS:find('PRESETS%[presetKey%]%.name') ~= nil,
                 "The chat message after applying a preset must include which preset was applied, not just say 'Quickstart applied'."

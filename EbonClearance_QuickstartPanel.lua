@@ -1024,7 +1024,21 @@ local function buildPanel(self, content)
             lbl:SetJustifyH("LEFT")
             lbl:SetText(rarityNames[q] .. L[" cap:"])
 
-            local eb = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+            -- v2.44.3: explicit unique name (was nil). InputBoxTemplate
+            -- references its *Left / *Middle / *Right child textures by
+            -- global name, and NS.StyleInputBox uses _G[name .. "Left"]
+            -- to normalize their draw layer. With a nil name those
+            -- textures aren't reachable and the first editbox (White)
+            -- rendered with stale template layering - subsequent boxes
+            -- dodged the bug by creation timing. Mirrors the working
+            -- Merchant Panel pattern (EbonClearanceQualityRowNInput).
+            -- Reported by Luxus/ElvinT.
+            local eb = CreateFrame(
+                "EditBox",
+                "EbonClearanceQuickstartCap" .. q .. "Input",
+                row,
+                "InputBoxTemplate"
+            )
             eb:SetSize(60, 20)
             eb:SetPoint("LEFT", lbl, "RIGHT", 8, 0)
             eb:SetAutoFocus(false)
@@ -1063,7 +1077,13 @@ local function buildPanel(self, content)
                 if capBoxes[q] then
                     if show then
                         capBoxes[q]:GetParent():Show()
-                        capBoxes[q]:Enable()
+                        -- v2.44.3: EditBox:Enable() is Cataclysm+ only -
+                        -- calling it on 3.3.5a throws "attempt to call
+                        -- method 'Enable' (a nil value)". The editbox is
+                        -- enabled by default; Show() on the parent row
+                        -- is sufficient. EC-TRAP: don't reintroduce an
+                        -- Enable / Disable pair here without using
+                        -- EnableMouse / EnableKeyboard, which DO exist.
                     else
                         capBoxes[q]:GetParent():Hide()
                     end
@@ -1076,10 +1096,14 @@ local function buildPanel(self, content)
             -- mode the stop sits below the last cap row.
             if self.q5bStop then
                 self.q5bStop:ClearAllPoints()
+                -- v2.44.3: -8 Y offset (was 0) so Q6's label sits ~22px
+                -- below the last cap row instead of ~11px. The tight gap
+                -- collapsed to visual overlap with Q6 on low UI scales
+                -- (Luxus's Q5b screenshot, useUiScale + 0.66 effective).
                 if show then
-                    self.q5bStop:SetPoint("TOPLEFT", lastCapRowAnchor, "BOTTOMLEFT", -40, 0)
+                    self.q5bStop:SetPoint("TOPLEFT", lastCapRowAnchor, "BOTTOMLEFT", -40, -8)
                 else
-                    self.q5bStop:SetPoint("TOPLEFT", fixBtn, "BOTTOMLEFT", -16, 0)
+                    self.q5bStop:SetPoint("TOPLEFT", fixBtn, "BOTTOMLEFT", -16, -8)
                 end
             end
         end
@@ -1110,8 +1134,12 @@ local function buildPanel(self, content)
         -- Created BEFORE the first updateCapBoxesVisible call so the
         -- initial visibility-driven positioning happens immediately.
         local q5bStop = CreateFrame("Frame", nil, content)
-        q5bStop:SetSize(1, 1)
-        q5bStop:SetPoint("TOPLEFT", lastCapRowAnchor, "BOTTOMLEFT", -40, 0)
+        -- v2.44.3: 14px tall (was 1px) so the gap to Q6 survives low UI
+        -- scales. Initial anchor matches updateCapBoxesVisible's "fixed"
+        -- branch (-40 X, -8 Y). updateCapBoxesVisible runs immediately
+        -- after and rebinds for the actual mode.
+        q5bStop:SetSize(1, 14)
+        q5bStop:SetPoint("TOPLEFT", lastCapRowAnchor, "BOTTOMLEFT", -40, -8)
         self.q5bStop = q5bStop
         lastAnchor = q5bStop
 

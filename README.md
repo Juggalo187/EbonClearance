@@ -4,30 +4,29 @@
 [![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/powerfulqa/EbonClearance/badge-data/downloads.json&style=for-the-badge&cacheSeconds=3600)](https://github.com/powerfulqa/EbonClearance/releases)
 [![Licence](https://img.shields.io/badge/Licence-Source--Available-blue?style=for-the-badge)](LICENSE)
 
-A **Project Ebonhold-aware** bag manager. Out of the box it sells your junk and old gear at any merchant, keeps your upgrades, and never touches anything important. It reads your account's affix-extraction and chance-on-hit-proc state from PE's own services, so two identical-itemID drops can land on different sides of "sell" or "keep" depending on which affix rolled and which procs you've already extracted. No external libraries; stock Blizzard 3.3.5a APIs only.
+**Full bags, every quest hub, every farm session. EbonClearance handles the chore.**
 
-## What It Does
+Sells what you don't want. Keeps what you do. Knows the difference because it reads your Project Ebonhold affix and proc state directly. Zero config to start, one click for a guided setup, deep controls when you want them. No external libraries, stock Blizzard 3.3.5a APIs only.
 
-- **Quickstart setup.** A guided panel gets you going in seconds: pick one of four one-click presets (Recommended / Cautious / Farmer / Power), or answer ~15 short questions for a tailored config. It opens automatically on a fresh install and only changes settings - your Sell, Keep, and Delete lists are never touched.
-- **Auto-sell trash + auto-vendor your loot.** Per-rarity rules (White / Green / Blue / Purple) with two cap modes: follow your equipped iLvl (default on Whites and Greens for fresh installs) or set a fixed max. Per-rarity bind-type filter (Any / BoE / BoP). Grey junk always auto-sells. Equipped gear is never touched.
-- **Per-character + account-wide Sell Lists**, plus a Keep List and a Delete List. Add items by ID or name (or bulk-add from your bags by colour), and switch lists by activity with saved profiles. Each list row shows the item's icon and a quality-colored name, hovering a row brings up the item tooltip, and you can filter the view by rarity.
-- **Project Ebonhold-specific protections** that the auto-rule sweep respects: affixed Rare/Epic drops (per-instance), chance-on-hit proc items, tomes and recipes (learned-state-aware), quest items, profession tools, equipped gear and looted upgrades, equipment-manager set members. Each protection has an Alt+Right-Click → **Allow Sell** override that's account-wide for items / per-affix-description for affixes.
-- **Greedy Scavenger + Goblin Merchant loop.** Auto-summon, dismiss-on-mount, re-summon-if-stuck, combat-resilient. Auto-loot cycle dismisses the scavenger and brings up the merchant when bags fill, then re-summons to continue. Heavy-combat safe.
-- **Fast Loot.** Throttled drain (~110 ms per slot) on manual loot windows so private-server anti-flood doesn't disconnect you. BoP-bind popups auto-confirm.
-- **Process Bags panel** for disenchant / mill / prospect / pick-lock. One button drives the casts; bind a key and hold to drain a stack. Honours every protection.
-- **Tooltip annotations** show what the addon will do *before* it does it: `Will Sell (<reason>)`, `Keep (<reason>)`, `Won't Sell (<reason>)`, `Will Delete`. No surprises at the merchant.
-- **Per-item sellability inspector** (`/ec sellinfo` or Alt+Shift+Right-Click) traces the entire decision chain in chat. "Why isn't this selling?" is always one click away.
-- **Rule summary at a glance** (`/ec rules` or the **Current Rules** button on the Main panel). Plain-English step-by-step of every active toggle + the order EC uses to decide DELETE / SELL / KEEP, in a copyable window.
-- **Affix-rank floor + smarter affix-protection.** A slider on the Item Protection panel sells affixed Rare/Epic items below the rank you pick (handy when low-rank affixes saturate your bag). Composes with the "Allow selling affixes you already have" toggle, which now sells extracted-rank dupes directly without needing a Sell List entry. Inline grey notes under each toggle spell out their scope.
-- **Per-category bag-slot border tints** in seven colours (Delete / Keep / Account Sell / Character Sell / Random affix / Junk / Rule-match), with per-category enable + colour picker. Slot-frame ring only.
-- **Item-level overlay** (opt-in). Quality-coloured iLvl in the bottom-right corner of equippable gear slots, with player-adjustable font size. Three independently togglable surfaces: bags, character sheet & inspect, merchant.
-- **Profile import/export** for sharing whole settings packs (lists + per-rarity rules) between characters or with other players.
-- **Update nudge** (on by default). Tells you when a newer version is out. WoW 3.3.5a addons can't check the web, so EbonClearance learns the latest version from other users in your guild or group, then shows one chat line per session with a clickable copy-link to the latest release. Toggle it off on the main panel.
-- **Guild stats sharing** (opt-in, off by default). The **Stats - Guild** panel pools your guild's or group's best farming zones, most-sold items, totals, and sold-by-rarity counts from members who also run EbonClearance. Anonymous by default (optionally show your name), guild/group only, shown as a live snapshot. Most-sold rows show the item tooltip on hover.
-- **Reactive layout**, minimap button + LDB launcher, keybindings, first-run welcome, session + lifetime stats.
-- **French & German ready.** The addon reads your client's language and shows translated text where a translation exists, falling back to English otherwise. Translations are community-written; see [docs/TRANSLATING.md](docs/TRANSLATING.md) to help translate into your language.
+## How it sells
 
-A complete enumeration of every feature lives in [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md). Behaviour history is in [CHANGELOG.md](CHANGELOG.md). For the design lineage and prior-art acknowledgement, see [NOTICE.md](NOTICE.md).
+- **Per-rarity auto-sell rules** (White / Green / Blue / Purple). Caps follow your equipped iLvl, or set a fixed max. Bind-type filter per rarity.
+- **Sell, Keep, and Delete lists**, per-character and account-wide. Bulk-add from your bags by colour, switch lists by activity with saved profiles.
+- **Tooltip says what will happen** before you vendor. `/ec sellinfo` traces every decision so "why isn't this selling?" is one click away.
+
+## What it protects
+
+- **Affixed Rare/Epic drops.** Affix-keyed Allow-Sell overrides for the ones you've decided you don't need.
+- **Chance-on-hit procs you haven't extracted yet**, plus tomes and recipes you haven't learned. Class-aware: bows on Druids and relics on Mages stay off your Keep List.
+- **Quest items, equipped gear, equipment-manager set members.** Each protection has an Alt+Right-Click → Allow Sell override.
+
+## The loop
+
+- **Greedy Scavenger summon** with auto-rebuy and dismiss-on-mount. Heavy-combat safe.
+- **Goblin Merchant + Fast Loot.** Throttled drain so private-server anti-flood doesn't disconnect you.
+- **Process Bags panel** for disenchant / mill / prospect / pick-lock. Bind a key, hold to drain a stack.
+
+A complete enumeration of every feature lives in [docs/ADDON_GUIDE.md](docs/ADDON_GUIDE.md). Behaviour history is in [CHANGELOG.md](CHANGELOG.md). For the design lineage, see [NOTICE.md](NOTICE.md).
 
 ## Installation
 
