@@ -67,7 +67,7 @@ local L = NS.L
 -- DO NOT move this constant out of EbonClearance_Events.lua without first
 -- updating the CI workflow's sed rule that targets this file by name
 -- (.github/workflows/release.yml).
-local ADDON_VERSION = "v2.44.3"
+local ADDON_VERSION = "v2.44.4"
 local function EC_GetVersion()
     -- Cached on the shared cache (not a new file-scope local) to respect
     -- the 200-locals cap on this chunk. Reached via NS.compCache because
