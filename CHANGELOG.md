@@ -5,6 +5,23 @@ Detailed per-release notes for [EbonClearance](README.md). For the user-level ov
 ---
 
 
+### v2.44.4
+
+Tiny QoL toggle.
+
+**New: silence the chat lines from auto-deletion.**
+
+Asked for by ayres. When EbonClearance auto-deletes a Delete-List item the moment it hits your bags, or auto-marks a piece of unsellable Resilience gear for deletion, it normally prints one chat line per event so you can see what just happened. A new checkbox on the Keep / Delete Panel ("Announce auto-deletions in chat") silences both lines.
+
+- Default ON - destructive actions stay visible until you opt out.
+- Greyed out when 'Allow items to be deleted' is off (neither chat line can fire without that anyway).
+- The manual vendor-cycle summary, session stats, lifetime totals, and your Delete List itself are unaffected. The toggle only gates the two per-event lines.
+
+New Help FAQ entry "Announce auto-deletions in chat" explains the scope.
+
+---
+
+
 ### v2.44.3
 
 Three Quickstart fixes (latent crash, layout gap, editbox texture layering) + a README pruning pass.

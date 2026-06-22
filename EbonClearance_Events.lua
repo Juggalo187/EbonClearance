@@ -750,6 +750,15 @@ local function EnsureDB()
     if type(DB.autoMarkResilience) ~= "boolean" then
         DB.autoMarkResilience = false
     end
+    -- v2.44.4: announce auto-delete actions in chat. Covers BOTH the
+    -- "Auto-deleted X" line from the auto-delete-on-pickup sweep AND
+    -- the "Marked for deletion (Resilience, unsellable)" line from
+    -- the resilience auto-mark sweep - same category of "EC just
+    -- touched something" notification. Default ON (the player should
+    -- see destructive actions); ayres asked for the off switch.
+    if type(DB.announceAutoDelete) ~= "boolean" then
+        DB.announceAutoDelete = true
+    end
     if type(DB.summonGreedy) ~= "boolean" then
         DB.summonGreedy = true
     end
@@ -4548,7 +4557,7 @@ function EC_compCache.executeBagSlotDelete(bag, slot, itemID, count, quality, an
     if quality then
         EC_BumpStatBucket("deletedItemsByQuality", quality, delCount)
     end
-    if announce then
+    if announce and DB and DB.announceAutoDelete ~= false then
         local link = select(2, GetItemInfo(itemID)) or ("item:" .. tostring(itemID))
         PrintNicef(L["|cffff4444Auto-deleted|r %s."], link)
     end
@@ -4672,8 +4681,10 @@ function EC_compCache.runAutoMarkResilience()
                             -- in scope for this same sweep.
                         else
                             deleteList[id] = true
-                            local link = select(2, GetItemInfo(id)) or ("item:" .. tostring(id))
-                            PrintNicef(L["|cffff4444Marked for deletion (Resilience, unsellable):|r %s"], link)
+                            if DB and DB.announceAutoDelete ~= false then
+                                local link = select(2, GetItemInfo(id)) or ("item:" .. tostring(id))
+                                PrintNicef(L["|cffff4444Marked for deletion (Resilience, unsellable):|r %s"], link)
+                            end
                             -- One add per BAG_UPDATE fire keeps the
                             -- chat tidy if the player loots multiple
                             -- PvP pieces at once; the next BAG_UPDATE

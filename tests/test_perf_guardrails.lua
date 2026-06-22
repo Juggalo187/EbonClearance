@@ -4102,6 +4102,44 @@ do
 end
 
 -- ---------------------------------------------------------------------------
+-- v2.44.4 Test 94: announce-auto-delete toggle (ayres ask).
+-- ---------------------------------------------------------------------------
+-- DB.announceAutoDelete gates BOTH the "Auto-deleted X" line from the
+-- auto-delete-on-pickup sweep AND the "Marked for deletion (Resilience)"
+-- line from the resilience auto-mark sweep. Default true (destructive
+-- actions should be visible by default); player can silence via the
+-- Keep / Delete panel checkbox.
+do
+    local function fileSrc(path)
+        local fh = io.open(path, "rb")
+        if not fh then return "" end
+        local s = fh:read("*a") or ""
+        fh:close()
+        return s
+    end
+    local ev = fileSrc("EbonClearance_Events.lua")
+    local kdp = fileSrc("EbonClearance_KeepDeletePanels.lua")
+    local hp = fileSrc("EbonClearance_HelpPanel.lua")
+    check("Test 94a: DB.announceAutoDelete seeded in EnsureDB with default true",
+        ev:find("DB%.announceAutoDelete%s*=%s*true") ~= nil,
+        "must default ON - the player should see destructive actions until they explicitly opt out. The off switch is a chat-noise convenience, not a safer default.")
+    check("Test 94b: 'Auto-deleted' PrintNicef gated on the toggle",
+        ev:find("announce and DB and DB%.announceAutoDelete ~= false") ~= nil,
+        "the auto-delete-on-pickup chat line must respect the new toggle. ayres asked for the off switch; if the gate disappears the toggle becomes inert.")
+    check("Test 94c: 'Marked for deletion (Resilience)' PrintNicef gated on the toggle",
+        ev:find('Marked for deletion %(Resilience, unsellable%)') ~= nil
+            and ev:find('if DB and DB%.announceAutoDelete ~= false then') ~= nil,
+        "the resilience auto-mark chat line must respect the same toggle. The two messages are the same category of 'EC just touched something' notification - one toggle gates both.")
+    check("Test 94d: KeepDeletePanels surfaces the announce checkbox",
+        kdp:find("EbonClearanceAnnounceAutoDeleteCB") ~= nil
+            and kdp:find("DB%.announceAutoDelete") ~= nil,
+        "the toggle must live on the Delete List panel beneath the two sub-toggles it affects (autoCB + resilienceCB); same enabled-state rule (greyed when 'Allow items to be deleted' is off, since neither announcement can fire without deletion enabled)")
+    check("Test 94e: Help FAQ entry exists",
+        hp:find('id = "gate%-announce%-auto%-delete"') ~= nil,
+        "the toggle needs an in-game explanation so a player who finds it in Interface Options understands what gets silenced. The help entry also documents that the manual vendor-cycle summary and lifetime stats are unaffected.")
+end
+
+-- ---------------------------------------------------------------------------
 -- Test 64 (v2.33.x): EC_TryResummonScavenger self-gates on DB.summonGreedy.
 -- ---------------------------------------------------------------------------
 -- Bug reported by SLG: "constantly summoning Greedy Scavenger after

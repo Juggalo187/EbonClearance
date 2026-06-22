@@ -130,24 +130,58 @@ DeletePanel:SetScript("OnShow", function(self)
             resilienceText:SetJustifyH("LEFT")
         end
 
+        -- v2.44.4: announce-in-chat toggle. Gates the two "EC just
+        -- deleted / marked X" lines that the auto-delete-on-pickup
+        -- sweep and the Resilience auto-mark sweep print. Default ON
+        -- (destructive actions should be visible); turn off if the
+        -- chat noise is unwelcome. Greys with the parent enableDeletion
+        -- gate - same enabled-state rule as the two sub-toggles above.
+        -- Asked for by ayres.
+        local announceCB = CreateFrame(
+            "CheckButton",
+            "EbonClearanceAnnounceAutoDeleteCB",
+            self,
+            "InterfaceOptionsCheckButtonTemplate"
+        )
+        announceCB:SetPoint("TOPLEFT", resilienceCB, "BOTTOMLEFT", 0, -2)
+        announceCB:SetChecked(DB.announceAutoDelete ~= false)
+        local announceText = _G[announceCB:GetName() .. "Text"]
+        if announceText then
+            announceText:SetText(L["Announce auto-deletions in chat"])
+            announceText:SetWidth(420)
+            announceText:SetJustifyH("LEFT")
+        end
+        announceCB:SetScript("OnClick", function()
+            DB.announceAutoDelete = announceCB:GetChecked() and true or false
+            PlaySound(DB.announceAutoDelete and "igMainMenuOptionCheckBoxOn" or "igMainMenuOptionCheckBoxOff")
+        end)
+
         refreshAutoCBEnabled = function()
             if DB.enableDeletion then
                 autoCB:Enable()
                 resilienceCB:Enable()
+                announceCB:Enable()
                 if autoText then
                     autoText:SetTextColor(1, 1, 1)
                 end
                 if resilienceText then
                     resilienceText:SetTextColor(1, 1, 1)
                 end
+                if announceText then
+                    announceText:SetTextColor(1, 1, 1)
+                end
             else
                 autoCB:Disable()
                 resilienceCB:Disable()
+                announceCB:Disable()
                 if autoText then
                     autoText:SetTextColor(0.5, 0.5, 0.5)
                 end
                 if resilienceText then
                     resilienceText:SetTextColor(0.5, 0.5, 0.5)
+                end
+                if announceText then
+                    announceText:SetTextColor(0.5, 0.5, 0.5)
                 end
             end
         end
@@ -202,10 +236,10 @@ DeletePanel:SetScript("OnShow", function(self)
         -- y-offset) so the list always clears the checkboxes even as the
         -- description / hint text wraps. Mirrors the Keep List panel's
         -- anchor-to-hint approach.
-        -- v2.44.0: re-anchored below the new resilience auto-mark
-        -- toggle so the list still clears every checkbox in the
-        -- header strip.
-        self.listUI:SetPoint("TOPLEFT", resilienceCB, "BOTTOMLEFT", 0, -12)
+        -- v2.44.0: re-anchored below the new resilience auto-mark toggle.
+        -- v2.44.4: re-anchored below the announce-in-chat toggle so the
+        -- list still clears every checkbox in the header strip.
+        self.listUI:SetPoint("TOPLEFT", announceCB, "BOTTOMLEFT", 0, -12)
         self.listUI:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -16, 16)
         self.listUI:Refresh()
     end)
