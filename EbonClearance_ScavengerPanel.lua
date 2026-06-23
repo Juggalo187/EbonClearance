@@ -38,9 +38,6 @@ ScavengerPanel:SetScript("OnShow", function(self)
         if self.sumCB then
             self.sumCB:SetChecked(DB.summonGreedy)
         end
-        if self.delaySlider then
-            self.delaySlider:SetValue(DB.summonDelay or 1.6)
-        end
         -- Hide chat + hide bubbles are no longer user-toggleable; their
         -- DB fields are forced true in EnsureDB. The muteCB OnShow guard
         -- predated the panel-split refactor and never had a backing
@@ -118,30 +115,10 @@ ScavengerPanel:SetScript("OnShow", function(self)
         -- DB.hideGreedyBubbles are forced true in EnsureDB so the
         -- Companion.lua filters keep working unchanged.
 
-        local delaySlider = NS.AddSlider(
-            content,
-            "EbonClearanceSummonDelaySlider",
-            combatOnlyCB,
-            L["Summon delay"],
-            0.0,
-            20.0,
-            0.1,
-            function()
-                return DB.summonDelay or 1.6
-            end,
-            function(v)
-                DB.summonDelay = v
-            end,
-            -16,
-            "%.1fs"
-        )
-        self.delaySlider = delaySlider
-        delaySlider:SetWidth(200)
-
         local cycleCB = NS.AddCheckbox(
             content,
             "EbonClearanceAutoLootCycleCB",
-            delaySlider,
+            combatOnlyCB,
             L["Enable auto-loot cycle (loot, sell, repeat)"],
             function()
                 return DB.autoLootCycle
@@ -155,7 +132,7 @@ ScavengerPanel:SetScript("OnShow", function(self)
                     end
                 end
             end,
-            -16
+            -8
         )
         self.cycleCB = cycleCB
         local cycleCBText = _G[cycleCB:GetName() .. "Text"]

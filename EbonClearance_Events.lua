@@ -765,9 +765,6 @@ local function EnsureDB()
     if type(DB.summonOnlyOutOfCombat) ~= "boolean" then
         DB.summonOnlyOutOfCombat = false
     end
-    if type(DB.summonDelay) ~= "number" then
-        DB.summonDelay = 1.6
-    end
 
     if type(DB.vendorInterval) ~= "number" then
         DB.vendorInterval = 0.1
@@ -2125,7 +2122,7 @@ local function EC_SummonGreedyWithDelay()
     if not DB or not DB.summonGreedy then
         return
     end
-    EC_Delay((DB and DB.summonDelay) or 1.6, SummonGreedyScavenger)
+    EC_Delay(1.0, SummonGreedyScavenger)
 end
 
 local function EC_GetFreeBagSlots()
@@ -4893,7 +4890,6 @@ local function FinishRun()
                 -- merchant visits silently summoned the Scavenger
                 -- without the chat acknowledgement.
                 EC_compCache.pendingAnnounce = true
-                EC_SummonGreedyWithDelay()
             end
         end)
         return
@@ -4911,7 +4907,6 @@ local function FinishRun()
     end
     -- v2.14.0: see comment at the corresponding call above.
     EC_compCache.pendingAnnounce = true
-    EC_SummonGreedyWithDelay()
 end
 
 local function DoNextAction()
@@ -5125,9 +5120,6 @@ local function StartRun()
     if #queue == 0 then
         PrintNice(L["Nothing to sell."])
         EC_compCache.vendorRunning = false
-        if UnitExists("target") and UnitName("target") == TARGET_NAME and MerchantFrame and MerchantFrame:IsShown() then
-            EC_SummonGreedyWithDelay()
-        end
         return
     end
 
@@ -6728,6 +6720,11 @@ f:SetScript("OnEvent", function(self, event, ...)
         -- Reopen bags after merchant closes
         if DB and DB.keepBagsOpen and EC_keepBagsFlag then
             EC_Delay(0.8, EC_OpenAllBags)
+        end
+		-- Summon Greedy Scavenger after merchant closes (if enabled)
+        if DB and DB.summonGreedy then
+            EC_compCache.pendingAnnounce = true
+            EC_SummonGreedyWithDelay()
         end
         EC_keepBagsFlag = false
     elseif event == "PARTY_MEMBERS_CHANGED" then
