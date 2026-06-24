@@ -123,7 +123,6 @@ local function EC_BuildBugReport()
 
     add("--- Scavenger ---")
     add("Summon Greedy: " .. tostring(DB.summonGreedy))
-    add("Summon Delay: " .. tostring(DB.summonDelay))
     add("Summon Only Out Of Combat: " .. tostring(DB.summonOnlyOutOfCombat))
     add("Mute Greedy: " .. tostring(DB.muteGreedy))
     add("Auto-Loot Cycle: " .. tostring(DB.autoLootCycle))
